@@ -1,2 +1,3 @@
-# imtrace-android
+# ImTrace Android client
+
 I trace, therefore I am.

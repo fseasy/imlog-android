@@ -1,0 +1,82 @@
+import kotlin.Boolean;
+
+CREATE TABLE topics (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    icon_uri TEXT,
+    creator_id TEXT NOT NULL REFERENCES users(id),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    is_deleted INTEGER AS Boolean NOT NULL DEFAULT 0
+);
+
+CREATE TABLE topic_members (
+    topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    user_nickname TEXT,
+    role TEXT NOT NULL,
+    joined_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    is_deleted INTEGER AS Boolean NOT NULL DEFAULT 0,
+    PRIMARY KEY (topic_id, user_id)
+);
+
+CREATE TABLE topic_personal_state (
+    topic_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    archived INTEGER AS Boolean NOT NULL DEFAULT 0,
+    pinned INTEGER AS Boolean NOT NULL DEFAULT 0,
+    background TEXT,
+    icon TEXT,
+    last_read_at INTEGER,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (topic_id, user_id)
+);
+
+CREATE TABLE topic_device_state (
+    topic_id TEXT NOT NULL PRIMARY KEY REFERENCES topics(id) ON DELETE CASCADE,
+    font TEXT
+);
+
+-- topics queries
+getActiveTopics:
+SELECT * FROM topics WHERE is_deleted = 0 ORDER BY created_at DESC;
+
+getTopicById:
+SELECT * FROM topics WHERE id = ? AND is_deleted = 0;
+
+insertTopic:
+INSERT INTO topics (id, name, icon_uri, creator_id, created_at, updated_at, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+updateTopic:
+UPDATE topics SET name = ?, icon_uri = ?, updated_at = ? WHERE id = ?;
+
+deleteTopicLogical:
+UPDATE topics SET is_deleted = 1, updated_at = ? WHERE id = ?;
+
+-- topic_members queries
+getMembersByTopicId:
+SELECT * FROM topic_members WHERE topic_id = ?;
+
+insertMember:
+INSERT INTO topic_members (topic_id, user_id, user_nickname, role, joined_at, updated_at, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- topic_personal_state queries
+getPersonalState:
+SELECT * FROM topic_personal_state WHERE topic_id = ? AND user_id = ?;
+
+insertPersonalState:
+INSERT INTO topic_personal_state (topic_id, user_id, archived, pinned, background, icon, last_read_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+updatePersonalState:
+UPDATE topic_personal_state SET archived = ?, pinned = ?, background = ?, icon = ?, last_read_at = ?, updated_at = ? WHERE topic_id = ? AND user_id = ?;
+
+-- topic_device_state queries
+getDeviceState:
+SELECT * FROM topic_device_state WHERE topic_id = ?;
+
+insertDeviceState:
+INSERT INTO topic_device_state (topic_id, font) VALUES (?, ?);
+
+updateDeviceState:
+UPDATE topic_device_state SET font = ? WHERE topic_id = ?;

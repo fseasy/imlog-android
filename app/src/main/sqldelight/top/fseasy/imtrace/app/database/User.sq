@@ -1,0 +1,20 @@
+CREATE TABLE users (
+    id TEXT NOT NULL PRIMARY KEY,
+    username TEXT NOT NULL,
+    avatar_uri TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+-- users queries
+getUserById:
+SELECT * FROM users WHERE id = ?;
+
+getAllUsersDesc:
+SELECT * FROM users ORDER BY created_at DESC;
+
+insertUser:
+INSERT INTO users (id, username, avatar_uri, created_at, updated_at) VALUES (?, ?, ?, ?, ?);
+
+updateUser:
+UPDATE users SET username = ?, avatar_uri = ?, updated_at = ? WHERE id = ?;

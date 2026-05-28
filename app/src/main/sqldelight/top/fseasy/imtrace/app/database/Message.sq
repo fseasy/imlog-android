@@ -1,0 +1,35 @@
+import kotlin.Boolean;
+
+CREATE TABLE messages (
+    id TEXT NOT NULL PRIMARY KEY,
+    topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    sender_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    content TEXT,
+    file_path TEXT,
+    file_size INTEGER,
+    duration INTEGER,
+    thumbnail_path TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER,
+    is_deleted INTEGER AS Boolean NOT NULL DEFAULT 0
+);
+
+CREATE INDEX idx_messages_topic_created ON messages(topic_id, created_at);
+CREATE INDEX idx_messages_sender_created ON messages(sender_id, created_at);
+CREATE INDEX idx_topics_creator ON topics(creator_id);
+
+getMessagesByTopic:
+SELECT * FROM messages WHERE topic_id = ? AND is_deleted = 0 ORDER BY created_at ASC;
+
+getAllActiveMessages:
+SELECT * FROM messages WHERE is_deleted = 0 ORDER BY created_at ASC;
+
+getMessageCount:
+SELECT COUNT(*) FROM messages WHERE is_deleted = 0;
+
+insertMessage:
+INSERT INTO messages (id, topic_id, sender_id, type, content, file_path, file_size, duration, thumbnail_path, created_at, updated_at, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteMessageLogical:
+UPDATE messages SET is_deleted = 1 WHERE id = ?;
