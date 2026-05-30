@@ -24,5 +24,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "imtrace"
+rootProject.name = "imlog"
 include(":app")

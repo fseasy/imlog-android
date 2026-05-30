@@ -1,3 +1,3 @@
-# ImTrace Android client
+# Imlog Android client
 
-I trace, therefore I am.
+I log, therefore I am.

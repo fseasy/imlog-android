@@ -74,6 +74,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.sqldelight.android)
@@ -83,6 +84,7 @@ dependencies {
     implementation(libs.androidx.media3.common)
     implementation(libs.coil.compose)
     implementation(libs.hilt.android)
+    debugImplementation(libs.androidx.ui.tooling)
     ksp(libs.hilt.compiler)
     implementation(libs.accompanist.permissions)
 
@@ -91,8 +93,8 @@ dependencies {
 
 sqldelight {
     databases {
-        create("Database") {
-            packageName.set("${libs.versions.appPackageName.get()}.database")
+        create("SqlDelightDb") {
+            packageName.set("${libs.versions.appPackageName.get()}.sqldelight")
         }
     }
 }

@@ -1,0 +1,98 @@
+import kotlin.Boolean;
+-- share across all members
+CREATE TABLE topics (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    icon_uri TEXT,
+    creator_id TEXT NOT NULL REFERENCES users(id),
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    is_deleted INTEGER AS Boolean NOT NULL DEFAULT 0
+);
+-- share across all members
+CREATE TABLE topic_members (
+    topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    user_nickname TEXT,
+    role TEXT NOT NULL,
+    joined_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    is_deleted INTEGER AS Boolean NOT NULL DEFAULT 0,
+    PRIMARY KEY (topic_id, user_id)
+);
+-- share across all members
+-- 专门追踪每个 Topic 的最新消息时间
+CREATE TABLE topic_last_message (
+    topic_id TEXT PRIMARY KEY REFERENCES topics(id) ON DELETE CASCADE,
+    last_message_at INTEGER NOT NULL,
+    last_message_snippet TEXT  -- 可选：用于列表页的预览文本
+);
+
+-- only for current user
+CREATE TABLE topic_personal_state (
+    topic_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    archived INTEGER AS Boolean NOT NULL DEFAULT 0,
+    pinned INTEGER AS Boolean NOT NULL DEFAULT 0,
+    background TEXT,
+    last_read_at INTEGER,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (topic_id, user_id)
+);
+
+-- topics queries
+-- - 查询当前用户所属的所有 Topics（包含个性化状态和设备状态）
+getCurrentUserOrderedTopics:
+SELECT
+    t.id,
+    t.name,
+    t.icon_uri,
+    -- 个性化状态（可能为 NULL）
+    COALESCE(tps.archived, 0) AS archived,
+    COALESCE(tps.pinned, 0) AS pinned,
+    tps.background,
+    tps.last_read_at,
+    COALESCE(tlm.last_message_at, t.created_at) AS sort_timestamp, -- handle empty msg
+    tlm.last_message_snippet
+FROM topics t
+INNER JOIN topic_members tm ON t.id = tm.topic_id
+LEFT JOIN topic_personal_state tps ON t.id = tps.topic_id AND tps.user_id = :current_user_id
+LEFT JOIN topic_last_message tlm ON t.id = tlm.topic_id  -- LEFT JOIN 以应对没有消息的新主题
+WHERE
+    tm.user_id = :current_user_id
+    AND t.is_deleted = 0
+    AND tm.is_deleted = 0
+    -- 默认过滤掉归档的 Topic
+    AND COALESCE(tps.archived, 0) = 0
+ORDER BY
+    -- 1. pin 2. has unread msg 3. last_message_at
+    COALESCE(tps.pinned, 0) DESC,
+    CASE WHEN COALESCE(tps.last_read_at, 0) < COALESCE(tlm.last_message_at, t.created_at)
+         THEN 1 ELSE 0 END DESC,
+    sort_timestamp DESC;
+
+getTopicById:
+SELECT * FROM topics WHERE id = ?;
+
+insertTopic:
+INSERT INTO topics (id, name, icon_uri, creator_id, created_at, updated_at, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+updateTopic:
+UPDATE topics SET name = ?, icon_uri = ?, updated_at = ? WHERE id = ?;
+
+deleteTopicLogical:
+UPDATE topics SET is_deleted = 1, updated_at = ? WHERE id = ?;
+
+-- topic_members queries
+getMembersByTopicId:
+SELECT * FROM topic_members WHERE topic_id = ?;
+
+insertMember:
+INSERT INTO topic_members (topic_id, user_id, user_nickname, role, joined_at, updated_at, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- topic_personal_state queries
+getPersonalState:
+SELECT * FROM topic_personal_state WHERE topic_id = ? AND user_id = ?;
+
+insertPersonalState:
+INSERT INTO topic_personal_state (topic_id, user_id, archived, pinned, background, last_read_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);
