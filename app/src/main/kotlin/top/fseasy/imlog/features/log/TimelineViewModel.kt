@@ -7,7 +7,7 @@ import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import top.fseasy.imlog.data.repository.MessageRepository
-import top.fseasy.imlog.data.repository.TopicRepositoryImpl
+import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.data.repository.UserRepository
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageType
@@ -45,7 +45,7 @@ data class TimelineUiState(
 
 @HiltViewModel
 class TimelineViewModel @Inject constructor(
-    private val topicRepositoryImpl: TopicRepositoryImpl,
+    private val topicRepository: TopicRepository,
     private val messageRepository: MessageRepository,
     private val userRepository: UserRepository,
     @ApplicationContext private val context: Context
@@ -61,7 +61,7 @@ class TimelineViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<TimelineUiState> = combine(
         _topicId.flatMapLatest { id ->
-            if (id != null) topicRepositoryImpl.getTopic(id)
+            if (id != null) topicRepository.observeTopicById(id)
             else flowOf(null)
         },
         _topicId.flatMapLatest { id ->
@@ -75,7 +75,7 @@ class TimelineViewModel @Inject constructor(
         TimelineUiState(
             isLoading = false,
             topic = topic,
-            messages = messages.filter { !it.isDeleted },
+            messages = messages,
             currentUserId = userId,
             voiceRecordingState = voiceState,
             voiceRecordingElapsed = elapsed
@@ -95,9 +95,11 @@ class TimelineViewModel @Inject constructor(
             VoiceRecordingState.RECORDING -> {
                 startRecording()
             }
+
             VoiceRecordingState.STOPPED -> {
                 stopRecording(cancelled = false)
             }
+
             VoiceRecordingState.IDLE -> {
                 if (_voiceRecordingState.value != VoiceRecordingState.IDLE) {
                     stopRecording(cancelled = true)

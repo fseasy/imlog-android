@@ -44,6 +44,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -87,6 +88,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     ksp(libs.hilt.compiler)
     implementation(libs.accompanist.permissions)
+    implementation(libs.timber)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

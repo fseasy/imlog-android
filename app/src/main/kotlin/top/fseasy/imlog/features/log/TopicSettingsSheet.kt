@@ -50,8 +50,7 @@ fun TopicSettingsSheet(
     var editedName by remember { mutableStateOf("") }
 
     ModalBottomSheet(
-        onDismissRequest = onBack,
-        sheetState = sheetState
+        onDismissRequest = onBack, sheetState = sheetState
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -67,29 +66,29 @@ fun TopicSettingsSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            ListItem(
-                headlineContent = { Text("Pin Topic") },
-                supportingContent = { Text(if (uiState.topic?.isPinned == true) "Pinned" else "Not pinned") },
-                leadingContent = { Icon(Icons.Default.PushPin, null) },
-                modifier = Modifier.fillMaxWidth(),
-                trailingContent = {
-                    TextButton(onClick = { viewModel.togglePin() }) {
-                        Text(if (uiState.topic?.isPinned == true) "Unpin" else "Pin")
-                    }
-                }
-            )
+//            ListItem(
+//                headlineContent = { Text("Pin Topic") },
+//                supportingContent = { Text(if (uiState.topic?.isPinned == true) "Pinned" else "Not pinned") },
+//                leadingContent = { Icon(Icons.Default.PushPin, null) },
+//                modifier = Modifier.fillMaxWidth(),
+//                trailingContent = {
+//                    TextButton(onClick = { viewModel.togglePin() }) {
+//                        Text(if (uiState.topic?.isPinned == true) "Unpin" else "Pin")
+//                    }
+//                }
+//            )
 
-            ListItem(
-                headlineContent = { Text("Archive Topic") },
-                supportingContent = { Text(if (uiState.topic?.isArchived == true) "Archived" else "Not archived") },
-                leadingContent = { Icon(Icons.Default.Archive, null) },
-                modifier = Modifier.fillMaxWidth(),
-                trailingContent = {
-                    TextButton(onClick = { viewModel.toggleArchive() }) {
-                        Text(if (uiState.topic?.isArchived == true) "Unarchive" else "Archive")
-                    }
-                }
-            )
+//            ListItem(
+//                headlineContent = { Text("Archive Topic") },
+//                supportingContent = { Text(if (uiState.topic?.isArchived == true) "Archived" else "Not archived") },
+//                leadingContent = { Icon(Icons.Default.Archive, null) },
+//                modifier = Modifier.fillMaxWidth(),
+//                trailingContent = {
+//                    TextButton(onClick = { viewModel.toggleArchive() }) {
+//                        Text(if (uiState.topic?.isArchived == true) "Unarchive" else "Archive")
+//                    }
+//                }
+//            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -99,18 +98,10 @@ fun TopicSettingsSheet(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            ListItem(
-                headlineContent = { Text("Topic Font") },
-                supportingContent = { Text(uiState.topic?.font ?: "Default") },
-                leadingContent = { Icon(Icons.Default.FontDownload, null) },
-                modifier = Modifier.fillMaxWidth()
-            )
-
             Spacer(modifier = Modifier.height(32.dp))
 
             TextButton(
-                onClick = { showDeleteDialog = true },
-                modifier = Modifier.fillMaxWidth()
+                onClick = { showDeleteDialog = true }, modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -145,8 +136,7 @@ fun TopicSettingsSheet(
                 TextButton(onClick = { showEditDialog = false }) {
                     Text("Cancel")
                 }
-            }
-        )
+            })
     }
 
     if (showDeleteDialog) {
@@ -167,7 +157,6 @@ fun TopicSettingsSheet(
                 TextButton(onClick = { showDeleteDialog = false }) {
                     Text("Cancel")
                 }
-            }
-        )
+            })
     }
 }

@@ -1,0 +1,71 @@
+
+updateTopicName:
+-- with user permission check: role = admin; role is effective
+UPDATE topics
+SET
+    name = :newName,
+    attributes_updated_at = :updatedAt
+WHERE id = :topicId
+AND EXISTS (
+    SELECT 1
+    FROM topic_members
+    WHERE topic_id = :topicId
+    AND user_id = :userId
+    AND role = 'admin'
+    AND is_deleted = 0
+);
+
+updateTopicIconUri:
+-- with user permission check: role = admin; role is effective
+UPDATE topics
+SET
+    icon_uri = :newIconUri,
+    attributes_updated_at = :updatedAt
+WHERE id = :topicId
+AND EXISTS (
+    SELECT 1
+    FROM topic_members
+    WHERE topic_id = :topicId
+    AND user_id = :userId
+    AND role = 'admin'
+    AND is_deleted = 0
+);
+
+updateTopicPersonalBackground:
+UPDATE topic_personal_state
+SET
+    background = :newBackground,
+    attributes_updated_at = :updatedAt
+WHERE topic_id = :topicId
+AND user_id = :userId;
+
+updateTopicPersonalArchived:
+UPDATE topic_personal_state
+SET
+    archived = :newArchived,
+    attributes_updated_at = :updatedAt
+WHERE topic_id = :topicId
+AND user_id = :userId;
+
+updateTopicPersonalPinned:
+UPDATE topic_personal_state
+SET
+    pinned = :newPinned,
+    attributes_updated_at = :updatedAt
+WHERE topic_id = :topicId
+AND user_id = :userId;
+
+softDeleteTopic:
+UPDATE topics
+SET
+    is_deleted = 1,
+    attributes_updated_at = :updatedAt
+WHERE id = :topicId
+AND EXISTS (
+    SELECT 1
+    FROM topic_members
+    WHERE topic_id = :topicId
+    AND user_id = :userId
+    AND role = 'admin'
+    AND is_deleted = 0
+);

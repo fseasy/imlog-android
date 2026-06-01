@@ -217,9 +217,6 @@ class TimelinePreviewParameterProvider : PreviewParameterProvider<TimelineUiStat
                 id = "1",
                 name = "闪念 & 灵感盒",
                 iconUri = "",
-                creatorId = "11",
-                createdAt = 1717000000000,
-                updatedAt = 1717000000000
             ), currentUserId = "user_me", messages = listOf(
                 Message(
                     id = "m1",
@@ -261,8 +258,6 @@ class TimelinePreviewParameterProvider : PreviewParameterProvider<TimelineUiStat
                 name = "闪念 & 灵感盒",
                 iconUri = "",
                 creatorId = "11",
-                createdAt = 1717000000000,
-                updatedAt = 1717000000000
             ),
             currentUserId = "user_me",
             messages = emptyList(),

@@ -1,4 +1,3 @@
-import kotlin.Boolean;
 -- share across all members
 CREATE TABLE topics (
     id TEXT NOT NULL PRIMARY KEY,
@@ -6,8 +5,8 @@ CREATE TABLE topics (
     icon_uri TEXT,
     creator_id TEXT NOT NULL REFERENCES users(id),
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    is_deleted INTEGER AS Boolean NOT NULL DEFAULT 0
+    attributes_updated_at INTEGER NOT NULL, -- for sync
+    is_deleted INTEGER NOT NULL DEFAULT 0
 );
 -- share across all members
 CREATE TABLE topic_members (
@@ -16,8 +15,8 @@ CREATE TABLE topic_members (
     user_nickname TEXT,
     role TEXT NOT NULL,
     joined_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    is_deleted INTEGER AS Boolean NOT NULL DEFAULT 0,
+    attributes_updated_at INTEGER NOT NULL, -- for sync
+    is_deleted INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (topic_id, user_id)
 );
 -- share across all members
@@ -25,35 +24,42 @@ CREATE TABLE topic_members (
 CREATE TABLE topic_last_message (
     topic_id TEXT PRIMARY KEY REFERENCES topics(id) ON DELETE CASCADE,
     last_message_at INTEGER NOT NULL,
-    last_message_snippet TEXT  -- 可选：用于列表页的预览文本
+    last_message_snippet TEXT NOT NULL
 );
 
 -- only for current user
 CREATE TABLE topic_personal_state (
     topic_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
-    archived INTEGER AS Boolean NOT NULL DEFAULT 0,
-    pinned INTEGER AS Boolean NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
     background TEXT,
     last_read_at INTEGER,
-    updated_at INTEGER NOT NULL,
+    attributes_updated_at INTEGER NOT NULL, -- for sync
     PRIMARY KEY (topic_id, user_id)
 );
 
 -- topics queries
--- - 查询当前用户所属的所有 Topics（包含个性化状态和设备状态）
-getCurrentUserOrderedTopics:
+-- 查询用于渲染 Log Screen 的 Topic 列表数据
+getCurrentUserLogScreenTopics:
 SELECT
     t.id,
     t.name,
     t.icon_uri,
     -- 个性化状态（可能为 NULL）
-    COALESCE(tps.archived, 0) AS archived,
     COALESCE(tps.pinned, 0) AS pinned,
     tps.background,
     tps.last_read_at,
-    COALESCE(tlm.last_message_at, t.created_at) AS sort_timestamp, -- handle empty msg
-    tlm.last_message_snippet
+    tlm.last_message_at,
+    tlm.last_message_snippet,
+    CASE
+        WHEN tlm.last_message_at IS NULL THEN 0  -- 没有消息，不算未读
+        WHEN tps.last_read_at IS NULL THEN 1  -- 从未读过
+        WHEN tps.last_read_at < tlm.last_message_at THEN 1  -- 有新消息
+        ELSE 0
+    END AS has_unread,
+    -- 1. if has message => last_message_at 2. no message => created_at (not updated_at)
+    COALESCE(tlm.last_message_at, t.created_at) AS topic_message_update_at
 FROM topics t
 INNER JOIN topic_members tm ON t.id = tm.topic_id
 LEFT JOIN topic_personal_state tps ON t.id = tps.topic_id AND tps.user_id = :current_user_id
@@ -65,34 +71,31 @@ WHERE
     -- 默认过滤掉归档的 Topic
     AND COALESCE(tps.archived, 0) = 0
 ORDER BY
-    -- 1. pin 2. has unread msg 3. last_message_at
+    -- 1. pin 2. topic last message at + new topic 3. has unread msg
+    -- time > unread. just think if the user always not click the unread topic,
+    -- we don't need to prioritize them.
     COALESCE(tps.pinned, 0) DESC,
-    CASE WHEN COALESCE(tps.last_read_at, 0) < COALESCE(tlm.last_message_at, t.created_at)
-         THEN 1 ELSE 0 END DESC,
-    sort_timestamp DESC;
+    topic_message_update_at DESC,
+    has_unread DESC;
 
 getTopicById:
 SELECT * FROM topics WHERE id = ?;
 
 insertTopic:
-INSERT INTO topics (id, name, icon_uri, creator_id, created_at, updated_at, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?);
-
-updateTopic:
-UPDATE topics SET name = ?, icon_uri = ?, updated_at = ? WHERE id = ?;
-
-deleteTopicLogical:
-UPDATE topics SET is_deleted = 1, updated_at = ? WHERE id = ?;
+INSERT INTO topics (id, name, icon_uri, creator_id, created_at, attributes_updated_at) VALUES (?, ?, ?, ?, ?, ?);
 
 -- topic_members queries
 getMembersByTopicId:
 SELECT * FROM topic_members WHERE topic_id = ?;
 
 insertMember:
-INSERT INTO topic_members (topic_id, user_id, user_nickname, role, joined_at, updated_at, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT
+INTO topic_members (topic_id, user_id, user_nickname, role, joined_at, attributes_updated_at)
+VALUES (?, ?, ?, ?, ?, ?);
 
 -- topic_personal_state queries
 getPersonalState:
-SELECT * FROM topic_personal_state WHERE topic_id = ? AND user_id = ?;
+SELECT * FROM topic_personal_state WHERE topic_id = :topic_id AND user_id = :user_id;
 
 insertPersonalState:
-INSERT INTO topic_personal_state (topic_id, user_id, archived, pinned, background, last_read_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO topic_personal_state (topic_id, user_id, archived, pinned, background, last_read_at, attributes_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);

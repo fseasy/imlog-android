@@ -6,6 +6,7 @@ import top.fseasy.imlog.data.repository.TopicRepositoryImpl
 import top.fseasy.imlog.data.repository.UserRepository
 import top.fseasy.imlog.domain.model.Topic
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,28 +16,33 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import top.fseasy.imlog.domain.model.TopicPersonalState
+import top.fseasy.imlog.domain.repository.TopicRepository
 import javax.inject.Inject
 
 data class TopicSettingsUiState(
     val isLoading: Boolean = true,
-    val topic: Topic? = null
+    val topic: Topic? = null,
+    val topicPersonalState: TopicPersonalState? = null,
 )
 
 @HiltViewModel
 class TopicSettingsViewModel @Inject constructor(
-    private val topicRepositoryImpl: TopicRepositoryImpl,
-    private val userRepository: UserRepository
+    private val topicRepository: TopicRepository,
+    private val userRepository: UserRepository,
 ) : ViewModel() {
 
     private val _topicId = MutableStateFlow<String?>(null)
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<TopicSettingsUiState> = _topicId.flatMapLatest { id ->
-        if (id != null) topicRepositoryImpl.getTopic(id)
+        if (id != null) topicRepository.observeTopicById(id)
+        else flowOf(null)
+        if (id != null) topicRepository.observeTopicPersonalStateById(topicId = id, )
         else flowOf(null)
     }.combine(MutableStateFlow(false)) { topic, _ ->
         TopicSettingsUiState(
-            isLoading = false,
-            topic = topic
+            isLoading = false, topic = topic
         )
     }.stateIn(
         scope = viewModelScope,
