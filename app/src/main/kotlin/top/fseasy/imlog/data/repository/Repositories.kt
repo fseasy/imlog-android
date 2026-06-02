@@ -7,63 +7,12 @@ import kotlinx.coroutines.Dispatchers
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Statistics
-import top.fseasy.imlog.domain.model.User
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
-
-@Singleton
-class UserRepository @Inject constructor(
-    private val database: SqlDelightDb,
-    private val appPreferences: top.fseasy.imlog.data.datastore.AppPreferencesRepository
-) {
-    val currentUserId: Flow<String?> = appPreferences.currentUserId
-
-    fun getCurrentUser(): Flow<User?> = currentUserId.map { userId ->
-        userId?.let { id ->
-            database.userQueries.getUserById(id).executeAsList().firstOrNull()?.let { row ->
-                User(
-                    id = row.id,
-                    username = row.username,
-                    avatarUri = row.avatar_uri,
-                    createdAt = row.created_at,
-                    updatedAt = row.updated_at
-                )
-            }
-        }
-    }
-
-    suspend fun createCurrentUser(username: String): User {
-        val now = System.currentTimeMillis()
-        val userId = UUID.randomUUID().toString()
-        val user = User(
-            id = userId, username = username, avatarUri = null, createdAt = now, updatedAt = now
-        )
-        database.userQueries.insertUser(
-            id = user.id,
-            username = user.username,
-            avatar_uri = user.avatarUri,
-            created_at = user.createdAt,
-            updated_at = user.updatedAt
-        )
-        appPreferences.setCurrentUserId(userId)
-        return user
-    }
-
-    suspend fun updateCurrentUser(username: String, avatarUri: String?) {
-        val userId = currentUserId.first() ?: return
-        database.userQueries.updateUser(
-            username = username,
-            avatar_uri = avatarUri,
-            updated_at = System.currentTimeMillis(),
-            id = userId
-        )
-    }
-}
 
 @Singleton
 class MessageRepository @Inject constructor(
@@ -86,7 +35,7 @@ class MessageRepository @Inject constructor(
                         duration = row.duration,
                         thumbnailPath = row.thumbnail_path,
                         createdAt = row.created_at,
-                        updatedAt = row.updated_at,
+                        updatedAt = row.attributes_updated_at,
                         isDeleted = row.is_deleted
                     )
                 }
@@ -105,7 +54,7 @@ class MessageRepository @Inject constructor(
                 duration = row.duration,
                 thumbnailPath = row.thumbnail_path,
                 createdAt = row.created_at,
-                updatedAt = row.updated_at,
+                updatedAt = row.attributes_updated_at,
                 isDeleted = row.is_deleted
             )
         }

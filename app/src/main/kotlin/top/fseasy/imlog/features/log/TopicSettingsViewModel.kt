@@ -2,7 +2,6 @@ package top.fseasy.imlog.features.log
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import top.fseasy.imlog.data.repository.TopicRepositoryImpl
 import top.fseasy.imlog.data.repository.UserRepository
 import top.fseasy.imlog.domain.model.Topic
 import dagger.hilt.android.lifecycle.HiltViewModel

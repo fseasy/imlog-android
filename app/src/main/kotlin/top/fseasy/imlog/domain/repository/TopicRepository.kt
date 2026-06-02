@@ -3,20 +3,22 @@ package top.fseasy.imlog.domain.repository
 import kotlinx.coroutines.flow.Flow
 import top.fseasy.imlog.domain.model.LogScreenTopic
 import top.fseasy.imlog.domain.model.Topic
+import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicPersonalState
+import top.fseasy.imlog.domain.model.UserId
 
 interface TopicRepository {
-    fun observeTopicById(topicId: String): Flow<Topic>
-    fun observeTopicPersonalStateById(userId: String, topicId: String): Flow<TopicPersonalState>
-    fun observeLogScreenTopics(userId: String): Flow<List<LogScreenTopic>>
+    fun observeTopicById(topicId: TopicId): Flow<Topic?>
+    fun observePersonalStateById(userId: UserId, topicId: TopicId): Flow<TopicPersonalState?>
+    fun observeLogScreenTopics(userId: UserId): Flow<List<LogScreenTopic>>
 
-    suspend fun createTopic(creatorId: String, name: String, iconUri: String?): LogScreenTopic
+    suspend fun createTopic(creatorId: UserId, name: String, iconUri: String?): LogScreenTopic
 
-    suspend fun updateTopicName(userId: String, topicId: String, newName: String): Boolean
-    suspend fun updateTopicIcon(userId: String, topicId: String, newIconUri: String): Boolean
-    suspend fun updateTopicBackground(userId: String, topicId: String, background: String?): Boolean
+    suspend fun updateTopicName(userId: UserId, topicId: TopicId, newName: String): Boolean
+    suspend fun updateTopicIcon(userId: UserId, topicId: TopicId, newIconUri: String): Boolean
+    suspend fun updateTopicBackground(userId: UserId, topicId: TopicId, background: String?): Boolean
 
-    suspend fun deleteTopic(userId: String, topicId: String): Boolean
-    suspend fun archiveTopic(userId: String, topicId: String, archived: Boolean): Boolean
-    suspend fun pinTopic(userId: String, topicId: String, pinned: Boolean): Boolean
+    suspend fun deleteTopic(userId: UserId, topicId: TopicId): Boolean
+    suspend fun archiveTopic(userId: UserId, topicId: TopicId, archived: Boolean): Boolean
+    suspend fun pinTopic(userId: UserId, topicId: TopicId, pinned: Boolean): Boolean
 }
