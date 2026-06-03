@@ -16,6 +16,7 @@ import timber.log.Timber
 import top.fseasy.imlog.data.datastore.AppPreferencesRepository
 import top.fseasy.imlog.domain.model.User
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.util.retrySQLiteOnKeyConflict
 import javax.inject.Inject
@@ -27,11 +28,11 @@ class UserRepositoryImpl @Inject constructor(
     private val database: SqlDelightDb,
     private val appPreferences: AppPreferencesRepository,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
-) {
-    val observeUserId: Flow<UserId?> = appPreferences.currentUserId.map { it?.let(::UserId) }
+) : UserRepository {
+    override val observeUserId: Flow<UserId?> = appPreferences.currentUserId.map { it?.let(::UserId) }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun observeUser(): Flow<User?> = observeUserId.flatMapLatest { userId ->
+    override fun observeUser(): Flow<User?> = observeUserId.flatMapLatest { userId ->
         val id = userId?.value ?: return@flatMapLatest flowOf(null)
         database.userQueries.getUserById(id)
             .asFlow()
@@ -43,7 +44,7 @@ class UserRepositoryImpl @Inject constructor(
             }
     }
 
-    suspend fun createCurrentUser(username: String, avatarUri: String?): User =
+    override suspend fun createCurrentUser(username: String, avatarUri: String?): User =
         withContext(dispatcher) {
             val now = System.currentTimeMillis()
             val userId = retrySQLiteOnKeyConflict {
@@ -75,21 +76,23 @@ class UserRepositoryImpl @Inject constructor(
             )
         }
 
-    suspend fun updateCurrentUser(username: String, avatarUri: String?) {
-        val userId = currentUserId.first() ?: return
-        database.userQueries.updateUser(
-            username = username,
-            avatar_uri = avatarUri,
-            updated_at = System.currentTimeMillis(),
-            id = userId
-        )
-    }
+    override suspend fun updateCurrentUser(username: String, avatarUri: String?): Unit =
+        withContext(dispatcher) {
+
+            val userId = observeUserId.first() ?: return@withContext
+            database.userQueries.updateUser(
+                username = username,
+                avatar_uri = avatarUri,
+                attributes_updated_at = System.currentTimeMillis(),
+                id = userId.value
+            )
+        }
 
     private fun UserEntity.toDomain() = User(
-        id = id,
+        id = UserId(id),
         username = username,
         avatarUri = avatar_uri,
         createdAt = created_at,
-        attributesUpdatedAt = updated_at
+        attributesUpdatedAt = attributes_updated_at,
     )
 }

@@ -1,0 +1,10 @@
+-- 删除那些在成员表里已经没有任何人关联的 topics
+CREATE TRIGGER IF NOT EXISTS delete_orphaned_topics
+AFTER DELETE ON topic_members
+BEGIN
+    DELETE FROM topics
+    WHERE id = old.topic_id
+      AND NOT EXISTS (
+          SELECT 1 FROM topic_members WHERE topic_id = old.topic_id
+      );
+END;

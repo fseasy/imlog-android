@@ -5,6 +5,7 @@ import android.app.Application
 import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
+import top.fseasy.imlog.data.paths.AppPaths
 
 @HiltAndroidApp
 class ImlogApplication : Application() {
@@ -15,6 +16,7 @@ class ImlogApplication : Application() {
         } else {
             Timber.plant(CrashReportingTree())
         }
+        AppPaths.init(this)
     }
 }
 

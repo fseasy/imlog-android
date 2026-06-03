@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.log
+package top.fseasy.imlog.features.log.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +50,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import top.fseasy.imlog.domain.model.Topic
+import top.fseasy.imlog.features.log.TopicsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

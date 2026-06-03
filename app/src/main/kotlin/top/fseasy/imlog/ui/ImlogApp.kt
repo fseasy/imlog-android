@@ -27,9 +27,9 @@ import top.fseasy.imlog.ui.navigation.Screen
 import top.fseasy.imlog.features.settings.FeedbackScreen
 import top.fseasy.imlog.features.settings.AboutScreen
 import top.fseasy.imlog.features.view.ViewScreen
-import top.fseasy.imlog.features.log.TopicsScreen
-import top.fseasy.imlog.features.log.TimelineScreen
-import top.fseasy.imlog.features.log.TopicSettingsSheet
+import top.fseasy.imlog.features.log.ui.TopicsScreen
+import top.fseasy.imlog.features.log.ui.TimelineScreen
+import top.fseasy.imlog.features.log.ui.TopicSettingsSheet
 import top.fseasy.imlog.features.settings.SettingsDrawer
 import kotlinx.coroutines.launch
 

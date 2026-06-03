@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.log
+package top.fseasy.imlog.features.log.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

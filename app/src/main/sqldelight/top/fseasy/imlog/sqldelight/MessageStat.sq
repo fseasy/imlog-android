@@ -1,0 +1,7 @@
+statOneUserUsage:
+SELECT
+    COALESCE(COUNT(*), 0) AS total_messages,
+    COALESCE(CAST((MAX(created_at) - MIN(created_at)) / (24 * 60 * 60 * 1000.0) + 1 AS INTEGER), 0) AS total_days
+FROM messages
+WHERE sender_id = :sender_id
+AND is_deleted = 0;

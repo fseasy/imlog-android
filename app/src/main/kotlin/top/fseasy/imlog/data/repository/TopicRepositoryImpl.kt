@@ -18,13 +18,11 @@ import top.fseasy.imlog.domain.model.TopicPersonalState
 import top.fseasy.imlog.domain.model.TopicRole
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.TopicRepository
-import top.fseasy.imlog.features.log.TopicCard
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.util.retrySQLiteOnKeyConflict
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 import top.fseasy.imlog.sqldelight.Topics as TopicEntity
 import top.fseasy.imlog.sqldelight.Topic_personal_state as PersonalStateEntity
 import top.fseasy.imlog.sqldelight.GetCurrentUserLogScreenTopics as UserLogScreenTopicEntity
@@ -180,7 +178,7 @@ class TopicRepositoryImpl @Inject constructor(
         id = TopicId(id),
         name = name,
         iconUri = icon_uri,
-        creatorId = creator_id,
+        creatorId = creator_id?.let(::UserId),
         createdAt = created_at,
         attributesUpdatedAt = attributes_updated_at,
         isDeleted = is_deleted == 1L,

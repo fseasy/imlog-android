@@ -1,22 +1,12 @@
 package top.fseasy.imlog.features.log
 
 import android.content.Context
-import android.media.MediaRecorder
 import android.net.Uri
-import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import top.fseasy.imlog.data.repository.MessageRepository
-import top.fseasy.imlog.domain.repository.TopicRepository
-import top.fseasy.imlog.data.repository.UserRepository
-import top.fseasy.imlog.domain.model.Message
-import top.fseasy.imlog.domain.model.MessageType
-import top.fseasy.imlog.domain.model.Topic
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,21 +16,27 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import top.fseasy.imlog.domain.model.Message
+import top.fseasy.imlog.domain.model.MessageType
+import top.fseasy.imlog.domain.model.Topic
+import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.model.VoiceRecordingState
+import top.fseasy.imlog.domain.repository.MessageRepository
+import top.fseasy.imlog.domain.repository.TopicRepository
+import top.fseasy.imlog.domain.repository.UserRepository
+import top.fseasy.imlog.features.log.domain.VoiceRecorder
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
-
-enum class VoiceRecordingState {
-    IDLE, RECORDING, STOPPED
-}
 
 data class TimelineUiState(
     val isLoading: Boolean = true,
     val topic: Topic? = null,
     val messages: List<Message> = emptyList(),
-    val currentUserId: String? = null,
+    val currentUserId: UserId? = null,
     val voiceRecordingState: VoiceRecordingState = VoiceRecordingState.IDLE,
-    val voiceRecordingElapsed: Long = 0
+    val voiceRecordingElapsed: Long = 0,
 )
 
 @HiltViewModel
@@ -48,29 +44,24 @@ class TimelineViewModel @Inject constructor(
     private val topicRepository: TopicRepository,
     private val messageRepository: MessageRepository,
     private val userRepository: UserRepository,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
-    private val _topicId = MutableStateFlow<String?>(null)
-    private val _voiceRecordingState = MutableStateFlow(VoiceRecordingState.IDLE)
-    private val _voiceRecordingElapsed = MutableStateFlow(0L)
-    private var recordingTimerJob: Job? = null
-    private var mediaRecorder: MediaRecorder? = null
-    private var currentRecordingFile: File? = null
+    private val _topicId = MutableStateFlow<TopicId?>(null)
+
+    val voiceRecorder = VoiceRecorder()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<TimelineUiState> = combine(
-        _topicId.flatMapLatest { id ->
-            if (id != null) topicRepository.observeTopicById(id)
-            else flowOf(null)
+        _topicId.flatMapLatest {
+            it?.let { topicRepository.observeTopicById(it) } ?: flowOf(null)
         },
-        _topicId.flatMapLatest { id ->
-            if (id != null) messageRepository.getMessages(id)
-            else flowOf(emptyList())
+        _topicId.flatMapLatest {
+            it?.let { messageRepository.observeTopicMessages(it) } ?: flowOf(emptyList())
         },
-        userRepository.currentUserId,
-        _voiceRecordingState,
-        _voiceRecordingElapsed
+        userRepository.observeUserId,
+        voiceRecorder.state,
+        voiceRecorder.elapsedMs
     ) { topic, messages, userId, voiceState, elapsed ->
         TimelineUiState(
             isLoading = false,
@@ -86,165 +77,109 @@ class TimelineViewModel @Inject constructor(
         initialValue = TimelineUiState()
     )
 
-    fun loadTopic(topicId: String) {
+    fun loadTopic(topicId: TopicId) {
         _topicId.value = topicId
     }
 
-    fun setVoiceRecordingState(state: VoiceRecordingState) {
-        when (state) {
-            VoiceRecordingState.RECORDING -> {
-                startRecording()
-            }
-
-            VoiceRecordingState.STOPPED -> {
-                stopRecording(cancelled = false)
-            }
-
-            VoiceRecordingState.IDLE -> {
-                if (_voiceRecordingState.value != VoiceRecordingState.IDLE) {
-                    stopRecording(cancelled = true)
-                }
-            }
-        }
-        _voiceRecordingState.value = state
+    fun startRecording() {
+        voiceRecorder.start(context)
     }
 
-    private fun startRecording() {
-        try {
-            val outputFile = File(context.cacheDir, "voice_${UUID.randomUUID()}.m4a")
-            currentRecordingFile = outputFile
-
-            mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                MediaRecorder(context)
-            } else {
-                @Suppress("DEPRECATION")
-                MediaRecorder()
-            }.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setOutputFile(outputFile.absolutePath)
-                prepare()
-                start()
-            }
-
-            _voiceRecordingElapsed.value = 0
-            recordingTimerJob = viewModelScope.launch {
-                while (true) {
-                    delay(100)
-                    _voiceRecordingElapsed.value += 100
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            _voiceRecordingState.value = VoiceRecordingState.IDLE
+    fun stopRecording() {
+        val file = voiceRecorder.stop()
+        if (file != null) {
+            sendAudioMessage(file)
         }
     }
 
-    private fun stopRecording(cancelled: Boolean) {
-        recordingTimerJob?.cancel()
-        recordingTimerJob = null
-
-        try {
-            mediaRecorder?.apply {
-                stop()
-                release()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        mediaRecorder = null
-
-        if (cancelled) {
-            currentRecordingFile?.delete()
-        }
-        currentRecordingFile = null
-        _voiceRecordingElapsed.value = 0
+    fun cancelRecording() {
+        voiceRecorder.cancel()
     }
 
+    // --- 消息发送 ---
     fun sendTextMessage(content: String) {
-        viewModelScope.launch {
-            val topicId = _topicId.value ?: return@launch
-            val userId = userRepository.currentUserId.first() ?: return@launch
+        launchWithTopic { topicId ->
+            val userId = requireCurrentUserId()
             messageRepository.sendTextMessage(topicId, userId, content)
         }
     }
 
     fun sendImageMessage(uri: Uri) {
-        viewModelScope.launch {
-            val topicId = _topicId.value ?: return@launch
-            val userId = userRepository.currentUserId.first() ?: return@launch
-
-            // Copy file to app storage
-            val inputStream = context.contentResolver.openInputStream(uri)
-            val file = File(context.filesDir, "images_${UUID.randomUUID()}")
-            inputStream?.use { input ->
-                file.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-
-            messageRepository.sendMediaMessage(
-                topicId = topicId,
-                senderId = userId,
-                type = MessageType.IMAGE,
-                filePath = file.absolutePath,
-                fileSize = file.length(),
-                duration = null,
-                thumbnailPath = null
-            )
-        }
+        sendMediaMessage(uri, MessageType.IMAGE)
     }
 
     fun sendVideoMessage(uri: Uri) {
-        viewModelScope.launch {
-            val topicId = _topicId.value ?: return@launch
-            val userId = userRepository.currentUserId.first() ?: return@launch
-
-            // Copy file to app storage
-            val inputStream = context.contentResolver.openInputStream(uri)
-            val file = File(context.filesDir, "videos_${UUID.randomUUID()}")
-            inputStream?.use { input ->
-                file.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-
-            messageRepository.sendMediaMessage(
-                topicId = topicId,
-                senderId = userId,
-                type = MessageType.VIDEO,
-                filePath = file.absolutePath,
-                fileSize = file.length(),
-                duration = null,
-                thumbnailPath = null
-            )
-        }
+        sendMediaMessage(uri, MessageType.VIDEO)
     }
 
     fun sendAudioMessage(file: File) {
-        viewModelScope.launch {
-            val topicId = _topicId.value ?: return@launch
-            val userId = userRepository.currentUserId.first() ?: return@launch
-
+        launchWithTopic { topicId ->
+            val userId = requireCurrentUserId()
+            val duration = voiceRecorder.elapsedMs.value / 1000
             messageRepository.sendMediaMessage(
                 topicId = topicId,
                 senderId = userId,
                 type = MessageType.AUDIO,
                 filePath = file.absolutePath,
                 fileSize = file.length(),
-                duration = (_voiceRecordingElapsed.value / 1000),
+                duration = duration,
                 thumbnailPath = null
             )
         }
     }
 
     fun copyMessage(message: Message) {
-        // Copy to clipboard - would be implemented with ClipboardManager
+        // TODO: 实现剪贴板复制
     }
 
     override fun onCleared() {
         super.onCleared()
-        stopRecording(cancelled = true)
+        voiceRecorder.cancel()
+    }
+
+    // --- 内部工具 ---
+
+    /**
+     * 在协程中确保 topicId 与 userId 非空后执行 [block]
+     */
+    private inline fun launchWithTopic(crossinline block: suspend (TopicId) -> Unit) {
+        viewModelScope.launch {
+            val topicId = _topicId.value ?: return@launch
+            block(topicId)
+        }
+    }
+
+    private suspend fun requireCurrentUserId(): UserId {
+        return userRepository.observeUserId.first() ?: error("未登录")
+    }
+
+    private suspend fun copyUriToInternal(uri: Uri, subDir: String, prefix: String): File {
+        val dir = File(context.filesDir, subDir).also { it.mkdirs() }
+        val file = File(dir, "${prefix}_${UUID.randomUUID()}")
+        context.contentResolver.openInputStream(uri)
+            ?.use { input ->
+                file.outputStream()
+                    .use { output ->
+                        input.copyTo(output)
+                    }
+            } ?: throw IllegalStateException("无法读取文件: $uri")
+        return file
+    }
+
+    private fun sendMediaMessage(uri: Uri, type: MessageType) {
+        viewModelScope.launch {
+            val topicId = _topicId.value ?: return@launch
+            val userId = requireCurrentUserId()
+            val file = copyUriToInternal(uri, type.name.lowercase(), type.name.lowercase())
+            messageRepository.sendMediaMessage(
+                topicId = topicId,
+                senderId = userId,
+                type = type,
+                filePath = file.absolutePath,
+                fileSize = file.length(),
+                duration = null,
+                thumbnailPath = null
+            )
+        }
     }
 }

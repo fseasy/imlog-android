@@ -3,19 +3,21 @@ CREATE TABLE topics (
     id TEXT NOT NULL PRIMARY KEY,
     name TEXT NOT NULL,
     icon_uri TEXT,
-    creator_id TEXT NOT NULL REFERENCES users(id),
+    -- 注意！这里可以为空：因为当 creator 注销账户后，不能直接删除这个 Topic!
+    -- 只有群成员全部注销后才能删除这个 Topic；对应到 Trigger 里基于 topic_members 的删除
+    creator_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     created_at INTEGER NOT NULL,
-    attributes_updated_at INTEGER NOT NULL, -- for sync
+    attributes_updated_at INTEGER NOT NULL,
     is_deleted INTEGER NOT NULL DEFAULT 0
 );
 -- share across all members
 CREATE TABLE topic_members (
     topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     user_nickname TEXT,
     role TEXT NOT NULL,
     joined_at INTEGER NOT NULL,
-    attributes_updated_at INTEGER NOT NULL, -- for sync
+    attributes_updated_at INTEGER NOT NULL,
     is_deleted INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (topic_id, user_id)
 );
@@ -29,13 +31,13 @@ CREATE TABLE topic_last_message (
 
 -- only for current user
 CREATE TABLE topic_personal_state (
-    topic_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
+    topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     archived INTEGER NOT NULL DEFAULT 0,
     pinned INTEGER NOT NULL DEFAULT 0,
     background TEXT,
     last_read_at INTEGER,
-    attributes_updated_at INTEGER NOT NULL, -- for sync
+    attributes_updated_at INTEGER NOT NULL,
     PRIMARY KEY (topic_id, user_id)
 );
 

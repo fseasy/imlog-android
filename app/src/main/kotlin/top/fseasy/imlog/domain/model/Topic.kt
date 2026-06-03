@@ -24,7 +24,7 @@ data class Topic(
     val id: TopicId,
     val name: String,
     val iconUri: String?,
-    val creatorId: String,
+    val creatorId: UserId?, // Can be null if creator is deleted
     val createdAt: Long,
     val attributesUpdatedAt: Long,
     val isDeleted: Boolean = false,
