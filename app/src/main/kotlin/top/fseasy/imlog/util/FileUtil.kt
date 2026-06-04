@@ -22,24 +22,21 @@ fun copyUriToFile(context: Context, uri: Uri, destination: File): File {
     // 确保父目录存在
     destination.parentFile?.mkdirs()
 
-    context.contentResolver.openInputStream(uri)?.use { input ->
-        destination.outputStream().use { output ->
-            input.copyTo(output)
-        }
-    } ?: throw FileNotFoundException("Can not open file: $uri")
+    context.contentResolver.openInputStream(uri)
+        ?.use { input ->
+            destination.outputStream()
+                .use { output ->
+                    input.copyTo(output)
+                }
+        } ?: throw FileNotFoundException("Can not open file: $uri")
 
     return destination
 }
 
 /**
- * 在应用内部存储中生成文件，自动创建父目录。
- *
- * @param context 用于获取 filesDir
- * @param relativePath 相对于 filesDir 的完整路径，如 "images/photo_123.jpg"
- * @return 文件对象，父目录已确保存在
+ * Extract path name by substring-after-last.
+ * not stable enough for dirty paths. Use it only when you know the path is very clean.
  */
-fun internalFile(context: Context, relativePath: String): File {
-    val file = File(context.filesDir, relativePath)
-    file.parentFile?.mkdirs()
-    return file
+fun String?.pathNameBySubstring(): String? {
+    return this?.let { substringAfterLast("/") }
 }

@@ -5,7 +5,7 @@ import android.app.Application
 import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
-import top.fseasy.imlog.data.paths.AppPaths
+import top.fseasy.imlog.data.file.AppPaths
 
 @HiltAndroidApp
 class ImlogApplication : Application() {

@@ -1,4 +1,4 @@
-package top.fseasy.imlog.data.paths
+package top.fseasy.imlog.data.file
 
 import android.content.Context
 

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import top.fseasy.imlog.domain.model.Message
+import top.fseasy.imlog.domain.model.MessageFactory
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
@@ -100,7 +101,8 @@ class TimelineViewModel @Inject constructor(
     fun sendTextMessage(content: String) {
         launchWithTopic { topicId ->
             val userId = requireCurrentUserId()
-            messageRepository.sendTextMessage(topicId, userId, content)
+            val textMsg = MessageFactory.createText(topicId, userId, content)
+            messageRepository.save(textMsg)
         }
     }
 
@@ -151,19 +153,6 @@ class TimelineViewModel @Inject constructor(
 
     private suspend fun requireCurrentUserId(): UserId {
         return userRepository.observeUserId.first() ?: error("未登录")
-    }
-
-    private suspend fun copyUriToInternal(uri: Uri, subDir: String, prefix: String): File {
-        val dir = File(context.filesDir, subDir).also { it.mkdirs() }
-        val file = File(dir, "${prefix}_${UUID.randomUUID()}")
-        context.contentResolver.openInputStream(uri)
-            ?.use { input ->
-                file.outputStream()
-                    .use { output ->
-                        input.copyTo(output)
-                    }
-            } ?: throw IllegalStateException("无法读取文件: $uri")
-        return file
     }
 
     private fun sendMediaMessage(uri: Uri, type: MessageType) {

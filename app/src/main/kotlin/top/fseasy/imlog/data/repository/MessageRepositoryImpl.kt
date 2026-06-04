@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import top.fseasy.imlog.data.file.toMessageAbsolutePath
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageType
@@ -16,6 +17,7 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
+import top.fseasy.imlog.util.pathNameBySubstring
 import javax.inject.Inject
 import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.Messages as MessageEntity
@@ -25,11 +27,18 @@ class MessageRepositoryImpl @Inject constructor(
     private val database: SqlDelightDb,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : MessageRepository {
-    override fun observeTopicMessages(topicId: TopicId): Flow<List<Message>> =
-        database.messageQueries.getMessagesByTopic(topicId.value)
-            .asFlow()
-            .mapToList(dispatcher)
-            .map { rows -> rows.map { it.toDomain() } }
+
+    /**
+     * To render the timeline message list.
+     * @param currentUserId: used to generate the full path of media resources
+     */
+    override fun observeTopicMessages(
+        topicId: TopicId,
+        currentUserId: UserId,
+    ): Flow<List<Message>> = database.messageQueries.getMessagesByTopic(topicId.value)
+        .asFlow()
+        .mapToList(dispatcher)
+        .map { rows -> rows.map { it.toDomain(currentUserId) } }
 
     override fun observeStatistics(senderId: UserId): Flow<Statistics> =
         database.messageStatQueries.statOneUserUsage(senderId.value)
@@ -45,19 +54,23 @@ class MessageRepositoryImpl @Inject constructor(
         database.messageQueries.deleteMessageLogical(id = messageId.value).value > 0L
     }
 
-    private fun MessageEntity.toDomain() = Message(
-        id = MessageId(id),
-        topicId = TopicId(topic_id),
-        senderId = UserId(sender_id),
-        type = MessageType.fromValue(type),
-        content = content,
-        filePath = filename,
-        fileSize = file_size,
-        duration = duration,
-        thumbnailPath = thumbnail_path,
-        createdAt = created_at,
-        attributesUpdatedAt = attributes_updated_at,
-    )
+    private fun MessageEntity.toDomain(currentUserId: UserId): Message {
+        return Message(
+            id = MessageId(id),
+            topicId = TopicId(topic_id),
+            senderId = UserId(sender_id),
+            type = MessageType.fromValue(type),
+            content = content,
+            filePath = filename.toMessageAbsolutePath(currentUserId.value, created_at),
+            fileSize = file_size,
+            duration = duration,
+            thumbnailPath = thumbnail_name.toMessageAbsolutePath(
+                currentUserId.value, created_at
+            ),
+            createdAt = created_at,
+            attributesUpdatedAt = attributes_updated_at,
+        )
+    }
 
     private fun Message.toEntity() = MessageEntity(
         id = id.value,
@@ -70,10 +83,10 @@ class MessageRepositoryImpl @Inject constructor(
          */
         type = type?.value ?: "__unknown__",
         content = content,
-        filename = filePath,
+        filename = filePath.pathNameBySubstring(),
         file_size = fileSize,
         duration = duration,
-        thumbnail_path = thumbnailPath,
+        thumbnail_name = thumbnailPath.pathNameBySubstring(),
         created_at = createdAt,
         attributes_updated_at = attributesUpdatedAt,
         is_deleted = 0

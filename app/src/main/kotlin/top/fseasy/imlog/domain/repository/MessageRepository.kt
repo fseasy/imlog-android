@@ -9,7 +9,7 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 
 interface MessageRepository {
-    fun observeTopicMessages(topicId: TopicId): Flow<List<Message>>
+    fun observeTopicMessages(topicId: TopicId, currentUserId: UserId): Flow<List<Message>>
     fun observeStatistics(senderId: UserId): Flow<Statistics>
     suspend fun save(message: Message): Unit
     suspend fun delete(messageId: MessageId): Boolean

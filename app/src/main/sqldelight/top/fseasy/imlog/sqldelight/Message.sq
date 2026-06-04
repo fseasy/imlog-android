@@ -11,7 +11,7 @@ CREATE TABLE messages (
     filename TEXT,
     file_size INTEGER,
     duration INTEGER,
-    thumbnail_path TEXT,
+    thumbnail_name TEXT,
     created_at INTEGER NOT NULL,
     attributes_updated_at INTEGER NOT NULL,
     is_deleted INTEGER NOT NULL DEFAULT 0
