@@ -40,3 +40,12 @@ fun copyUriToFile(context: Context, uri: Uri, destination: File): File {
 fun String?.pathNameBySubstring(): String? {
     return this?.let { substringAfterLast("/") }
 }
+
+fun String.splitNameAndExtension(): Pair<String, String> {
+    val lastDotIndex = lastIndexOf(".")
+    return if (lastDotIndex == -1) {
+        this to ""
+    } else {
+        substring(0, lastDotIndex) to substring(lastDotIndex + 1)
+    }
+}

@@ -2,88 +2,116 @@ package top.fseasy.imlog.data.file
 
 import android.content.Context
 import android.net.Uri
-import android.webkit.MimeTypeMap
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import top.fseasy.imlog.data.datastore.AppPreferencesRepository
-import java.io.File
-import java.io.FileOutputStream
-import java.util.UUID
+import top.fseasy.imlog.data.file.MediaSaveResult.*
+import top.fseasy.imlog.domain.model.MessageType
+import top.fseasy.imlog.domain.model.UserId
 import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
+sealed interface MediaSaveResult {
+    /**
+     * Full/relative path/uri will be dynamically calculated
+     */
+    data class SavedMedia(
+        val filename: String,
+        val originalFilename: String,
+        val fileSize: Long,
+        val thumbnailFilename: String,
+        val mimeType: String,
+        val duration: Long?, // for video, audio
+        val width: Int,
+        val height: Int,
+    ) : MediaSaveResult
+
+    data class MediaSavePermissionError(val cause: Throwable) : MediaSaveResult
+    data class MediaSaveSrcInvalidError(val cause: Throwable) : MediaSaveResult
+    data class MediaSaveUnexpectedError(val cause: Throwable) : MediaSaveResult
+}
+
 class FileManager @Inject constructor(
-    appPreferencesRepository: AppPreferencesRepository,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
 ) {
-
     /**
-     * 接收外部的 Uri（相册、文件管理器、录音缓存），将其 Copy 到 ImLog 的专属时间线目录下。
-     * * @return 返回相对于 AppRoot 的相对路径 (relativePath)，用于存入数据库 messages 表。
+     * Perform media (img, video) saving logics:
+     * 1. copy raw to shared storage
+     * 2. generate thumbnail, save to private external storage
      */
-    suspend fun saveMessageFile(
-        userId: String,
-        sourceUri: Uri,
-        timestampMs: Long = System.currentTimeMillis()
-    ): String = withContext(Dispatchers.IO) {
-
-        // 1. 解析文件后缀名 (默认给个 unknown 防崩)
-        val extension = getFileExtension(sourceUri) ?: "unknown"
-
-        // 2. 生成文件名和路径
-        val filename = MessageFilePath.generateFilename(timestampMs, extension)
-        val absolutePath = MessageFilePath.absolutePath(userId, timestampMs, filename)
-        val relativePath = MessageFilePath.relativePath(userId, timestampMs, filename) // 注意：需要将此方法改为 public
-
-        val destFile = File(absolutePath)
-
-        // 3. 确保父级目录 (年月/旬) 已经创建
-        destFile.parentFile?.let { parent ->
-            if (!parent.exists()) {
-                parent.mkdirs()
-            }
+    suspend fun saveMessageMedia(
+        userId: UserId,
+        topicId: UserId,
+        srcUri: Uri,
+        messageTimestampMs: Long,
+        messageType: MessageType,
+        tgtRootTreeUri: Uri,
+    ): MediaSaveResult {
+        val queryMetaFields = with(MediaFields) {
+            listOf(
+                DISPLAY_NAME, FILE_SIZE, MIME_TYPE, DURATION, HEIGHT, WIDTH
+            )
         }
 
-        // 4. 执行 IO 流拷贝 (从 Uri 读，往 File 写)
-        context.contentResolver.openInputStream(sourceUri)?.use { inputStream ->
-            FileOutputStream(destFile).use { outputStream ->
-                inputStream.copyTo(outputStream)
-            }
-        } ?: throw IllegalArgumentException("无法打开源文件 Uri: $sourceUri")
+        val metaData = UriStorageUtil.resolveMetadata(context, srcUri, queryMetaFields)
 
-        // 5. 返回相对路径供数据库持久化
-        return@withContext relativePath
-    }
+        val displayName = metaData.displayName
+            ?: UriStorageUtil.getFilenameFallback(srcUri) // more robust
+            ?: "_" // have to assign a value. It should be ok.
 
-    /**
-     * 用于 UI 层 (如 ImageBubble, VideoBubble) 读取真实的物理文件进行渲染。
-     */
-    fun getFileForRender(absolutePath: String): File {
-        return File(absolutePath)
-    }
+        val storeRawFilename =
+            MessageFilePath.generateFilenameByPrependTime(messageTimestampMs, displayName)
+        val mimeType =
+            metaData.mimeType ?: UriStorageUtil.getMimeTypeFallback(context, srcUri)
+        val relativePathSegments =
+            MessageFilePath.fullRelativePath(userId, topicId, messageTimestampMs, storeRawFilename)
+        val tgtUriFindResult =
+            UriStorageUtil.ensureSAFFileUri(context, tgtRootTreeUri, relativePathSegments, mimeType)
+        val rawFileTgtUri = when (tgtUriFindResult) {
+            is FindFileResult.Success -> tgtUriFindResult.uri
+            is FindFileResult.Error.PermissionDenied -> return MediaSavePermissionError(
+                tgtUriFindResult.cause
+            )
 
-    /**
-     * 用户删除某条记录时，彻底从磁盘抹除文件。
-     */
-    suspend fun deleteMessageFile(absolutePath: String): Boolean = withContext(Dispatchers.IO) {
-        val file = File(absolutePath)
-        if (file.exists()) {
-            return@withContext file.delete()
+            is FindFileResult.Error.Unexpected -> return MediaSaveUnexpectedError(
+                tgtUriFindResult.cause
+            )
+
+            is FindFileResult.NotFound -> return MediaSaveUnexpectedError(IllegalStateException("EnsureSAFFile got Not Found"))
         }
-        return@withContext false
-    }
 
-    /**
-     * 辅助方法：从 Uri 安全提取文件扩展名
-     */
-    private fun getFileExtension(uri: Uri): String? {
-        return if (uri.scheme == "content") {
-            val mimeType = context.contentResolver.getType(uri)
-            MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
-        } else {
-            MimeTypeMap.getFileExtensionFromUrl(Uri.fromFile(File(uri.path ?: "")).toString())
+
+        val copyResult = UriStorageUtil.copyBetweenUri(
+            context,
+            srcUri,
+            rawFileTgtUri,
+            writeMode = FileWriteMode.WRITE_TRUNCATE,
+        )
+
+        when (copyResult) {
+            is FileCopyResult.Error.SrcPermissionDenied,
+            is FileCopyResult.Error.SrcNotFound,
+            is FileCopyResult.Error.SrcOpenUnexpected,
+                -> return MediaSaveSrcInvalidError(
+                copyResult.cause
+            )
+
+            is FileCopyResult.Error.TgtPermissionDenied -> return MediaSavePermissionError(
+                copyResult.cause
+            )
+
+            is FileCopyResult.Error.TgtNotFound,
+            is FileCopyResult.Error.TgtOpenUnexpected,
+            is FileCopyResult.Error.CopyIOError,
+            is FileCopyResult.Error.CopyUnexpected,
+                -> return MediaSaveUnexpectedError(
+                IllegalStateException(copyResult.cause)
+            )
+
+            is FileCopyResult.Success -> {}
         }
+
+        // generate thumbnail
+
+
+        val fileSize = metaData.fileSize ?: 0L
+
     }
 }

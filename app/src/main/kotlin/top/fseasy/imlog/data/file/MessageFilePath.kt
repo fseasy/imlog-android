@@ -1,8 +1,12 @@
 package top.fseasy.imlog.data.file
 
+import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.util.splitNameAndExtension
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+
+private const val KEEP_ORIGINAL_FILENAME_MAX_CHARS = 60;
 
 /**
  * 消息附件的文件路径生成规则。
@@ -11,41 +15,51 @@ import java.time.format.DateTimeFormatter
  */
 object MessageFilePath {
 
-    /**
-     * 生成新文件的文件名。
-     * 格式: yyyy-MM-dd-HHmmss.suffix
-     */
-    fun generateFilename(timestampMs: Long, suffix: String): String {
-        val instant = Instant.ofEpochMilli(timestampMs)
-        val utc = instant.atOffset(ZoneOffset.UTC)
-        val time = utc.format(DateTimeFormatter.ofPattern("dd-HHmmss-SSS-utc"))
-        return "$time.$suffix"
+    fun generateFilenameByPrependTime(timestampMs: Long, originalFilename: String): String {
+        val (rawName, extension) = originalFilename.splitNameAndExtension()
+        val rawTruncatedName = rawName.take(KEEP_ORIGINAL_FILENAME_MAX_CHARS)
+        val timePrefix = generateTimePrefix(timestampMs)
+        return if (extension.isNotEmpty()) {
+            "${timePrefix}.{$rawTruncatedName}.${extension}"
+        } else {
+            "${timePrefix}.{$rawTruncatedName}"
+        }
     }
 
     /**
-     * 根据 文件名 + userId + timestampMs，并基于 AppPath 的 root 目录，计算最终的全路径。
-     * 用于显示/加载文件时即时计算。
-     * @param userId: should be the login user id!
+     * 格式: ${dd-HHmmss-SSS}-utc.$suffix
      */
-    fun absolutePath(userId: String, timestampMs: Long, filename: String): String {
-        val relativePath = relativePath(userId, timestampMs, filename)
-        val rootDir = AppPaths.messageRootDir
-        return "${rootDir}/$relativePath"
+    private fun generateTimePrefix(timestampMs: Long): String {
+        val instant = Instant.ofEpochMilli(timestampMs)
+        val utc = instant.atOffset(ZoneOffset.UTC)
+        val time = utc.format(DateTimeFormatter.ofPattern("dd-HHmmss-SSSutc"))
+        return "$time"
     }
 
     /**
      * 根据文件名 + userId + timestampMs 拼接完整相对路径。
      * 用于显示/加载文件时即时计算。
      */
-    private fun relativePath(userId: String, timestampMs: Long, filename: String): String {
-        val prefix = buildDirPrefix(timestampMs)
-        return "user_data/$userId/$prefix/$filename"
+    fun fullRelativePath(
+        userId: UserId,
+        topicId: UserId,
+        timestampMs: Long,
+        filename: String,
+    ): List<String> {
+        val subPrefixDirs = buildDirPrefix(timestampMs)
+        return buildList(6) {
+            add("user_data")
+            add(userId.value)
+            add(topicId.value)
+            addAll(subPrefixDirs)
+            add(filename)
+        }
     }
 
     /**
      * @param timestampMs: something like System.currentTimeMillis()
      */
-    private fun buildDirPrefix(timestampMs: Long): String {
+    private fun buildDirPrefix(timestampMs: Long): List<String> {
         val instant = Instant.ofEpochMilli(timestampMs)
         val utc = instant.atOffset(ZoneOffset.UTC)
         val yearMonth = utc.format(DateTimeFormatter.ofPattern("yyyy-MM"))
@@ -55,12 +69,6 @@ object MessageFilePath {
             in 11..20 -> "day11-20-utc"
             else -> "day21-31-utc"
         }
-        return "$yearMonth/$dayRange"
+        return listOf(yearMonth, dayRange)
     }
-}
-
-// Extensions for string (filename)
-
-fun String?.toMessageAbsolutePath(userId: String, timestampMs: Long): String? {
-    return this?.let { MessageFilePath.absolutePath(userId, timestampMs, it) }
 }

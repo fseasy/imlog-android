@@ -16,4 +16,13 @@
 
    按官方的来，就用 SAF 吧。其实读取外部共享存储的时间并不多啊。
    
-   
+## 实现框架
+
+class FileManager(context): 
+    saveToSAF(relativeSubDirs: List<String>, fileName: String, mimeType: String? = null)
+    saveToPrivateExternal(relativeSubDirs: List<String>, fileName: String)
+    saveToPrivateExternal(relativePath: String)
+    
+    
+
+    
