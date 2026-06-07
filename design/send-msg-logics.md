@@ -72,36 +72,38 @@ UI 层（通过 Flow/LiveData 监听数据库）：
    );
 2. 发送图片时的完整工作流
    当用户点击发送图片时，执行以下步骤：
-   本地原子写入（同一个 SQLite 事务中）：
-   插入数据到 messages 表（PowerSync 会自动开始尝试同步这条消息到服务器）。
-   插入数据到 local_message_states 表，初始状态为 PENDING_UPLOAD，并记录 local_uri。
-   UI 展现（双表联合查询）：
-   你的 UI 监听的是一个 LEFT JOIN 的查询：
-   code
-   SQL
-   SELECT m.*, l.status, l.local_uri, l.upload_progress
-   FROM messages m
-   LEFT JOIN local_message_states l ON m.id = l.message_id
-   WHERE m.topic_id = :topicId;
-   UI 渲染逻辑：
-   如果 l.status 不为空（说明是自己正在发送的图）：
-   图片源直接使用 l.local_uri（瞬间展现）。
-   根据 l.status 和 l.upload_progress 显示进度条。
-   如果 l.status 为空（说明是别人发过来的图，或者是以前已经发送成功的图）：
-   路径拼接：context.filesDir + m.filename（或缩略图）。
-   不显示任何上传进度条。
-   后台任务（WorkManager / 协程）处理上传：
-   拷贝原图到沙盒，生成缩略图。
-   更新 local_message_states，把 status 设为 UPLOADING。
-   开始上传文件到服务器（如 OSS/S3），期间不断更新 local_message_states.upload_progress（UI 也会实时跟着变）。
-   上传成功后：
-   更新 messages 表中的 filename 和 thumbnail_name。
-   删除 local_message_states 中对应的行（因为它已经不再需要本地状态了）。
-   此时，PowerSync 会把 messages 中补全了 filename 的最终版本同步到服务器。
-   总结：你的 Schema 需要修改吗？
-   messages 表：不需要大改。目前的字段非常干净，适合同步给所有设备。
-   新增一张本地表：如上文所述，新增 local_message_states 表用于临时中转，不参与 PowerSync 同步。
-   通过这种“本地表 + 同步表 LEFT JOIN”的设计，你既保证了本地 UI 的极致响应速度（Instant UI），又保证了网络同步数据的极简与纯粹。
+   
+   1. 本地原子写入（同一个 SQLite 事务中）：
+      插入数据到 messages 表（PowerSync 会自动开始尝试同步这条消息到服务器）。
+      插入数据到 local_message_states 表，初始状态为 PENDING_UPLOAD，并记录 local_uri。
+      UI 展现（双表联合查询）：
+      你的 UI 监听的是一个 LEFT JOIN 的查询：
+      ```SQL
+      SELECT m.*, l.status, l.local_uri, l.upload_progress
+      FROM messages m
+      LEFT JOIN local_message_states l ON m.id = l.message_id
+      WHERE m.topic_id = :topicId;
+      ```
+      
+   2. UI 渲染逻辑：
+          如果 l.status 不为空（说明是自己正在发送的图）：
+          图片源直接使用 l.local_uri（瞬间展现）。
+          根据 l.status 和 l.upload_progress 显示进度条。
+          如果 l.status 为空（说明是别人发过来的图，或者是以前已经发送成功的图）：
+          路径拼接：context.filesDir + m.filename（或缩略图）。
+          不显示任何上传进度条。
+   3. 后台任务（WorkManager / 协程）处理上传：
+      拷贝原图到沙盒，生成缩略图。
+      更新 local_message_states，把 status 设为 UPLOADING。
+      开始上传文件到服务器（如 OSS/S3），期间不断更新 local_message_states.upload_progress（UI 也会实时跟着变）。
+      上传成功后：
+      更新 messages 表中的 filename 和 thumbnail_name。
+      删除 local_message_states 中对应的行（因为它已经不再需要本地状态了）。
+      此时，PowerSync 会把 messages 中补全了 filename 的最终版本同步到服务器。
+      总结：你的 Schema 需要修改吗？
+      messages 表：不需要大改。目前的字段非常干净，适合同步给所有设备。
+      新增一张本地表：如上文所述，新增 local_message_states 表用于临时中转，不参与 PowerSync 同步。
+      通过这种“本地表 + 同步表 LEFT JOIN”的设计，你既保证了本地 UI 的极致响应速度（Instant UI），又保证了网络同步数据的极简与纯粹。
 
 ## 发送消息后的这些操作，写在哪里？ viewModel?
 
@@ -136,20 +138,20 @@ ViewModel 的生命周期是与当前页面（Activity/Fragment）绑定的。
 - ViewModel 层：只负责快速响应 UI
 
 - ViewModel 极其轻量，它只负责调用 Repository，然后立即结束，不占用生命周期。
-code
-Kotlin
-class ChatViewModel(private val repository: MessageRepository) : ViewModel() {
-
-    fun sendImage(imageUri: Uri, topicId: String) {
-        viewModelScope.launch {
-            // 快速调用，然后界面就可以通过 Livedata/Flow 看到新气泡了
-            repository.sendImageMessage(imageUri, topicId)
+    ```Kotlin
+    class ChatViewModel(private val repository: MessageRepository) : ViewModel() {
+    
+        fun sendImage(imageUri: Uri, topicId: String) {
+            viewModelScope.launch {
+                // 快速调用，然后界面就可以通过 Livedata/Flow 看到新气泡了
+                repository.sendImageMessage(imageUri, topicId)
+            }
         }
     }
-}
+    ```
 
-2. Repository 层：负责数据库操作与启动后台任务
-   Repository 运行在应用全局生命周期（或通过 WorkManager），确保即使页面销毁，任务依然被触发。
+- Repository 层：负责数据库操作与启动后台任务
+  Repository 运行在应用全局生命周期（或通过 WorkManager），确保即使页面销毁，任务依然被触发。
    
    ```Kotlin
    class MessageRepository(
@@ -180,51 +182,51 @@ class ChatViewModel(private val repository: MessageRepository) : ViewModel() {
    }
    ```
 
-3. WorkManager 层（Worker）：负责所有的重型操作
-   WorkManager 是 Google 推荐的用于保证可靠运行的后台任务组件。即便用户退出了应用，甚至系统杀死了进程，系统也会在合适的时候重启 WorkManager 继续完成上传。
+  3. WorkManager 层（Worker）：负责所有的重型操作
+     WorkManager 是 Google 推荐的用于保证可靠运行的后台任务组件。即便用户退出了应用，甚至系统杀死了进程，系统也会在合适的时候重启 WorkManager 继续完成上传。
 
-   ```Kotlin
-   class UploadImageWorker(
-   context: Context,
-   workerParams: WorkerParameters
-   ) : CoroutineWorker(context, workerParams) {
+     ```Kotlin
+     class UploadImageWorker(
+     context: Context,
+     workerParams: WorkerParameters
+     ) : CoroutineWorker(context, workerParams) {
 
-   override suspend fun doWork(): Result {
-   val messageId = inputData.getString("KEY_MESSAGE_ID") ?: return Result.failure()
-   val uriString = inputData.getString("KEY_URI") ?: return Result.failure()
-   val uri = Uri.parse(uriString)
+     override suspend fun doWork(): Result {
+         val messageId = inputData.getString("KEY_MESSAGE_ID") ?: return Result.failure()
+         val uriString = inputData.getString("KEY_URI") ?: return Result.failure()
+         val uri = Uri.parse(uriString)
 
-        return withContext(Dispatchers.IO) {
-            try {
-                // 1. 拷贝原图到沙盒
-                val originalFile = copyToSandbox(uri, messageId)
+          return withContext(Dispatchers.IO) {
+              try {
+                  // 1. 拷贝原图到沙盒
+                  val originalFile = copyToSandbox(uri, messageId)
                 
-                // 2. 生成缩略图
-                val thumbnailFile = generateThumbnail(originalFile, messageId)
+                  // 2. 生成缩略图
+                  val thumbnailFile = generateThumbnail(originalFile, messageId)
                 
-                // 3. 更新本地数据库路径（此时 UI 会从加载 Uri 切换为加载本地文件）
-                updateLocalPathsInDb(messageId, originalFile, thumbnailFile)
+                  // 3. 更新本地数据库路径（此时 UI 会从加载 Uri 切换为加载本地文件）
+                  updateLocalPathsInDb(messageId, originalFile, thumbnailFile)
                 
-                // 4. 上传到服务器 (OSS/S3)
-                val remoteUrl = uploadToServer(originalFile) { progress ->
-                    // 更新数据库中的进度，UI 进度条会动
-                    updateUploadProgressInDb(messageId, progress)
-                }
+                  // 4. 上传到服务器 (OSS/S3)
+                  val remoteUrl = uploadToServer(originalFile) { progress ->
+                      // 更新数据库中的进度，UI 进度条会动
+                      updateUploadProgressInDb(messageId, progress)
+                  }
 
-                // 5. 成功后：更新 messages.filename，删除 local_message_states
-                finalizeDbStatus(messageId, originalFile.name, thumbnailFile.name, remoteUrl)
+                  // 5. 成功后：更新 messages.filename，删除 local_message_states
+                  finalizeDbStatus(messageId, originalFile.name, thumbnailFile.name, remoteUrl)
 
-                Result.success()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                // 可以更新本地状态为 FAILED，UI 会显示红感叹号
-                markAsFailedInDb(messageId)
-                Result.failure()
-            }
-        }
-   }
-   }
-   ```
+                  Result.success()
+              } catch (e: Exception) {
+                  e.printStackTrace()
+                  // 可以更新本地状态为 FAILED，UI 会显示红感叹号
+                  markAsFailedInDb(messageId)
+                  Result.failure()
+              }
+          }
+     }
+     }
+     ```
    
 总结
    ViewModel：只负责将用户的“发送点击”翻译成对数据层的调用。

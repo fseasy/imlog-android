@@ -31,7 +31,7 @@ CREATE TABLE message_media_processing_temp_states (
    -- 'processing', 'faild', ['uploading']
    status TEXT NOT NULL,
    -- used to show before thumnail and internal-raw data are prepared.
-   src_uri TEXT
+   src_uri TEXT NOT NULL
 );
 
 CREATE INDEX idx_messages_topic_created ON messages(topic_id, created_at);
@@ -53,6 +53,19 @@ SELECT COUNT(*) FROM messages WHERE is_deleted = 0;
 insertMessage:
 INSERT INTO messages
 VALUES ?;
+
+updateMessageMediaFields:
+UPDATE messages
+SET
+    filename = :filename,
+    original_filename = :original_filename,
+    file_size = :file_size,
+    thumbnail_name = :thumbnail_name,
+    mime_type = :mime_type,
+    duration = :duration,
+    width = :width,
+    height = :height
+WHERE id = :message_id;
 
 deleteMessageLogical:
 UPDATE messages SET is_deleted = 1 WHERE id = ?;

@@ -1,14 +1,15 @@
 package top.fseasy.imlog
 
-import android.annotation.SuppressLint
 import android.app.Application
-import android.util.Log
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
+import coil3.request.crossfade
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
 import top.fseasy.imlog.util.CrashReportingTree
 
 @HiltAndroidApp
-class ImlogApplication : Application() {
+class ImLogApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         if (BuildConfig.DEBUG) {
@@ -16,6 +17,10 @@ class ImlogApplication : Application() {
         } else {
             Timber.plant(CrashReportingTree())
         }
-        AppPaths.init(this)
+        SingletonImageLoader.setSafe {
+            ImageLoader.Builder(this)
+                .crossfade(true)
+                .build()
+        }
     }
 }

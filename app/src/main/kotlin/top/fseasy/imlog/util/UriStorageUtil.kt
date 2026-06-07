@@ -1,4 +1,4 @@
-package top.fseasy.imlog.data.file
+package top.fseasy.imlog.util
 
 import android.content.Context
 import android.database.Cursor
@@ -22,7 +22,7 @@ import android.media.MediaMetadataRetriever
  * @property fileSize stable
  */
 data class ContentResolverQueriedResult(
-    val displayName: String? = null,
+    val displayName: String? = null, // stable
     val fileSize: Long? = null, // stable
     val mimeType: String? = null,
     val duration: Long? = null,

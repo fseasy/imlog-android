@@ -45,7 +45,7 @@ class TimelineViewModel @Inject constructor(
     private val topicRepository: TopicRepository,
     private val messageRepository: MessageRepository,
     private val userRepository: UserRepository,
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     private val _topicId = MutableStateFlow<TopicId?>(null)
@@ -159,15 +159,11 @@ class TimelineViewModel @Inject constructor(
         viewModelScope.launch {
             val topicId = _topicId.value ?: return@launch
             val userId = requireCurrentUserId()
-            val file = copyUriToInternal(uri, type.name.lowercase(), type.name.lowercase())
             messageRepository.sendMediaMessage(
                 topicId = topicId,
                 senderId = userId,
-                type = type,
-                filePath = file.absolutePath,
-                fileSize = file.length(),
-                duration = null,
-                thumbnailPath = null
+                messageType = type,
+                mediaUri = uri
             )
         }
     }
