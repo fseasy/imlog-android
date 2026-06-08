@@ -9,7 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import top.fseasy.imlog.domain.model.VoiceRecordingState
 import java.io.File
-import java.util.UUID
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * 封装语音录制全流程，提供响应式状态与计时。
@@ -31,10 +32,14 @@ class VoiceRecorder {
      * 开始录制，[context] 用于创建 MediaRecorder（Android S 以上需要）。
      * 调用前必须处于 IDLE 状态。
      */
+    @OptIn(ExperimentalUuidApi::class)
     fun start(context: Context) {
         if (_state.value != VoiceRecordingState.IDLE) return
-
-        val file = File(context.cacheDir, "voice_${UUID.randomUUID()}.m4a")
+        val voiceTmpName = "voice_${
+            Uuid.random()
+                .toHexString()
+        }.m4a"
+        val file = File(context.cacheDir, voiceTmpName)
         currentFile = file
 
         try {

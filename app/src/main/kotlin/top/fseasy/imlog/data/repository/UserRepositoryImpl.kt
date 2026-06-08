@@ -1,5 +1,6 @@
 package top.fseasy.imlog.data.repository
 
+import android.net.Uri
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.CoroutineDispatcher
@@ -44,7 +45,7 @@ class UserRepositoryImpl @Inject constructor(
             }
     }
 
-    override suspend fun createCurrentUser(username: String, avatarUri: String?): User =
+    override suspend fun createCurrentUser(username: String, avatarUri: Uri?): User =
         withContext(dispatcher) {
             val now = System.currentTimeMillis()
             val userId = retrySQLiteOnKeyConflict {
@@ -53,7 +54,7 @@ class UserRepositoryImpl @Inject constructor(
                         database.userQueries.insertUser(
                             id = uid.value,
                             username = username,
-                            avatar_uri = avatarUri,
+                            avatar_uri = avatarUri?.toString(),
                             created_at = now,
                             attributes_updated_at = now
                         )
@@ -70,7 +71,7 @@ class UserRepositoryImpl @Inject constructor(
             User(
                 id = userId,
                 username = username,
-                avatarUri = avatarUri,
+                avatarUri = avatarUri?.toString(),
                 createdAt = now,
                 attributesUpdatedAt = now
             )

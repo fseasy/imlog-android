@@ -28,7 +28,6 @@ import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.features.log.domain.VoiceRecorder
 import java.io.File
-import java.util.UUID
 import javax.inject.Inject
 
 data class TimelineUiState(
@@ -55,7 +54,7 @@ class TimelineViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<TimelineUiState> = combine(
         _topicId.flatMapLatest {
-            it?.let { topicRepository.observeTopicById(it) } ?: flowOf(null)
+            it?.let { topicRepository.observeTopic(it) } ?: flowOf(null)
         },
         _topicId.flatMapLatest {
             it?.let { messageRepository.observeTopicMessages(it) } ?: flowOf(emptyList())
@@ -102,7 +101,7 @@ class TimelineViewModel @Inject constructor(
         launchWithTopic { topicId ->
             val userId = requireCurrentUserId()
             val textMsg = MessageFactory.createText(topicId, userId, content)
-            messageRepository.save(textMsg)
+            messageRepository.saveTextMessage(textMsg)
         }
     }
 
@@ -114,19 +113,14 @@ class TimelineViewModel @Inject constructor(
         sendMediaMessage(uri, MessageType.VIDEO)
     }
 
-    fun sendAudioMessage(file: File) {
-        launchWithTopic { topicId ->
+    fun sendAudioMessage(uri: Uri) {
+        sendMediaMessage(uri, MessageType.VIDEO)
+    }
+
+    fun sendVoiceMessage(cacheVoiceFile: File) {
+        launchWithTopic {
             val userId = requireCurrentUserId()
-            val duration = voiceRecorder.elapsedMs.value / 1000
-            messageRepository.sendMediaMessage(
-                topicId = topicId,
-                senderId = userId,
-                type = MessageType.AUDIO,
-                filePath = file.absolutePath,
-                fileSize = file.length(),
-                duration = duration,
-                thumbnailPath = null
-            )
+            messageRepository.
         }
     }
 
@@ -163,7 +157,8 @@ class TimelineViewModel @Inject constructor(
                 topicId = topicId,
                 senderId = userId,
                 messageType = type,
-                mediaUri = uri
+                srcMediaUri = uri,
+                deleteSrcMediaWhenSuccess = false
             )
         }
     }

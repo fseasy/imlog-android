@@ -2,57 +2,68 @@ package top.fseasy.imlog.features.log
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import top.fseasy.imlog.data.repository.TopicRepositoryImpl
-import top.fseasy.imlog.data.repository.UserRepository
-import top.fseasy.imlog.domain.model.Topic
+import top.fseasy.imlog.domain.repository.TopicRepository
+import top.fseasy.imlog.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import top.fseasy.imlog.domain.model.LogScreenTopic
+import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.domain.model.UserId
 import javax.inject.Inject
 
 
 data class TopicsUiState(
     val isLoading: Boolean = true,
-    val topics: List<Topic> = emptyList(),
-    val currentUserId: String? = null,
+    val topics: List<LogScreenTopic> = emptyList(),
+    val currentUserId: UserId? = null,
     val showCreateDialog: Boolean = false,
-    val selectedTopicId: String? = null
+    val selectedTopicId: TopicId? = null,
 )
 
 @HiltViewModel
 class TopicsViewModel @Inject constructor(
-    private val topicRepositoryImpl: TopicRepositoryImpl,
-    private val userRepository: UserRepository
+    private val topicRepository: TopicRepository,
+    private val userRepository: UserRepository,
 ) : ViewModel() {
 
     private val _showCreateDialog = MutableStateFlow(false)
-    private val _selectedTopicId = MutableStateFlow<String?>(null)
+    private val _selectedTopicId = MutableStateFlow<TopicId?>(null)
 
-    val uiState: StateFlow<TopicsUiState> = combine(
-        topicRepositoryImpl.getTopics(),
-        userRepository.currentUserId,
-        _showCreateDialog,
-        _selectedTopicId
-    ) { topics, userId, showDialog, selectedId ->
-        TopicsUiState(
-            isLoading = false,
-            topics = topics.filter { !it.isArchived }
-                .sortedByDescending { it.isPinned }
-                .sortedByDescending { it.createdAt },
-            currentUserId = userId,
-            showCreateDialog = showDialog,
-            selectedTopicId = selectedId
+    val uiState: StateFlow<TopicsUiState> = userRepository.observeUserId
+        .distinctUntilChanged()
+        .flatMapLatest { uId ->
+            if (uId == null) {
+                flowOf(TopicsUiState())
+            } else {
+                combine(
+                    topicRepository.observeLogScreenTopics(uId),
+                    _showCreateDialog,
+                    _selectedTopicId
+                ) { topics, showDialog, selectedId ->
+                    TopicsUiState(
+                        isLoading = false,
+                        topics = topics,
+                        currentUserId = uId,
+                        showCreateDialog = showDialog,
+                        selectedTopicId = selectedId
+                    )
+                }
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TopicsUiState()
         )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = TopicsUiState()
-    )
 
     fun showCreateDialog() {
         _showCreateDialog.value = true
@@ -62,38 +73,39 @@ class TopicsViewModel @Inject constructor(
         _showCreateDialog.value = false
     }
 
-    fun selectTopic(topicId: String?) {
+    fun selectTopic(topicId: TopicId?) {
         _selectedTopicId.value = topicId
     }
 
     fun createTopic(name: String) {
         viewModelScope.launch {
-            val userId = userRepository.currentUserId.first() ?: return@launch
-            topicRepositoryImpl.createTopic(name, userId)
+            val userId = uiState.value.currentUserId ?: return@launch
+            topicRepository.createTopic(userId, name = name, iconUri = null)
             _showCreateDialog.value = false
         }
     }
 
-    fun pinTopic(topicId: String) {
+    fun pinTopic(topicId: TopicId) {
         viewModelScope.launch {
-            val userId = userRepository.currentUserId.first() ?: return@launch
+            val userId = uiState.value.currentUserId ?: return@launch
             val topic = uiState.value.topics.find { it.id == topicId } ?: return@launch
-            topicRepositoryImpl.pinTopic(topicId, userId, !topic.isPinned)
+            topicRepository.pinTopic(userId = userId, topicId = topicId, pinned = !topic.isPinned)
             _selectedTopicId.value = null
         }
     }
 
-    fun deleteTopic(topicId: String) {
+    fun deleteTopic(topicId: TopicId) {
         viewModelScope.launch {
-            topicRepositoryImpl.deleteTopic(topicId)
+            val userId = uiState.value.currentUserId ?: return@launch
+            topicRepository.deleteTopic(userId = userId, topicId = topicId)
             _selectedTopicId.value = null
         }
     }
 
-    fun archiveTopic(topicId: String) {
+    fun archiveTopic(topicId: TopicId) {
         viewModelScope.launch {
-            val userId = userRepository.currentUserId.first() ?: return@launch
-            topicRepositoryImpl.archiveTopic(topicId, userId, true)
+            val userId = uiState.value.currentUserId ?: return@launch
+            topicRepository.archiveTopic(userId = userId, topicId = topicId, archived = true)
             _selectedTopicId.value = null
         }
     }

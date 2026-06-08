@@ -41,63 +41,16 @@ CREATE TABLE topic_personal_state (
     PRIMARY KEY (topic_id, user_id)
 );
 
--- topics queries
--- 查询用于渲染 Log Screen 的 Topic 列表数据
-getCurrentUserLogScreenTopics:
-SELECT
-    t.id,
-    t.name,
-    t.icon_uri,
-    -- 个性化状态（可能为 NULL）
-    COALESCE(tps.pinned, 0) AS pinned,
-    tps.background,
-    tps.last_read_at,
-    tlm.last_message_at,
-    tlm.last_message_snippet,
-    CASE
-        WHEN tlm.last_message_at IS NULL THEN 0  -- 没有消息，不算未读
-        WHEN tps.last_read_at IS NULL THEN 1  -- 从未读过
-        WHEN tps.last_read_at < tlm.last_message_at THEN 1  -- 有新消息
-        ELSE 0
-    END AS has_unread,
-    -- 1. if has message => last_message_at 2. no message => created_at (not updated_at)
-    COALESCE(tlm.last_message_at, t.created_at) AS topic_message_update_at
-FROM topics t
-INNER JOIN topic_members tm ON t.id = tm.topic_id
-LEFT JOIN topic_personal_state tps ON t.id = tps.topic_id AND tps.user_id = :current_user_id
-LEFT JOIN topic_last_message tlm ON t.id = tlm.topic_id  -- LEFT JOIN 以应对没有消息的新主题
-WHERE
-    tm.user_id = :current_user_id
-    AND t.is_deleted = 0
-    AND tm.is_deleted = 0
-    -- 默认过滤掉归档的 Topic
-    AND COALESCE(tps.archived, 0) = 0
-ORDER BY
-    -- 1. pin 2. topic last message at + new topic 3. has unread msg
-    -- time > unread. just think if the user always not click the unread topic,
-    -- we don't need to prioritize them.
-    COALESCE(tps.pinned, 0) DESC,
-    topic_message_update_at DESC,
-    has_unread DESC;
 
-getTopicById:
-SELECT * FROM topics WHERE id = ?;
 
 insertTopic:
 INSERT INTO topics (id, name, icon_uri, creator_id, created_at, attributes_updated_at) VALUES (?, ?, ?, ?, ?, ?);
-
--- topic_members queries
-getMembersByTopicId:
-SELECT * FROM topic_members WHERE topic_id = ?;
 
 insertMember:
 INSERT
 INTO topic_members (topic_id, user_id, user_nickname, role, joined_at, attributes_updated_at)
 VALUES (?, ?, ?, ?, ?, ?);
 
--- topic_personal_state queries
-getPersonalState:
-SELECT * FROM topic_personal_state WHERE topic_id = :topic_id AND user_id = :user_id;
 
 insertPersonalState:
 INSERT INTO topic_personal_state (topic_id, user_id, archived, pinned, background, last_read_at, attributes_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);

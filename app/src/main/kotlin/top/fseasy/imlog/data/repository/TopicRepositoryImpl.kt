@@ -16,6 +16,7 @@ import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicPersonalState
 import top.fseasy.imlog.domain.model.TopicRole
+import top.fseasy.imlog.domain.model.TopicWithPersonalState
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
@@ -26,6 +27,7 @@ import kotlin.uuid.ExperimentalUuidApi
 import top.fseasy.imlog.sqldelight.Topics as TopicEntity
 import top.fseasy.imlog.sqldelight.Topic_personal_state as PersonalStateEntity
 import top.fseasy.imlog.sqldelight.GetCurrentUserLogScreenTopics as UserLogScreenTopicEntity
+import top.fseasy.imlog.sqldelight.GetTopicWithPersonalState as GetTopicWithPersonalStateEntity
 
 @Singleton
 class TopicRepositoryImpl @Inject constructor(
@@ -33,8 +35,8 @@ class TopicRepositoryImpl @Inject constructor(
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : TopicRepository {
 
-    override fun observeTopicById(topicId: TopicId): Flow<Topic?> =
-        database.topicQueries.getTopicById(topicId.value)
+    override fun observeTopic(topicId: TopicId): Flow<Topic?> =
+        database.topicSelectQueries.getTopicById(topicId.value)
             .asFlow()
             .mapToOneOrNull(dispatcher)
             .map { it?.toDomain() }
@@ -45,11 +47,14 @@ class TopicRepositoryImpl @Inject constructor(
             }
 
 
-    override fun observePersonalStateById(
+    override fun observeTopicPersonalState(
         userId: UserId,
         topicId: TopicId,
     ): Flow<TopicPersonalState?> =
-        database.topicQueries.getPersonalState(topic_id = topicId.value, user_id = userId.value)
+        database.topicSelectQueries.getPersonalState(
+            topic_id = topicId.value,
+            user_id = userId.value
+        )
             .asFlow()
             .mapToOneOrNull(dispatcher)
             .map { it?.toDomain() }
@@ -58,11 +63,27 @@ class TopicRepositoryImpl @Inject constructor(
                 emit(null)
             }
 
+    override fun observeTopicWithPersonalState(
+        topicId: TopicId,
+        userId: UserId,
+    ): Flow<TopicWithPersonalState?> =
+        database.topicSelectQueries.getTopicWithPersonalState(
+            topic_id = topicId.value,
+            user_id = userId.value
+        )
+            .asFlow()
+            .mapToOneOrNull(dispatcher)
+            .map { it?.toDomain() }
+            .catch { e ->
+                Timber.i(e, "Observer TopicWithPersonalState failed on id=$topicId")
+                emit(null)
+            }
+
     /**
      * Used for Log Screen Topics lists (home screen)
      */
     override fun observeLogScreenTopics(userId: UserId): Flow<List<LogScreenTopic>> {
-        return database.topicQueries.getCurrentUserLogScreenTopics(userId.value)
+        return database.topicSelectQueries.getCurrentUserLogScreenTopics(userId.value)
             .asFlow()
             .mapToList(dispatcher)
             .map { rows -> rows.map { it.toDomain() } }
@@ -174,37 +195,6 @@ class TopicRepositoryImpl @Inject constructor(
             rowsAffected > 0L;
         }
 
-    private fun TopicEntity.toDomain() = Topic(
-        id = TopicId(id),
-        name = name,
-        iconUri = icon_uri,
-        creatorId = creator_id?.let(::UserId),
-        createdAt = created_at,
-        attributesUpdatedAt = attributes_updated_at,
-        isDeleted = is_deleted == 1L,
-    )
-
-    private fun PersonalStateEntity.toDomain() = TopicPersonalState(
-        topicId = TopicId(topic_id),
-        userId = UserId(user_id),
-        isArchived = archived == 1L,
-        isPinned = pinned == 1L,
-        background = background,
-        lastReadAt = last_read_at ?: System.currentTimeMillis(),
-        attributesUpdatedAt = attributes_updated_at
-    )
-
-    private fun UserLogScreenTopicEntity.toDomain() = LogScreenTopic(
-        id = TopicId(id),
-        name = name,
-        iconUri = icon_uri,
-        isPinned = pinned == 1L,
-        hasUnread = has_unread == 1L,
-        messageUpdatedAt = topic_message_update_at,
-        lastMessageSnippet = last_message_snippet,
-        background = background
-    )
-
     private fun executeInsertTopicTransaction(
         topicId: TopicId,
         topicName: String,
@@ -241,4 +231,53 @@ class TopicRepositoryImpl @Inject constructor(
             )
         }
     }
+
+    private fun TopicEntity.toDomain() = Topic(
+        id = TopicId(id),
+        name = name,
+        iconUri = icon_uri,
+        creatorId = creator_id?.let(::UserId),
+        createdAt = created_at,
+        attributesUpdatedAt = attributes_updated_at,
+        isDeleted = is_deleted == 1L,
+    )
+
+    private fun PersonalStateEntity.toDomain() = TopicPersonalState(
+        topicId = TopicId(topic_id),
+        userId = UserId(user_id),
+        isArchived = archived == 1L,
+        isPinned = pinned == 1L,
+        background = background,
+        lastReadAt = last_read_at ?: System.currentTimeMillis(),
+        attributesUpdatedAt = attributes_updated_at
+    )
+
+    private fun UserLogScreenTopicEntity.toDomain() = LogScreenTopic(
+        id = TopicId(id),
+        name = name,
+        iconUri = icon_uri,
+        isPinned = pinned == 1L,
+        hasUnread = has_unread == 1L,
+        messageUpdatedAt = topic_message_update_at,
+        lastMessageSnippet = last_message_snippet,
+        background = background
+    )
+
+    private fun GetTopicWithPersonalStateEntity.toTopicEntity() = TopicEntity(
+        id = id,
+        name = name,
+        icon_uri = icon_uri,
+        creator_id = creator_id,
+        created_at = created_at,
+        attributes_updated_at = attributes_updated_at,
+        is_deleted = is_deleted
+    )
+
+    private fun GetTopicWithPersonalStateEntity.toDomain() = TopicWithPersonalState(
+        topic = toTopicEntity().toDomain(),
+        isArchived = archived == 1L,
+        isPinned = pinned == 1L,
+        background = background,
+        lastReadAt = last_read_at ?: System.currentTimeMillis(),
+    )
 }

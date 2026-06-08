@@ -3,6 +3,8 @@ package top.fseasy.imlog.util
 // utils/FileUtil.kt
 import android.content.Context
 import android.net.Uri
+import androidx.core.content.FileProvider
+import top.fseasy.imlog.constants.FILE_PROVIDER_AUTHORITIES
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -32,6 +34,11 @@ fun copyUriToFile(context: Context, uri: Uri, destination: File): File {
 
     return destination
 }
+
+fun File.toFileProviderUri(context: Context): Uri =
+    FileProvider.getUriForFile(context, FILE_PROVIDER_AUTHORITIES, this)
+
+fun String?.toFile(): File? = this?.let { File(it) }
 
 /**
  * Extract path name by substring-after-last.

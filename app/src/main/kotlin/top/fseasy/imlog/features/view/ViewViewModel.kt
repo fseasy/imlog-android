@@ -2,13 +2,14 @@ package top.fseasy.imlog.features.view
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import top.fseasy.imlog.data.repository.MessageRepository
+import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.model.Statistics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import top.fseasy.imlog.domain.repository.UserRepository
 import javax.inject.Inject
 
 data class ViewUiState(
@@ -18,10 +19,11 @@ data class ViewUiState(
 
 @HiltViewModel
 class ViewViewModel @Inject constructor(
-    messageRepository: MessageRepository
+    messageRepository: MessageRepository,
+    userRepository: UserRepository
 ) : ViewModel() {
 
-    val uiState: StateFlow<ViewUiState> = messageRepository.getStatistics()
+    val uiState: StateFlow<ViewUiState> = messageRepository.observeStatistics()
         .map { stats ->
             ViewUiState(
                 isLoading = false,

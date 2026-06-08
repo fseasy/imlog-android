@@ -5,11 +5,12 @@ import top.fseasy.imlog.domain.model.LogScreenTopic
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicPersonalState
+import top.fseasy.imlog.domain.model.TopicWithPersonalState
 import top.fseasy.imlog.domain.model.UserId
 
 interface TopicRepository {
-    fun observeTopicById(topicId: TopicId): Flow<Topic?>
-    fun observePersonalStateById(userId: UserId, topicId: TopicId): Flow<TopicPersonalState?>
+    fun observeTopic(topicId: TopicId): Flow<Topic?>
+    fun observeTopicPersonalState(userId: UserId, topicId: TopicId): Flow<TopicPersonalState?>
     fun observeLogScreenTopics(userId: UserId): Flow<List<LogScreenTopic>>
 
     suspend fun createTopic(creatorId: UserId, name: String, iconUri: String?): LogScreenTopic
@@ -21,4 +22,8 @@ interface TopicRepository {
     suspend fun deleteTopic(userId: UserId, topicId: TopicId): Boolean
     suspend fun archiveTopic(userId: UserId, topicId: TopicId, archived: Boolean): Boolean
     suspend fun pinTopic(userId: UserId, topicId: TopicId, pinned: Boolean): Boolean
+    fun observeTopicWithPersonalState(
+        topicId: TopicId,
+        userId: UserId
+    ): Flow<TopicWithPersonalState?>
 }
