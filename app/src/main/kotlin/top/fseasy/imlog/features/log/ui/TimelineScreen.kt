@@ -1,6 +1,5 @@
 package top.fseasy.imlog.features.log.ui
 
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -42,17 +41,25 @@ import coil3.compose.AsyncImage
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Topic
+import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.domain.model.VoiceRecordingState
+import top.fseasy.imlog.features.log.MessageUiState
 import top.fseasy.imlog.features.log.TimelineUiState
 import top.fseasy.imlog.features.log.TimelineViewModel
-import top.fseasy.imlog.features.log.VoiceRecordingState
-import java.io.File
+
+sealed interface TimelineAction {
+    data object Back : TimelineAction
+    data class SettingClick(val topicId: TopicId) : TimelineAction
+    data class CopyMessage(val message: Message) : TimelineAction
+}
+
 
 @Composable
 fun TimelineScreen(
-    topicId: String,
+    topicId: TopicId,
     onBack: () -> Unit,
-    onSettingsClick: (String) -> Unit,
-    viewModel: TimelineViewModel = hiltViewModel()
+    onSettingsClick: (TopicId) -> Unit,
+    viewModel: TimelineViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -61,16 +68,24 @@ fun TimelineScreen(
     }
 
     TimelineContent(
-        uiState = uiState,
-        onBack = onBack,
-        onSettingsClick = { onSettingsClick(topicId) },
-        onCopyMessage = { viewModel.copyMessage(it) },
-        onSendText = { viewModel.sendTextMessage(it) },
-        onSendImage = { viewModel.sendImageMessage(it) },
-        onSendVideo = { viewModel.sendVideoMessage(it) },
-        onSendAudio = { viewModel.sendAudioMessage(it) },
-        onVoiceRecordingStateChange = { viewModel.setVoiceRecordingState(it) },
-        modifier = Modifier
+        uiState = uiState, onTimelineAction = { action: TimelineAction ->
+            when (action) {
+                is TimelineAction.Back -> onBack()
+                is TimelineAction.CopyMessage -> {}
+                is TimelineAction.SettingClick -> onSettingsClick(action.topicId)
+            }
+        }, onComposerAction = { action: ComposerAction ->
+            when (action) {
+                is ComposerAction.SendText -> viewModel.sendTextMessage(action.content)
+                is ComposerAction.SendVoice -> viewModel.sendVoiceMessage(action.file)
+                is ComposerAction.SendImage -> viewModel.sendImageMessage(action.uri)
+                is ComposerAction.SendVideo -> viewModel.sendVideoMessage(action.uri)
+                is ComposerAction.SendAudio -> viewModel.sendAudioMessage(action.uri)
+                is ComposerAction.SetVoiceRecordingState -> viewModel.setVoiceRecorderState(
+                    action.state
+                )
+            }
+        }, modifier = Modifier
     )
 
 }
@@ -79,15 +94,9 @@ fun TimelineScreen(
 @Composable
 fun TimelineContent(
     uiState: TimelineUiState,
-    onBack: () -> Unit,
-    onSettingsClick: () -> Unit,
-    onCopyMessage: (Message) -> Unit,
-    onSendText: (String) -> Unit,
-    onSendImage: (Uri) -> Unit,
-    onSendVideo: (Uri) -> Unit,
-    onSendAudio: (File) -> Unit,
-    onVoiceRecordingStateChange: (VoiceRecordingState) -> Unit,
-    modifier: Modifier = Modifier
+    onTimelineAction: (TimelineAction) -> Unit,
+    onComposerAction: (ComposerAction) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
 
@@ -100,11 +109,11 @@ fun TimelineContent(
     Scaffold(
         topBar = {
             TopAppBar(title = { Text(uiState.topic?.name ?: "Loading...") }, navigationIcon = {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = { onTimelineAction(TimelineAction.Back) }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                 }
             }, actions = {
-                IconButton(onClick = onSettingsClick) {
+                IconButton(onClick = { onTimelineAction(TimelineAction.SettingClick(uiState.topic!!.id)) }) {
                     Icon(Icons.Default.Settings, "Topic Settings")
                 }
             })
@@ -121,26 +130,18 @@ fun TimelineContent(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(uiState.messages, key = { it.id }) { message ->
+                items(uiState.messages, key = { it.message.id }) { mState ->
                     MessageBubble(
-                        message = message,
-                        isOwnMessage = message.senderId == uiState.currentUserId,
-                        onCopy = { onCopyMessage(message) })
+                        messageUiState = mState,
+                        isOwnMessage = mState.message.senderId == uiState.currentUserId,
+                        onCopy = { onTimelineAction(TimelineAction.CopyMessage(mState.message)) })
                 }
             }
 
-            MessageComposer(
-                onSendText = { onSendText(it) },
-                onSendImage = { onSendImage(it) },
-                onSendVideo = { onSendVideo(it) },
-                onSendAudio = { onSendAudio(it) },
-                uiState = uiState,
-                onVoiceRecordingStateChange = onVoiceRecordingStateChange
-            )
+            MessageComposer(uiState = uiState, onAction = onComposerAction)
         }
     }
 }
-
 
 
 @Composable
@@ -152,8 +153,7 @@ fun FullScreenImage(uri: String) {
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                .clickable { },
-            contentAlignment = Alignment.Center
+                .clickable { }, contentAlignment = Alignment.Center
         ) {
             AsyncImage(
                 model = uri,
@@ -164,84 +164,74 @@ fun FullScreenImage(uri: String) {
         }
     }
 }
-
-class TimelinePreviewParameterProvider : PreviewParameterProvider<TimelineUiState> {
-    override val values = sequenceOf(
-        // 状态 1：加载中
-        TimelineUiState(
-            isLoading = true, topic = null, messages = emptyList(), currentUserId = "user_me"
-        ),
-        // 状态 2：正常聊天状态，有多种消息类型
-        TimelineUiState(
-            isLoading = false, topic = Topic(
-                id = "1",
-                name = "闪念 & 灵感盒",
-                iconUri = "",
-            ), currentUserId = "user_me", messages = listOf(
-                Message(
-                    id = "m1",
-                    topicId = "1",
-                    senderId = "user_other",
-                    type = MessageType.TEXT,
-                    content = "嗨！ImLog 感觉如何？",
-                    createdAt = 1717000000000,
-                ), Message(
-                    id = "m2",
-                    topicId = "1",
-                    senderId = "user_me",
-                    type = MessageType.TEXT,
-                    content = "非常好用！本地优先，启动速度拉满🚀",
-                    createdAt = 1717000100000
-                ), Message(
-                    id = "m3",
-                    topicId = "1",
-                    senderId = "user_other",
-                    type = MessageType.IMAGE,
-                    filePath = "mock_path",
-                    createdAt = 1717000200000
-                ), Message(
-                    id = "m4",
-                    topicId = "1",
-                    senderId = "user_me",
-                    type = MessageType.AUDIO,
-                    filePath = "mock_path",
-                    duration = 5,
-                    createdAt = 1717000300000
-                )
-            )
-        ),
-        // 状态 3：正在录音状态
-        TimelineUiState(
-            isLoading = false,
-            topic = Topic(
-                id = "1",
-                name = "闪念 & 灵感盒",
-                iconUri = "",
-                creatorId = "11",
-            ),
-            currentUserId = "user_me",
-            messages = emptyList(),
-            voiceRecordingState = VoiceRecordingState.RECORDING,
-            voiceRecordingElapsed = 3400 // 模拟录制了 3.4 秒
-        )
-    )
-}
-
-@Preview(showBackground = true, name = "Timeline Multi-State Preview")
-@Composable
-fun TimelineScreenPreview(
-    @PreviewParameter(TimelinePreviewParameterProvider::class) uiState: TimelineUiState
-) {
-    MaterialTheme {
-        TimelineContent(
-            uiState = uiState,
-            onBack = {},
-            onSettingsClick = {},
-            onCopyMessage = {},
-            onSendText = {},
-            onSendImage = {},
-            onSendVideo = {},
-            onSendAudio = {},
-            onVoiceRecordingStateChange = {})
-    }
-}
+//
+//class TimelinePreviewParameterProvider : PreviewParameterProvider<TimelineUiState> {
+//    override val values = sequenceOf(
+//        // 状态 1：加载中
+//        TimelineUiState(
+//            isLoading = true, topic = null, messages = emptyList(), currentUserId = "user_me"
+//        ),
+//        // 状态 2：正常聊天状态，有多种消息类型
+//        TimelineUiState(
+//            isLoading = false, topic = Topic(
+//                id = TopicId("1"),
+//                name = "闪念 & 灵感盒",
+//                iconUri = "",
+//                creatorId =
+//            ), currentUserId = "user_me", messages = listOf(
+//                MessageUiState(
+//                    Message(
+//                        id = "m1",
+//                        topicId = "1",
+//                        senderId = "user_other",
+//                        type = MessageType.TEXT,
+//                        content = "嗨！ImLog 感觉如何？",
+//                        createdAt = 1717000000000,
+//                    ), null
+//                ), MessageUiState(
+//                    Message(
+//                        id = "m2",
+//                        topicId = "1",
+//                        senderId = "user_me",
+//                        type = MessageType.TEXT,
+//                        content = "非常好用！本地优先，启动速度拉满🚀",
+//                        createdAt = 1717000100000
+//                    ), null
+//                )
+//            )
+//        ),
+//        // 状态 3：正在录音状态
+//        TimelineUiState(
+//            isLoading = false,
+//            topic = Topic(
+//                id = "1",
+//                name = "闪念 & 灵感盒",
+//                iconUri = "",
+//                creatorId = "11",
+//            ),
+//            currentUserId = "user_me",
+//            messages = emptyList(),
+//            voiceRecordingState = VoiceRecordingState.RECORDING,
+//            voiceRecordingElapsed = 3400 // 模拟录制了 3.4 秒
+//        )
+//    )
+//}
+//
+//@Preview(showBackground = true, name = "Timeline Multi-State Preview")
+//@Composable
+//fun TimelineScreenPreview(
+//    @PreviewParameter(TimelinePreviewParameterProvider::class) uiState: TimelineUiState,
+//) {
+//    MaterialTheme {
+//        TimelineContent(
+//            uiState = uiState,
+//            onBack = {},
+//            onSettingsClick = {},
+//            onCopyMessage = {},
+//            onSendText = {},
+//            onSendImage = {},
+//            onSendVideo = {},
+//            onSendAudio = {},
+//            onVoiceRecordingStateChange = {})
+//    }
+//}

@@ -3,9 +3,7 @@ package top.fseasy.imlog.data.repository
 import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
-import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import androidx.work.workDataOf
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
@@ -19,6 +17,7 @@ import top.fseasy.imlog.data.file.MediaSaveResult
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageFactory
 import top.fseasy.imlog.domain.model.MessageId
+import top.fseasy.imlog.domain.model.MessageMediaCopySource
 import top.fseasy.imlog.domain.model.MessageMediaProcessingStatus
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Statistics
@@ -30,6 +29,7 @@ import top.fseasy.imlog.sqldelight.Message_media_processing_temp_states
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.util.retrySQLiteOnKeyConflict
 import top.fseasy.imlog.util.toFileProviderUri
+import top.fseasy.imlog.worker.DeleteFileWorker
 import top.fseasy.imlog.worker.MediaFileProcessWorker
 import java.io.File
 import javax.inject.Inject
@@ -42,7 +42,6 @@ class MessageRepositoryImpl @Inject constructor(
     @param:ApplicationContext val context: Context,
     private val database: SqlDelightDb,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val workManager: WorkManager,
 ) : MessageRepository {
 
     /**
@@ -79,11 +78,14 @@ class MessageRepositoryImpl @Inject constructor(
         topicId: TopicId,
         senderId: UserId,
         messageType: MessageType,
-        srcMediaUri: Uri,
-        deleteSrcMediaWhenSuccess: Boolean,
+        srcMediaCopySource: MessageMediaCopySource,
     ): Unit = withContext(dispatcher) {
         // insert pending message
         val now = System.currentTimeMillis()
+        val srcMediaUri = when (srcMediaCopySource) {
+            is MessageMediaCopySource.FromUri -> srcMediaCopySource.uri
+            is MessageMediaCopySource.FromFile -> srcMediaCopySource.file.toUri()
+        }
 
         val messageId = retrySQLiteOnKeyConflict {
             val pendingMessage = MessageFactory.createPendingMedia(
@@ -92,12 +94,11 @@ class MessageRepositoryImpl @Inject constructor(
                 type = messageType,
                 timestampMs = now,
             )
-            val pendingStateEntity =
-                Message_media_processing_temp_states(
-                    message_id = pendingMessage.id.value,
-                    status = MessageMediaProcessingStatus.PROCESSING.value,
-                    src_uri = srcMediaUri.toString()
-                )
+            val pendingStateEntity = Message_media_processing_temp_states(
+                message_id = pendingMessage.id.value,
+                status = MessageMediaProcessingStatus.PROCESSING.value,
+                src_uri = srcMediaUri.toString()
+            )
             database.transaction {
                 database.messageQueries.insertMessage(pendingMessage.toEntity())
                 database.messageQueries.insertMessageMediaProcessingTempStates(pendingStateEntity)
@@ -105,22 +106,23 @@ class MessageRepositoryImpl @Inject constructor(
             pendingMessage.id
         }
         // invoke worker to processing media file
-
-    }
-
-    suspend fun sendVoiceMessage(
-        topicId: TopicId,
-        senderId: UserId,
-        cacheVoiceFile: File,
-    ): Unit = withContext(dispatcher) {
-        val voiceUri = cacheVoiceFile.toFileProviderUri(context)
-        sendMediaMessage(
+        val mediaProcessRequest = MediaFileProcessWorker.createRequest(
+            messageId = messageId,
             topicId = topicId,
             senderId = senderId,
-            messageType = MessageType.VOICE,
-            srcMediaUri = voiceUri,
-            deleteSrcMediaWhenSuccess = false
+            messageTimestampMs = now,
+            srcMediaUri = srcMediaUri
         )
+        if (srcMediaCopySource is MessageMediaCopySource.FromFile && srcMediaCopySource.deleteOnCopySuccess) {
+            val deleteRequest = DeleteFileWorker.createRequest(srcMediaCopySource.file.toString())
+            WorkManager.getInstance(context)
+                .beginWith(mediaProcessRequest)
+                .then(deleteRequest)
+                .enqueue()
+        } else {
+            WorkManager.getInstance(context)
+                .enqueue(mediaProcessRequest)
+        }
     }
 
     override suspend fun finishMediaProcessing(

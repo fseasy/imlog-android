@@ -116,5 +116,5 @@ object MessageFactory {
 
 sealed interface MessageMediaCopySource {
     class FromUri(val uri: Uri) : MessageMediaCopySource
-    class FromFile(val file: File) : MessageMediaCopySource
+    class FromFile(val file: File, val deleteOnCopySuccess: Boolean) : MessageMediaCopySource
 }

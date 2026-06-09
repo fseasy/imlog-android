@@ -1,6 +1,7 @@
 package top.fseasy.imlog.worker
 
 import android.content.Context
+import android.net.Uri
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.core.net.toUri
@@ -39,26 +40,22 @@ class MediaFileProcessWorker @AssistedInject constructor(
         private const val KEY_MAX_RETRIES = "max_retries"
         private const val DEFAULT_MAX_RETRIES = 3
 
-
         fun createRequest(
             messageId: MessageId,
             topicId: TopicId,
             senderId: UserId,
             messageTimestampMs: Long,
-            copySource: MessageMediaCopySource,
+            srcMediaUri: Uri,
             maxRetries: Int = DEFAULT_MAX_RETRIES,
         ): OneTimeWorkRequest {
-            val uri = when (copySource) {
-                is MessageMediaCopySource.FromUri -> copySource.uri
-                is MessageMediaCopySource.FromFile -> copySource.file.toUri()
-            }
+
             return OneTimeWorkRequestBuilder<MediaFileProcessWorker>().setInputData(
                     workDataOf(
                         KEY_MESSAGE_ID to messageId.value,
                         KEY_USER_ID to senderId.value,
                         KEY_TOPIC_ID to topicId.value,
                         KEY_MESSAGE_TIMESTAMP_MS to messageTimestampMs,
-                        KEY_SRC_URI to uri.toString(),
+                        KEY_SRC_URI to srcMediaUri.toString(),
                         KEY_MAX_RETRIES to maxRetries
                     )
                 )

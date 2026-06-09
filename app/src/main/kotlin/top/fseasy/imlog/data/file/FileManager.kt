@@ -8,18 +8,19 @@ import timber.log.Timber
 import top.fseasy.imlog.constants.THUMBNAIL_MAX_HEIGHT
 import top.fseasy.imlog.constants.THUMBNAIL_MAX_WIDTH
 import top.fseasy.imlog.data.file.MediaSaveResult.*
-import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.util.ContentResolverQueriedResult
 import top.fseasy.imlog.util.FileCopyResult
 import top.fseasy.imlog.util.FileWriteMode
-import top.fseasy.imlog.util.FindFileResult
+import top.fseasy.imlog.util.FindOrCreateFileUriResult
 import top.fseasy.imlog.util.GenerateThumbnailResult
 import top.fseasy.imlog.util.MediaFields
 import top.fseasy.imlog.util.UriStorageUtil
 import top.fseasy.imlog.util.generateAndSaveThumbnail
 import top.fseasy.imlog.util.isDimensionValid
 import top.fseasy.imlog.util.resolveSubPaths
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -59,11 +60,6 @@ class FileManager @Inject constructor(
         srcUri: Uri,
         messageTimestampMs: Long,
     ): MediaSaveResult {
-        val tgtRootTreeUri = fileRootDir.messageFileRootUri.firstOrNull()
-            ?: return MediaSavePermissionError(
-                IllegalStateException("message storage dir isn't accessible, pick again?")
-            )
-
         val queryMetaFields = with(MediaFields) {
             listOf(
                 DISPLAY_NAME, FILE_SIZE, MIME_TYPE, DURATION, HEIGHT, WIDTH
@@ -80,36 +76,38 @@ class FileManager @Inject constructor(
             MessageFilePathRule.generateFilenameByPrependTime(messageTimestampMs, displayName)
         val mimeType =
             metaData.mimeType ?: UriStorageUtil.getMimeTypeFallback(context, srcUri)
-        val relativePathSegments =
-            MessageFilePathRule.generateFullRelativePath(
-                userId,
-                topicId,
-                messageTimestampMs,
-                storeRawFilename
-            )
-        val tgtUriFindResult =
-            UriStorageUtil.ensureSAFFileUri(context, tgtRootTreeUri, relativePathSegments, mimeType)
-        val rawFileTgtUri = when (tgtUriFindResult) {
-            is FindFileResult.Success -> tgtUriFindResult.uri
-            is FindFileResult.Error.PermissionDenied -> return MediaSavePermissionError(
-                tgtUriFindResult.cause
+        val rawFileTgtUri = when (val result = calcRawSharedStorageUri(
+            userId = userId,
+            topicId = topicId,
+            messageTimestampMs = messageTimestampMs,
+            rawFilename = storeRawFilename,
+            mimeType = mimeType
+        )) {
+            is FindOrCreateFileUriResult.Success -> result.uri
+            // Will return on errors
+            is FindOrCreateFileUriResult.Error.PermissionDenied -> return MediaSavePermissionError(
+                result.cause
             )
 
-            is FindFileResult.Error.Unexpected -> return MediaSaveUnexpectedError(
-                tgtUriFindResult.cause
+            is FindOrCreateFileUriResult.Error.Unexpected -> return MediaSaveUnexpectedError(
+                result.cause
             )
 
-            is FindFileResult.NotFound -> return MediaSaveUnexpectedError(IllegalStateException("EnsureSAFFile got Not Found"))
+            is FindOrCreateFileUriResult.NotFound -> return MediaSaveUnexpectedError(
+                IllegalStateException("EnsureSAFFile got Not Found")
+            )
         }
 
-        val copyResult = UriStorageUtil.copyBetweenUri(
+        val bytesCopied = when (val copyResult = UriStorageUtil.copyBetweenUri(
             context,
             srcUri,
             rawFileTgtUri,
             writeMode = FileWriteMode.WRITE_TRUNCATE,
-        )
-
-        when (copyResult) {
+        )) {
+            is FileCopyResult.Success -> {
+                copyResult.bytesCopied
+            }
+            // Else return error
             is FileCopyResult.Error.SrcPermissionDenied,
             is FileCopyResult.Error.SrcNotFound,
             is FileCopyResult.Error.SrcOpenUnexpected,
@@ -128,97 +126,190 @@ class FileManager @Inject constructor(
                 -> return MediaSaveUnexpectedError(
                 IllegalStateException(copyResult.cause)
             )
-
-            is FileCopyResult.Success -> {}
         }
         // Following logics will be different on different mime
         val isImage = mimeType.startsWith("image")
         val isVideo = mimeType.startsWith("video")
         val isAudio = mimeType.startsWith("audio")
 
-        var thumbnailFilename: String? = null
-        if (isImage || isVideo) {
-            // generate thumbnail
-            // First try to use the srcUri to share the cache (gen in the UI show up)
-            thumbnailFilename =
+        // generate thumbnail
+        val thumbnailFilename = if (isImage || isVideo) {
+            val name =
                 MessageFilePathRule.generateFilenameByPrependTime(messageTimestampMs, "thumb.webp")
-            val thumbnailFullRelativePath =
-                MessageFilePathRule.generateFullRelativePath(
-                    userId = userId,
-                    topicId = topicId,
-                    timestampMs = messageTimestampMs,
-                    filename = thumbnailFilename
-                )
-            val thumbnailFile =
-                fileRootDir.thumbnailRootDir.resolveSubPaths(
-                    thumbnailFullRelativePath,
-                    true,
-                    lastPathIsFile = true
-                )
             val uriCandidates = listOf("src" to srcUri, "tgt" to rawFileTgtUri)
-            var generateThumbnailOk = false
-            var generateThumbnailLastError: Throwable? = null
-            for ((uriName, tryUri) in uriCandidates) {
-                val generateThumbResult = generateAndSaveThumbnail(
-                    context, tryUri,
-                    targetFile = thumbnailFile,
-                    maxWidth = THUMBNAIL_MAX_WIDTH,
-                    maxHeight = THUMBNAIL_MAX_HEIGHT
-                )
-                when (generateThumbResult) {
-                    is GenerateThumbnailResult.Success -> {
-                        generateThumbnailOk = true
-                        break
-                    }
-
-                    is GenerateThumbnailResult.Error -> {
-                        Timber.i(
-                            generateThumbResult.cause,
-                            "Generate thumbnail failed for $uriName Uri "
-                        )
-                        generateThumbnailLastError = generateThumbResult.cause
-                    }
-                }
+            val (isOK, lastError) = generateImageOrVideoThumbnailFromSrcCandidates(
+                userId = userId,
+                topicId = topicId,
+                messageTimestampMs = messageTimestampMs,
+                thumbnailFilename = name,
+                srcUriCandidates = uriCandidates
+            )
+            if (!isOK) {
+                return MediaSaveUnexpectedError(lastError!!) // Exit quickly when failed
             }
-            if (!generateThumbnailOk) {
-                return MediaSaveUnexpectedError(generateThumbnailLastError!!)
-            }
-        }
+            name
+        } else null
+        // First try to use the srcUri to share the cache (gen in the UI show up)
+        val finalDimensionAndDuration = ensureValidDimensionAndDuration(
+            isImage = isImage,
+            isVideo = isVideo,
+            isAudio = isAudio,
+            mediaUri = rawFileTgtUri,
+            initialMeta = metaData
+        )
 
-        var width = metaData.width
-        var height = metaData.height
-        var duration = metaData.duration
-        if (isImage && !isDimensionValid(width, height)) {
-            UriStorageUtil.getImageDimensionsFallback(context, srcUri)
-                ?.also {
-                    width = it.width
-                    height = it.height
-                }
-        } else if (isVideo && !(isDimensionValid(
-                width,
-                height
-            ) && duration != null && duration > 0L)
-        ) {
-            UriStorageUtil.getVideo3DimensionsFallback(context, srcUri)
-                ?.also {
-                    width = it.width
-                    height = it.height
-                    duration = it.duration
-                }
-        } else if (isAudio && !(duration != null && duration > 0L)) {
-            duration = UriStorageUtil.getAudioDurationFallback(context, srcUri)
-        }
-
-        val fileSize = metaData.fileSize ?: copyResult.bytesCopied
+        val fileSize = metaData.fileSize ?: bytesCopied
         return SavedMedia(
             filename = storeRawFilename,
             originalFilename = displayName,
             fileSize = fileSize,
             thumbnailFilename = thumbnailFilename,
             mimeType = mimeType,
-            duration = duration,
-            width = width,
-            height = height
+            duration = finalDimensionAndDuration.duration,
+            width = finalDimensionAndDuration.width,
+            height = finalDimensionAndDuration.height
         )
+    }
+
+    suspend fun generateImageOrVideoThumbnailFromSrcCandidates(
+        userId: UserId,
+        topicId: TopicId,
+        messageTimestampMs: Long,
+        thumbnailFilename: String,
+        srcUriCandidates: List<Pair<String, Uri>>,
+    ): Pair<Boolean, Throwable?> {
+        val thumbnailFile = calcThumbnailFile(
+            userId = userId,
+            topicId = topicId,
+            messageTimestampMs = messageTimestampMs,
+            thumbnailFilename = thumbnailFilename
+        )
+
+        var generateThumbnailLastError: Throwable? = null
+        for ((uriName, tryUri) in srcUriCandidates) {
+
+            when (val generateThumbResult = generateAndSaveThumbnail(
+                context, tryUri,
+                targetFile = thumbnailFile,
+                maxWidth = THUMBNAIL_MAX_WIDTH,
+                maxHeight = THUMBNAIL_MAX_HEIGHT
+            )) {
+                is GenerateThumbnailResult.Success -> {
+                    return true to null
+                }
+
+                is GenerateThumbnailResult.Error -> {
+                    Timber.i(
+                        generateThumbResult.cause,
+                        "Generate thumbnail failed for $uriName Uri "
+                    )
+                    generateThumbnailLastError = generateThumbResult.cause
+                }
+            }
+        }
+        return false to generateThumbnailLastError
+    }
+
+    fun calcThumbnailFile(
+        userId: UserId,
+        topicId: TopicId,
+        messageTimestampMs: Long,
+        thumbnailFilename: String,
+    ): File {
+        val thumbnailFullRelativePath =
+            MessageFilePathRule.generateFullRelativePath(
+                userId = userId,
+                topicId = topicId,
+                timestampMs = messageTimestampMs,
+                filename = thumbnailFilename
+            )
+        return fileRootDir.thumbnailRootDir.resolveSubPaths(
+            thumbnailFullRelativePath,
+            true,
+            lastPathIsFile = true
+        )
+    }
+
+    suspend fun calcRawSharedStorageUri(
+        userId: UserId,
+        topicId: TopicId,
+        messageTimestampMs: Long,
+        rawFilename: String,
+        mimeType: String,
+    ): FindOrCreateFileUriResult {
+        val tgtRootTreeUri = fileRootDir.messageFileRootUri.firstOrNull()
+            ?: return FindOrCreateFileUriResult.Error.Unexpected(
+                IllegalStateException("messageFileRootUri is Null")
+            )
+        val relativePathSegments =
+            MessageFilePathRule.generateFullRelativePath(
+                userId,
+                topicId,
+                messageTimestampMs,
+                rawFilename
+            )
+        return UriStorageUtil.ensureSAFFileUri(
+            context,
+            tgtRootTreeUri,
+            relativePathSegments,
+            mimeType
+        )
+    }
+
+
+    private data class DimensionAndDuration(
+        val width: Int?,
+        val height: Int?,
+        val duration: Long?,
+    )
+
+    private fun ensureValidDimensionAndDuration(
+        isImage: Boolean,
+        isVideo: Boolean,
+        isAudio: Boolean,
+        mediaUri: Uri,
+        initialMeta: ContentResolverQueriedResult,
+    ): DimensionAndDuration {
+        val isDurationValid = (initialMeta.duration ?: 0L) > 0L
+
+        // 使用 when(true) 进行多条件分支判断
+        return when {
+            isImage && !isDimensionValid(initialMeta.width, initialMeta.height) -> {
+                UriStorageUtil.getImageDimensionsFallback(context, mediaUri)
+                    ?.let {
+                        DimensionAndDuration(it.width, it.height, 0L)
+                    } ?: DimensionAndDuration(
+                    initialMeta.width,
+                    initialMeta.height,
+                    initialMeta.duration
+                )
+            }
+
+            isVideo && !(isDimensionValid(
+                initialMeta.width,
+                initialMeta.height
+            ) && isDurationValid) -> {
+                UriStorageUtil.getVideo3DimensionsFallback(context, mediaUri)
+                    ?.let {
+                        DimensionAndDuration(it.width, it.height, it.duration)
+                    } ?: DimensionAndDuration(
+                    initialMeta.width,
+                    initialMeta.height,
+                    initialMeta.duration
+                )
+            }
+
+            isAudio && !isDurationValid -> {
+                val d = UriStorageUtil.getAudioDurationFallback(context, mediaUri)
+                    ?: initialMeta.duration
+                DimensionAndDuration(null, null, d)
+            }
+
+            else -> DimensionAndDuration(
+                initialMeta.width,
+                initialMeta.height,
+                initialMeta.duration
+            )
+        }
     }
 }

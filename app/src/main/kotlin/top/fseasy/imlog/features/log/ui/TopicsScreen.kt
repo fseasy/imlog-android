@@ -38,7 +38,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,24 +48,75 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import top.fseasy.imlog.domain.model.Topic
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import top.fseasy.imlog.domain.model.LogScreenTopic
+import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.features.log.TopicsUiState
 import top.fseasy.imlog.features.log.TopicsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+sealed interface TopicCardAction {
+    data class Click(val topicId: TopicId) : TopicCardAction
+    data class Pin(val topicId: TopicId) : TopicCardAction
+    data class Archive(val topicId: TopicId) : TopicCardAction
+    data class Delete(val topicId: TopicId) : TopicCardAction
+    data class Settings(val topicId: TopicId) : TopicCardAction
+}
+
+sealed interface CreateTopicDialogAction {
+    data object Dismiss : CreateTopicDialogAction
+    data class Create(val topicName: String) : CreateTopicDialogAction
+}
+
+@Composable
+fun TopicsRoute(
+    onTopicClick: (TopicId) -> Unit,
+    onSettingsClick: () -> Unit,
+    onFloatingButtonClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: TopicsViewModel = hiltViewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    TopicsScreenContent(
+        uiState = uiState,
+        onTopicCardAction = { action: TopicCardAction ->
+            when (action) {
+                is TopicCardAction.Click -> onTopicClick(action.topicId)
+                is TopicCardAction.Pin -> viewModel.pinTopic(action.topicId)
+                is TopicCardAction.Settings -> {}
+                is TopicCardAction.Archive -> viewModel.archiveTopic(action.topicId)
+                is TopicCardAction.Delete -> viewModel.deleteTopic(action.topicId)
+            }
+        },
+        onCreateTopicDialogAction = { action: CreateTopicDialogAction ->
+            when (action) {
+                is CreateTopicDialogAction.Dismiss -> viewModel.hideCreateDialog()
+                is CreateTopicDialogAction.Create -> viewModel.createTopic(action.topicName)
+            }
+        },
+        onFloatingButtonClick = onFloatingButtonClick,
+        onSettingsClick = onSettingsClick,
+        modifier = modifier
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TopicsScreen(
-    onTopicClick: (String) -> Unit,
+fun TopicsScreenContent(
+    uiState: TopicsUiState,
+    onTopicCardAction: (TopicCardAction) -> Unit,
+    onCreateTopicDialogAction: (CreateTopicDialogAction) -> Unit,
+    onFloatingButtonClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    viewModel: TopicsViewModel = hiltViewModel()
+    modifier: Modifier,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = { Text("Records") },
@@ -79,7 +129,7 @@ fun TopicsScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { viewModel.showCreateDialog() }) {
+            FloatingActionButton(onClick = onFloatingButtonClick) {
                 Icon(Icons.Default.Add, contentDescription = "Create Topic")
             }
         }
@@ -104,21 +154,14 @@ fun TopicsScreen(
                 items(uiState.topics, key = { it.id }) { topic ->
                     TopicCard(
                         topic = topic,
-                        onClick = { onTopicClick(topic.id) },
-                        onPin = { viewModel.pinTopic(topic.id) },
-                        onArchive = { viewModel.archiveTopic(topic.id) },
-                        onDelete = { viewModel.deleteTopic(topic.id) },
-                        onSettings = { onTopicClick(topic.id) }
+                        onTopicCardAction = onTopicCardAction
                     )
                 }
             }
         }
 
         if (uiState.showCreateDialog) {
-            CreateTopicDialog(
-                onDismiss = { viewModel.hideCreateDialog() },
-                onCreate = { viewModel.createTopic(it) }
-            )
+            CreateTopicDialog(onCreateTopicDialogAction)
         }
     }
 }
@@ -126,18 +169,14 @@ fun TopicsScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopicCard(
-    topic: Topic,
-    onClick: () -> Unit,
-    onPin: () -> Unit,
-    onArchive: () -> Unit,
-    onDelete: () -> Unit,
-    onSettings: () -> Unit
+    topic: LogScreenTopic,
+    onTopicCardAction: (TopicCardAction) -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("MMM dd", Locale.getDefault()) }
 
     Card(
-        onClick = onClick,
+        onClick = { onTopicCardAction(TopicCardAction.Click(topic.id)) },
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = if (topic.isPinned)
@@ -160,7 +199,8 @@ fun TopicCard(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
-                        text = topic.name.firstOrNull()?.uppercase() ?: "?",
+                        text = topic.name.firstOrNull()
+                            ?.uppercase() ?: "?",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onPrimary
                     )
@@ -187,7 +227,7 @@ fun TopicCard(
                     }
                 }
                 Text(
-                    text = dateFormat.format(Date(topic.createdAt)),
+                    text = dateFormat.format(Date(topic.messageUpdatedAt)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -206,7 +246,7 @@ fun TopicCard(
                         leadingIcon = { Icon(Icons.Default.PushPin, null) },
                         onClick = {
                             showMenu = false
-                            onPin()
+                            onTopicCardAction(TopicCardAction.Pin(topic.id))
                         }
                     )
                     DropdownMenuItem(
@@ -214,7 +254,7 @@ fun TopicCard(
                         leadingIcon = { Icon(Icons.Default.Archive, null) },
                         onClick = {
                             showMenu = false
-                            onArchive()
+                            onTopicCardAction(TopicCardAction.Archive(topic.id))
                         }
                     )
                     DropdownMenuItem(
@@ -222,7 +262,7 @@ fun TopicCard(
                         leadingIcon = { Icon(Icons.Default.Delete, null) },
                         onClick = {
                             showMenu = false
-                            onDelete()
+                            onTopicCardAction(TopicCardAction.Delete(topic.id))
                         }
                     )
                 }
@@ -231,15 +271,17 @@ fun TopicCard(
     }
 }
 
+
+
+
 @Composable
 fun CreateTopicDialog(
-    onDismiss: () -> Unit,
-    onCreate: (String) -> Unit
+    onAction: (CreateTopicDialogAction) -> Unit,
 ) {
     var topicName by remember { mutableStateOf("") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { onAction(CreateTopicDialogAction.Dismiss) },
         title = { Text("Create Topic") },
         text = {
             OutlinedTextField(
@@ -251,14 +293,14 @@ fun CreateTopicDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onCreate(topicName) },
+                onClick = { onAction(CreateTopicDialogAction.Create(topicName)) },
                 enabled = topicName.isNotBlank()
             ) {
                 Text("Create")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = { onAction(CreateTopicDialogAction.Dismiss) }) {
                 Text("Cancel")
             }
         }

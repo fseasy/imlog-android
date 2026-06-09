@@ -99,17 +99,21 @@ data class MediaMetadataRetrieverResult(
     val duration: Long? = null,
 )
 
-enum class MediaMetadataRetrieverKey(val code: int) {
+enum class MediaMetadataRetrieverKey(val code: Int) {
     VIDEO_WIDTH(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH), VIDEO_HEIGHT(
         MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
     ),
     DURATION(MediaMetadataRetriever.METADATA_KEY_DURATION)
 }
 
-sealed interface FindFileResult {
-    data class Success(val uri: Uri) : FindFileResult
-    data object NotFound : FindFileResult
-    sealed interface Error : FindFileResult {
+sealed interface FindOrCreateFileUriResult {
+    data class Success(val uri: Uri) : FindOrCreateFileUriResult
+
+    /**
+     * Logically only it exists when it's in find-only mode (call `findSAFFileUri`)
+     */
+    data object NotFound : FindOrCreateFileUriResult
+    sealed interface Error : FindOrCreateFileUriResult {
         val cause: Throwable
 
         data class PermissionDenied(override val cause: SecurityException) : Error
@@ -162,6 +166,7 @@ object UriStorageUtil {
     /**
      * A combined contextResolver Query to get multiple metadata in one query.
      * STABLE result expectation Fields: DISPLAY_NAME, SIZE
+     * Sync BLOCKING io.
      */
     fun resolveMetadata(
         context: Context,
@@ -187,8 +192,9 @@ object UriStorageUtil {
     /**
      * More robust way compared to metadata.mimeType
      * Will always try to get a mime type on the uri (SAF or MediaStore)
+     * SYNC.
      */
-    suspend fun getMimeTypeFallback(context: Context, uri: Uri): String {
+    fun getMimeTypeFallback(context: Context, uri: Uri): String {
         var mimeType = context.contentResolver.getType(uri)
         if (mimeType == null) {
             val extension = MimeTypeMap.getFileExtensionFromUrl(uri.toString())
@@ -208,7 +214,10 @@ object UriStorageUtil {
         return uri.lastPathSegment?.let { Uri.decode(it) }
     }
 
-    // 仅读取图片边界，不解码图片本身，性能极高
+    /**
+     * Read the image boundary without decoding the whole image. It's high efficiency.
+     * Sync BLOCKING IO.
+     */
     fun getImageDimensionsFallback(context: Context, uri: Uri): Dimensions? {
         return try {
             context.contentResolver.openInputStream(uri)
@@ -219,17 +228,22 @@ object UriStorageUtil {
                     Dimensions(options.outWidth, options.outHeight)
                 }
         } catch (e: Exception) {
+            Timber.i(e, "Failed to get image dimension by decodeStream")
             null
         }
     }
 
-    fun getAudioDurationFallback(context: Context, uri: Uri): Long? = callMediaMetadataRetriever(
-        context, uri, listOf(
-            MediaMetadataRetrieverKey.DURATION
-        )
-    )?.duration
+    fun getAudioDurationFallback(context: Context, uri: Uri): Long? =
+        callMediaMetadataRetriever(
+            context, uri, listOf(
+                MediaMetadataRetrieverKey.DURATION
+            )
+        )?.duration
 
-    fun getVideo3DimensionsFallback(context: Context, uri: Uri): MediaMetadataRetrieverResult? =
+    fun getVideo3DimensionsFallback(
+        context: Context,
+        uri: Uri,
+    ): MediaMetadataRetrieverResult? =
         callMediaMetadataRetriever(
             context, uri, listOf(
                 MediaMetadataRetrieverKey.VIDEO_WIDTH,
@@ -238,7 +252,10 @@ object UriStorageUtil {
             )
         )
 
-    // 使用 MediaMetadataRetriever 获取视频宽高
+    /**
+     * Use MediaMetadataRetriever to Get specific fields
+     * NOTE: it's sync blocking io. Use io coroutine
+     */
     private fun callMediaMetadataRetriever(
         context: Context,
         uri: Uri,
@@ -350,7 +367,7 @@ object UriStorageUtil {
         context: Context,
         rootTreeUri: Uri,
         relativePathSegments: List<String>,
-    ): FindFileResult = resolveSAFFileUri(
+    ): FindOrCreateFileUriResult = resolveSAFFileUri(
         context = context,
         rootTreeUri = rootTreeUri,
         relativePathSegments = relativePathSegments,
@@ -367,7 +384,7 @@ object UriStorageUtil {
         rootTreeUri: Uri,
         relativePathSegments: List<String>,
         mimeType: String,
-    ): FindFileResult = resolveSAFFileUri(
+    ): FindOrCreateFileUriResult = resolveSAFFileUri(
         context = context,
         rootTreeUri = rootTreeUri,
         relativePathSegments = relativePathSegments,
@@ -387,7 +404,7 @@ object UriStorageUtil {
         relativePathSegments: List<String>,
         mimeType: String,
         createIfMissing: Boolean,
-    ): FindFileResult = withContext(Dispatchers.IO) {
+    ): FindOrCreateFileUriResult = withContext(Dispatchers.IO) {
         val resolver = context.contentResolver
 
         try {
@@ -417,7 +434,7 @@ object UriStorageUtil {
 
             // 3. 如果最深层路径（即文件本身）已经命中且有效，直接返回
             if (startIndex == relativePathSegments.size) {
-                return@withContext FindFileResult.Success(currentUri)
+                return@withContext FindOrCreateFileUriResult.Success(currentUri)
             }
 
             // 4. 从找到的最近有效节点开始，向下级继续查找或创建
@@ -435,14 +452,14 @@ object UriStorageUtil {
                             if (isFile) mimeType else DocumentsContract.Document.MIME_TYPE_DIR
                         DocumentsContract.createDocument(
                             resolver, currentUri, targetMimeType, nodeName
-                        ) ?: return@withContext FindFileResult.Error.Unexpected(
+                        ) ?: return@withContext FindOrCreateFileUriResult.Error.Unexpected(
                             IllegalStateException("Failed to create ${if (isFile) "file" else "directory"}: $nodeName")
                         )
                     }
 
                     else -> {
                         // 没找到且不允许创建，直接返回 NotFound
-                        return@withContext FindFileResult.NotFound
+                        return@withContext FindOrCreateFileUriResult.NotFound
                     }
                 }
 
@@ -451,14 +468,14 @@ object UriStorageUtil {
                 uriCache.put(key, currentUri)
             }
 
-            FindFileResult.Success(currentUri)
+            FindOrCreateFileUriResult.Success(currentUri)
 
         } catch (e: SecurityException) {
             Timber.e(e, "Resolve file get permission denied")
-            FindFileResult.Error.PermissionDenied(e)
+            FindOrCreateFileUriResult.Error.PermissionDenied(e)
         } catch (e: Exception) {
             Timber.e(e, "Resolve file get unknown exception")
-            FindFileResult.Error.Unexpected(e)
+            FindOrCreateFileUriResult.Error.Unexpected(e)
         }
     }
 

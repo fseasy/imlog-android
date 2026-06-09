@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.Flow
 import top.fseasy.imlog.data.file.MediaSaveResult
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageId
+import top.fseasy.imlog.domain.model.MessageMediaCopySource
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Statistics
 import top.fseasy.imlog.domain.model.TopicId
@@ -19,8 +20,7 @@ interface MessageRepository {
         topicId: TopicId,
         senderId: UserId,
         messageType: MessageType,
-        srcMediaUri: Uri,
-        deleteSrcMediaWhenSuccess: Boolean,
+        srcMediaCopySource: MessageMediaCopySource,
     ): Unit
 
     suspend fun finishMediaProcessing(messageId: MessageId, savedMedia: MediaSaveResult.SavedMedia)

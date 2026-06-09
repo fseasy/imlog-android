@@ -10,15 +10,23 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNot
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import top.fseasy.imlog.data.file.FileManager
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageFactory
+import top.fseasy.imlog.domain.model.MessageMediaCopySource
 import top.fseasy.imlog.domain.model.MessageType
+import top.fseasy.imlog.domain.model.ResourceModel
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
@@ -30,10 +38,15 @@ import top.fseasy.imlog.features.log.domain.VoiceRecorder
 import java.io.File
 import javax.inject.Inject
 
+data class MessageUiState(
+    val message: Message,
+    val thumbnailModel: ResourceModel?,
+)
+
 data class TimelineUiState(
     val isLoading: Boolean = true,
     val topic: Topic? = null,
-    val messages: List<Message> = emptyList(),
+    val messages: List<MessageUiState> = emptyList(),
     val currentUserId: UserId? = null,
     val voiceRecordingState: VoiceRecordingState = VoiceRecordingState.IDLE,
     val voiceRecordingElapsed: Long = 0,
@@ -44,84 +57,91 @@ class TimelineViewModel @Inject constructor(
     private val topicRepository: TopicRepository,
     private val messageRepository: MessageRepository,
     private val userRepository: UserRepository,
+    private val fileManager: FileManager,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     private val _topicId = MutableStateFlow<TopicId?>(null)
+    private val _currentUserId: StateFlow<UserId?> = userRepository.observeUserId.stateIn(
+        scope = viewModelScope, started = SharingStarted.WhileSubscribed(2000), initialValue = null
+    )
 
-    val voiceRecorder = VoiceRecorder()
+    val voiceRecorder = VoiceRecorder(viewModelScope)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<TimelineUiState> = combine(
-        _topicId.flatMapLatest {
-            it?.let { topicRepository.observeTopic(it) } ?: flowOf(null)
-        },
-        _topicId.flatMapLatest {
-            it?.let { messageRepository.observeTopicMessages(it) } ?: flowOf(emptyList())
-        },
-        userRepository.observeUserId,
-        voiceRecorder.state,
-        voiceRecorder.elapsedMs
-    ) { topic, messages, userId, voiceState, elapsed ->
-        TimelineUiState(
-            isLoading = false,
-            topic = topic,
-            messages = messages,
-            currentUserId = userId,
-            voiceRecordingState = voiceState,
-            voiceRecordingElapsed = elapsed
+        _topicId.filterNotNull(), _currentUserId.filterNotNull()
+    ) { tid, uid ->
+        tid to uid
+    }.flatMapLatest { (tid, uid) ->
+        combine(
+            topicRepository.observeTopic(tid),
+            messageRepository.observeTopicMessages(tid, uid),
+            voiceRecorder.state,
+            voiceRecorder.elapsedMs
+        ) { topic, messages, voiceState, elapsed ->
+            TimelineUiState(
+                isLoading = false,
+                topic = topic,
+                messages = messages.map { m ->
+                    MessageUiState(
+                        message = m,
+                        thumbnailModel = buildThumbnailModel(m, uid)
+                    )
+                },
+                currentUserId = uid,
+                voiceRecordingState = voiceState,
+                voiceRecordingElapsed = elapsed,
+            )
+        }
+    }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TimelineUiState()
         )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = TimelineUiState()
-    )
 
     fun loadTopic(topicId: TopicId) {
         _topicId.value = topicId
     }
 
-    fun startRecording() {
-        voiceRecorder.start(context)
-    }
-
-    fun stopRecording() {
-        val file = voiceRecorder.stop()
-        if (file != null) {
-            sendAudioMessage(file)
+    fun setVoiceRecorderState(state: VoiceRecordingState) {
+        when (state) {
+            VoiceRecordingState.IDLE -> voiceRecorder.cancel()
+            VoiceRecordingState.RECORDING -> voiceRecorder.start(context)
+            VoiceRecordingState.STOPPED -> {
+                voiceRecorder.stop()
+                    ?.let { sendVoiceMessage(it) }
+            }
         }
     }
 
-    fun cancelRecording() {
-        voiceRecorder.cancel()
-    }
-
-    // --- 消息发送 ---
     fun sendTextMessage(content: String) {
-        launchWithTopic { topicId ->
-            val userId = requireCurrentUserId()
-            val textMsg = MessageFactory.createText(topicId, userId, content)
+        launchWithTopicUserId { topicId, userId ->
+            val now = System.currentTimeMillis()
+            val textMsg =
+                MessageFactory.createText(topicId, userId, content = content, timestampMs = now)
             messageRepository.saveTextMessage(textMsg)
         }
     }
 
     fun sendImageMessage(uri: Uri) {
-        sendMediaMessage(uri, MessageType.IMAGE)
+        sendMediaMessage(MessageMediaCopySource.FromUri(uri), MessageType.IMAGE)
     }
 
     fun sendVideoMessage(uri: Uri) {
-        sendMediaMessage(uri, MessageType.VIDEO)
+        sendMediaMessage(MessageMediaCopySource.FromUri(uri), MessageType.VIDEO)
     }
 
     fun sendAudioMessage(uri: Uri) {
-        sendMediaMessage(uri, MessageType.VIDEO)
+        sendMediaMessage(MessageMediaCopySource.FromUri(uri), MessageType.VIDEO)
     }
 
     fun sendVoiceMessage(cacheVoiceFile: File) {
-        launchWithTopic {
-            val userId = requireCurrentUserId()
-            messageRepository.
-        }
+        sendMediaMessage(
+            MessageMediaCopySource.FromFile(cacheVoiceFile, deleteOnCopySuccess = true),
+            MessageType.VOICE
+        )
     }
 
     fun copyMessage(message: Message) {
@@ -133,33 +153,53 @@ class TimelineViewModel @Inject constructor(
         voiceRecorder.cancel()
     }
 
-    // --- 内部工具 ---
-
-    /**
-     * 在协程中确保 topicId 与 userId 非空后执行 [block]
-     */
-    private inline fun launchWithTopic(crossinline block: suspend (TopicId) -> Unit) {
-        viewModelScope.launch {
-            val topicId = _topicId.value ?: return@launch
-            block(topicId)
-        }
-    }
-
-    private suspend fun requireCurrentUserId(): UserId {
-        return userRepository.observeUserId.first() ?: error("未登录")
-    }
-
-    private fun sendMediaMessage(uri: Uri, type: MessageType) {
-        viewModelScope.launch {
-            val topicId = _topicId.value ?: return@launch
-            val userId = requireCurrentUserId()
+    private fun sendMediaMessage(copySource: MessageMediaCopySource, type: MessageType) {
+        launchWithTopicUserId { topicId, userId ->
             messageRepository.sendMediaMessage(
                 topicId = topicId,
                 senderId = userId,
                 messageType = type,
-                srcMediaUri = uri,
-                deleteSrcMediaWhenSuccess = false
+                srcMediaCopySource = copySource
             )
         }
     }
+
+    private fun buildThumbnailModel(
+        message: Message,
+        userId: UserId,
+    ): ResourceModel? {
+        if (message.type != MessageType.IMAGE && message.type != MessageType.VIDEO) {
+            return null
+        }
+        return message.thumbnailName?.let { name ->
+            ResourceModel.File(
+                fileManager.calcThumbnailFile(
+                    userId = userId,
+                    topicId = message.topicId,
+                    messageTimestampMs = message.createdAt,
+                    thumbnailFilename = name
+                )
+            )
+        } ?: message.originalFileUri?.let { uri ->
+            ResourceModel.Uri(uri)
+        }
+    }
+
+// --- 内部工具 ---
+
+    /**
+     * 在协程中确保 topicId 与 userId 非空后执行 [block]
+     */
+    private inline fun launchWithTopicUserId(crossinline block: suspend (topicId: TopicId, userId: UserId) -> Unit) {
+        viewModelScope.launch {
+            val topicId = _topicId.value ?: return@launch
+            val userId = requireCurrentUserId()
+            block(topicId, userId)
+        }
+    }
+
+    private suspend fun requireCurrentUserId(): UserId {
+        return userRepository.observeUserId.firstOrNull() ?: error("未登录")
+    }
+
 }

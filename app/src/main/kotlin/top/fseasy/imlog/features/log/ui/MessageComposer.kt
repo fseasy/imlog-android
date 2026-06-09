@@ -47,20 +47,24 @@ import androidx.compose.ui.unit.dp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import top.fseasy.imlog.domain.model.VoiceRecordingState
 import top.fseasy.imlog.features.log.TimelineUiState
-import top.fseasy.imlog.features.log.VoiceRecordingState
 import java.io.File
 
+sealed interface ComposerAction {
+    data class SendText(val content: String) : ComposerAction
+    data class SendImage(val uri: Uri) : ComposerAction
+    data class SendVideo(val uri: Uri) : ComposerAction
+    data class SendAudio(val uri: Uri) : ComposerAction
+    data class SendVoice(val file: File) : ComposerAction
+    data class SetVoiceRecordingState(val state: VoiceRecordingState) : ComposerAction
+}
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MessageComposer(
-    onSendText: (String) -> Unit,
-    onSendImage: (Uri) -> Unit,
-    onSendVideo: (Uri) -> Unit,
-    onSendAudio: (File) -> Unit,
     uiState: TimelineUiState,
-    onVoiceRecordingStateChange: (VoiceRecordingState) -> Unit
+    onAction: (ComposerAction) -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
     var showAttachmentMenu by remember { mutableStateOf(false) }
@@ -72,13 +76,13 @@ fun MessageComposer(
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let { onSendImage(it) }
+        uri?.let { onAction(ComposerAction.SendImage(uri)) }
     }
 
     val videoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let { onSendVideo(it) }
+        uri?.let { onAction(ComposerAction.SendVideo(uri)) }
     }
 
     Surface(
@@ -90,7 +94,11 @@ fun MessageComposer(
                     if (isVoiceMode) {
                         VoiceInputOverlay(onStartRecording = {
                             if (audioPermissionState.status.isGranted) {
-                                onVoiceRecordingStateChange(VoiceRecordingState.RECORDING)
+                                onAction(
+                                    ComposerAction.SetVoiceRecordingState(
+                                        VoiceRecordingState.RECORDING
+                                    )
+                                )
                             } else {
                                 audioPermissionState.launchPermissionRequest()
                             }
@@ -146,7 +154,7 @@ fun MessageComposer(
 
                             if (text.isNotBlank()) {
                                 IconButton(onClick = {
-                                    onSendText(text)
+                                    onAction(ComposerAction.SendText(text))
                                     text = ""
                                 }) {
                                     Icon(Icons.AutoMirrored.Filled.Send, "Send")
@@ -154,7 +162,11 @@ fun MessageComposer(
                             } else {
                                 IconButton(onClick = {
                                     isVoiceMode = true
-                                    onVoiceRecordingStateChange(VoiceRecordingState.IDLE)
+                                    onAction(
+                                        ComposerAction.SetVoiceRecordingState(
+                                            VoiceRecordingState.IDLE
+                                        )
+                                    )
                                 }) {
                                     Icon(Icons.Default.Mic, "Voice")
                                 }
@@ -166,18 +178,27 @@ fun MessageComposer(
                 VoiceRecordingState.RECORDING -> {
                     VoiceRecordingOverlay(
                         onCancel = {
-                            onVoiceRecordingStateChange(
-                                VoiceRecordingState.IDLE
+                            onAction(
+                                ComposerAction.SetVoiceRecordingState(
+                                    VoiceRecordingState.IDLE
+                                )
                             )
-                        },
-                        onStop = { onVoiceRecordingStateChange(VoiceRecordingState.STOPPED) },
-                        elapsedTime = uiState.voiceRecordingElapsed
+                        }, onStop = {
+                            onAction(
+                                ComposerAction.SetVoiceRecordingState(
+                                    VoiceRecordingState.STOPPED
+                                )
+                            )
+                        }, elapsedTime = uiState.voiceRecordingElapsed
                     )
                 }
 
                 VoiceRecordingState.STOPPED -> {
-                    // Recording finished, would send audio here
-                    onVoiceRecordingStateChange(VoiceRecordingState.IDLE)
+                    onAction(
+                        ComposerAction.SetVoiceRecordingState(
+                            VoiceRecordingState.STOPPED
+                        )
+                    )
                 }
             }
         }
@@ -186,7 +207,7 @@ fun MessageComposer(
 
 @Composable
 fun VoiceInputOverlay(
-    onStartRecording: () -> Unit, onCancel: () -> Unit
+    onStartRecording: () -> Unit, onCancel: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -222,13 +243,12 @@ fun VoiceInputOverlay(
 
 @Composable
 fun VoiceRecordingOverlay(
-    onCancel: () -> Unit, onStop: () -> Unit, elapsedTime: Long
+    onCancel: () -> Unit, onStop: () -> Unit, elapsedTime: Long,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = "Recording ${elapsedTime / 1000}s",
