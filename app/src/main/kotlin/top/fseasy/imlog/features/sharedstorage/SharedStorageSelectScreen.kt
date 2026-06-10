@@ -35,8 +35,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.fseasy.imlog.data.file.FastSAFManager
-
+import top.fseasy.imlog.util.FindOrCreateFileUriResult
+import top.fseasy.imlog.util.UriStorageUtil
 
 @Composable
 fun SharedStorageSelectScreen() {
@@ -117,19 +117,21 @@ fun SharedStorageSelectScreen() {
                 coroutineScope.launch {
                     val success = withContext(Dispatchers.IO) {
                         try {
-                            // 调用我们之前写的高性能 SAF 工具
-                            // 它会自动在用户选择的目录下创建 IMLog/Backup 多级文件夹，并在内部创建 log.txt
-                            val fileUri = FastSAFManager.getOrCreateFileUri(
+                            val ensureResult = UriStorageUtil.ensureSAFFileUri(
                                 context = context,
-                                treeUri = currentUri,
-                                subDirs = listOf("IMLog", "Backup"),
-                                fileName = "log.txt"
+                                rootTreeUri = currentUri,
+                                relativePathSegments = listOf("Backup", "log.txt"),
+                                mimeType = "plain/text"
                             )
 
-                            if (fileUri != null) {
+                            if (ensureResult is FindOrCreateFileUriResult.Success) {
                                 val logContent =
                                     "备份时间: ${System.currentTimeMillis()}\n这是一条测试备份日志。\n"
-                                FastSAFManager.writeData(context, fileUri, logContent.toByteArray())
+                                UriStorageUtil.writeData(
+                                    context,
+                                    ensureResult.uri,
+                                    logContent.toByteArray()
+                                )
                                 true
                             } else {
                                 false

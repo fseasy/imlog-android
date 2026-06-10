@@ -4,7 +4,6 @@ import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
@@ -24,15 +23,15 @@ import top.fseasy.imlog.util.retrySQLiteOnKeyConflict
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.uuid.ExperimentalUuidApi
-import top.fseasy.imlog.sqldelight.Topics as TopicEntity
-import top.fseasy.imlog.sqldelight.Topic_personal_state as PersonalStateEntity
 import top.fseasy.imlog.sqldelight.GetCurrentUserLogScreenTopics as UserLogScreenTopicEntity
 import top.fseasy.imlog.sqldelight.GetTopicWithPersonalState as GetTopicWithPersonalStateEntity
+import top.fseasy.imlog.sqldelight.Topic_personal_state as PersonalStateEntity
+import top.fseasy.imlog.sqldelight.Topics as TopicEntity
 
 @Singleton
 class TopicRepositoryImpl @Inject constructor(
     private val database: SqlDelightDb,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val dispatcher: CoroutineDispatcher,
 ) : TopicRepository {
 
     override fun observeTopic(topicId: TopicId): Flow<Topic?> =

@@ -1,7 +1,6 @@
 package top.fseasy.imlog.data.repository
 
 import android.content.Context
-import android.net.Uri
 import androidx.core.net.toUri
 import androidx.work.WorkManager
 import app.cash.sqldelight.coroutines.asFlow
@@ -9,7 +8,6 @@ import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -28,10 +26,8 @@ import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.sqldelight.Message_media_processing_temp_states
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.util.retrySQLiteOnKeyConflict
-import top.fseasy.imlog.util.toFileProviderUri
 import top.fseasy.imlog.worker.DeleteFileWorker
 import top.fseasy.imlog.worker.MediaFileProcessWorker
-import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.GetMessagesByTopic as GetMessagesByTopicRowEntity
@@ -41,7 +37,7 @@ import top.fseasy.imlog.sqldelight.Messages as MessageEntity
 class MessageRepositoryImpl @Inject constructor(
     @param:ApplicationContext val context: Context,
     private val database: SqlDelightDb,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val dispatcher: CoroutineDispatcher,
 ) : MessageRepository {
 
     /**

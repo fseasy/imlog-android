@@ -130,7 +130,8 @@ fun TimelineContent(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(uiState.messages, key = { it.message.id }) { mState ->
+                // Key must be saveable in bundle => primitive String does
+                items(uiState.messages, key = { it.message.id.value }) { mState ->
                     MessageBubble(
                         messageUiState = mState,
                         isOwnMessage = mState.message.senderId == uiState.currentUserId,

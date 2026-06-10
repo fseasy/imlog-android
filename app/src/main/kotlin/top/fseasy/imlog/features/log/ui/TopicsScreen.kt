@@ -1,5 +1,6 @@
 package top.fseasy.imlog.features.log.ui
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import timber.log.Timber
 import top.fseasy.imlog.domain.model.LogScreenTopic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.log.TopicsUiState
@@ -74,7 +76,6 @@ sealed interface CreateTopicDialogAction {
 fun TopicsRoute(
     onTopicClick: (TopicId) -> Unit,
     onSettingsClick: () -> Unit,
-    onFloatingButtonClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: TopicsViewModel = hiltViewModel(),
 ) {
@@ -97,7 +98,11 @@ fun TopicsRoute(
                 is CreateTopicDialogAction.Create -> viewModel.createTopic(action.topicName)
             }
         },
-        onFloatingButtonClick = onFloatingButtonClick,
+        onFloatingButtonClick = {
+            Timber.i("Floating button clicked")
+            Log.i("TTT", "Button click")
+            viewModel.showCreateDialog()
+        },
         onSettingsClick = onSettingsClick,
         modifier = modifier
     )
@@ -119,7 +124,7 @@ fun TopicsScreenContent(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
-                title = { Text("Records") },
+                title = { Text("Logs") },
                 actions = {
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
@@ -151,7 +156,8 @@ fun TopicsScreenContent(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(uiState.topics, key = { it.id }) { topic ->
+                // MUST use .value as it should be saveable in bundle
+                items(uiState.topics, key = { it.id.value }) { topic ->
                     TopicCard(
                         topic = topic,
                         onTopicCardAction = onTopicCardAction
@@ -270,8 +276,6 @@ fun TopicCard(
         }
     }
 }
-
-
 
 
 @Composable

@@ -125,6 +125,13 @@ enum class FileWriteMode(val value: String) {
     WRITE_TRUNCATE("wt"), WRITE_APPEND("wa"),
 }
 
+sealed interface WriteDataResult {
+    data object Success : WriteDataResult
+    data class PermissionDeniedError(val cause: Throwable) : WriteDataResult
+    data class FileOpenError(val cause: Throwable) : WriteDataResult
+    data class UnexpectedError(val cause: Throwable) : WriteDataResult
+}
+
 sealed interface FileCopyResult {
     data class Success(val bytesCopied: Long) : FileCopyResult
 
@@ -233,24 +240,22 @@ object UriStorageUtil {
         }
     }
 
-    fun getAudioDurationFallback(context: Context, uri: Uri): Long? =
-        callMediaMetadataRetriever(
-            context, uri, listOf(
-                MediaMetadataRetrieverKey.DURATION
-            )
-        )?.duration
+    fun getAudioDurationFallback(context: Context, uri: Uri): Long? = callMediaMetadataRetriever(
+        context, uri, listOf(
+            MediaMetadataRetrieverKey.DURATION
+        )
+    )?.duration
 
     fun getVideo3DimensionsFallback(
         context: Context,
         uri: Uri,
-    ): MediaMetadataRetrieverResult? =
-        callMediaMetadataRetriever(
-            context, uri, listOf(
-                MediaMetadataRetrieverKey.VIDEO_WIDTH,
-                MediaMetadataRetrieverKey.VIDEO_HEIGHT,
-                MediaMetadataRetrieverKey.DURATION,
-            )
+    ): MediaMetadataRetrieverResult? = callMediaMetadataRetriever(
+        context, uri, listOf(
+            MediaMetadataRetrieverKey.VIDEO_WIDTH,
+            MediaMetadataRetrieverKey.VIDEO_HEIGHT,
+            MediaMetadataRetrieverKey.DURATION,
         )
+    )
 
     /**
      * Use MediaMetadataRetriever to Get specific fields
@@ -287,6 +292,25 @@ object UriStorageUtil {
             null
         } finally {
             retriever.release()
+        }
+    }
+
+    suspend fun writeData(
+        context: Context,
+        tgtFileUri: Uri,
+        content: ByteArray,
+    ): WriteDataResult = withContext(Dispatchers.IO) {
+        try {
+            context.contentResolver.openOutputStream(tgtFileUri, FileWriteMode.WRITE_TRUNCATE.value)
+                ?.use { it.write(content) }
+                ?: WriteDataResult.UnexpectedError(IllegalStateException("open output stream get null"))
+            WriteDataResult.Success
+        } catch (e: SecurityException) {
+            WriteDataResult.PermissionDeniedError(e)
+        } catch (e: FileNotFoundException) {
+            WriteDataResult.FileOpenError(e)
+        } catch (e: Exception) {
+            WriteDataResult.UnexpectedError(e)
         }
     }
 

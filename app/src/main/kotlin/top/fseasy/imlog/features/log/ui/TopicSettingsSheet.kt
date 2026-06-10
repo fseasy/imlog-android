@@ -59,7 +59,7 @@ fun TopicSettingsSheet(
 
             ListItem(
                 headlineContent = { Text("Edit Topic Name") },
-                supportingContent = { Text(uiState.topic?.name ?: "") },
+                supportingContent = { Text(uiState.topicWithPersonalState?.topic?.name ?: "") },
                 leadingContent = { Icon(Icons.Default.Image, null) },
                 modifier = Modifier.fillMaxWidth()
             )

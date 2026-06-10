@@ -27,16 +27,17 @@ import top.fseasy.imlog.ui.navigation.Screen
 import top.fseasy.imlog.features.settings.FeedbackScreen
 import top.fseasy.imlog.features.settings.AboutScreen
 import top.fseasy.imlog.features.view.ViewScreen
-import top.fseasy.imlog.features.log.ui.TopicsScreen
+import top.fseasy.imlog.features.log.ui.TopicsRoute
 import top.fseasy.imlog.features.log.ui.TimelineScreen
 import top.fseasy.imlog.features.log.ui.TopicSettingsSheet
 import top.fseasy.imlog.features.settings.SettingsDrawer
 import kotlinx.coroutines.launch
+import top.fseasy.imlog.domain.model.TopicId
 
 @Composable
 fun ImlogApp(
     navController: NavHostController = rememberNavController(),
-    viewModel: MainViewModel = hiltViewModel()
+    viewModel: MainViewModel = hiltViewModel(),
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -94,7 +95,7 @@ fun ImlogApp(
                 modifier = Modifier.padding(paddingValues)
             ) {
                 composable(Screen.Log.route) {
-                    TopicsScreen(
+                    TopicsRoute(
                         onTopicClick = { topicId ->
                             navController.navigate(Screen.LogTimeline.createRoute(topicId))
                         },
@@ -110,7 +111,8 @@ fun ImlogApp(
                     route = Screen.LogTimeline.route,
                     arguments = listOf(navArgument("topicId") { type = NavType.StringType })
                 ) { backStackEntry ->
-                    val topicId = backStackEntry.arguments?.getString("topicId") ?: return@composable
+                    val topicId = backStackEntry.arguments?.getString("topicId")
+                        ?.let(::TopicId) ?: return@composable
                     TimelineScreen(
                         topicId = topicId,
                         onBack = { navController.popBackStack() },
@@ -123,7 +125,8 @@ fun ImlogApp(
                     route = Screen.TopicSettings.route,
                     arguments = listOf(navArgument("topicId") { type = NavType.StringType })
                 ) { backStackEntry ->
-                    val topicId = backStackEntry.arguments?.getString("topicId") ?: return@composable
+                    val topicId =
+                        backStackEntry.arguments?.getString("topicId") ?: return@composable
                     TopicSettingsSheet(
                         topicId = topicId,
                         onBack = { navController.popBackStack() },

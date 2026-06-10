@@ -4,7 +4,6 @@ import android.net.Uri
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -28,7 +27,7 @@ import top.fseasy.imlog.sqldelight.Users as UserEntity
 class UserRepositoryImpl @Inject constructor(
     private val database: SqlDelightDb,
     private val appPreferences: AppPreferencesRepository,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val dispatcher: CoroutineDispatcher,
 ) : UserRepository {
     override val observeUserId: Flow<UserId?> = appPreferences.currentUserId.map { it?.let(::UserId) }
 

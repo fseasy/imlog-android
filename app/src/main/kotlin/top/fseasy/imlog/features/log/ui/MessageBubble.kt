@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageType
+import top.fseasy.imlog.domain.model.ResourceModel
 import top.fseasy.imlog.features.log.MessageUiState
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -67,7 +68,7 @@ fun MessageBubble(
         ) {
             val message = messageUiState.message
             when (message.type) {
-                MessageType.TEXT -> {
+                MessageType.TEXT, null -> {
                     Text(
                         text = message.content ?: "",
                         modifier = Modifier.padding(12.dp),
@@ -78,7 +79,7 @@ fun MessageBubble(
 
                 MessageType.VOICE -> {
                     AudioPlayer(
-                        filePath = messageUiState.thumbnailModel,
+                        resourceModel = messageUiState.thumbnailModel,
                         duration = message.duration ?: 0,
                         isOwnMessage = isOwnMessage
                     )
@@ -97,7 +98,7 @@ fun MessageBubble(
 
                 MessageType.VIDEO -> {
                     VideoPlayer(
-                        filePath = messageUiState.thumbnailModel,
+                        resourceModel = messageUiState.thumbnailModel,
                         duration = message.duration ?: 0,
                         isOwnMessage = isOwnMessage
                     )
@@ -105,7 +106,7 @@ fun MessageBubble(
 
                 MessageType.AUDIO -> {
                     AudioPlayer(
-                        filePath = messageUiState.thumbnailModel,
+                        resourceModel = messageUiState.thumbnailModel,
                         duration = message.duration ?: 0,
                         isOwnMessage = isOwnMessage
                     )
@@ -117,7 +118,6 @@ fun MessageBubble(
                         modifier = Modifier.padding(12.dp)
                     )
                 }
-
             }
             Text(
                 text = dateFormat.format(Date(message.createdAt)),
@@ -134,14 +134,14 @@ fun MessageBubble(
 
 @Composable
 fun VideoPlayer(
-    filePath: String?, duration: Long, isOwnMessage: Boolean,
+    resourceModel: ResourceModel?, duration: Long, isOwnMessage: Boolean,
 ) {
     var isPlaying by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableFloatStateOf(0f) }
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
 
     Column(modifier = Modifier.padding(8.dp)) {
-        if (filePath != null) {
+        if (resourceModel != null) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -206,7 +206,7 @@ fun VideoPlayer(
 
 @Composable
 fun AudioPlayer(
-    filePath: String?, duration: Long, isOwnMessage: Boolean,
+    resourceModel: ResourceModel?, duration: Long, isOwnMessage: Boolean,
 ) {
     var isPlaying by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableFloatStateOf(0f) }
