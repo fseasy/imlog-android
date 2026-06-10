@@ -65,6 +65,7 @@ sealed interface ComposerAction {
 fun MessageComposer(
     uiState: TimelineUiState,
     onAction: (ComposerAction) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var text by remember { mutableStateOf("") }
     var showAttachmentMenu by remember { mutableStateOf(false) }
@@ -86,7 +87,7 @@ fun MessageComposer(
     }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(), shadowElevation = 8.dp
+        modifier = modifier.fillMaxWidth(), shadowElevation = 8.dp
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
             when (uiState.voiceRecordingState) {

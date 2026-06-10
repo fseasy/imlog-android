@@ -2,15 +2,13 @@ package top.fseasy.imlog.features.log
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import top.fseasy.imlog.domain.repository.TopicRepository
-import top.fseasy.imlog.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -18,6 +16,8 @@ import kotlinx.coroutines.launch
 import top.fseasy.imlog.domain.model.LogScreenTopic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.repository.TopicRepository
+import top.fseasy.imlog.domain.repository.UserRepository
 import javax.inject.Inject
 
 
@@ -38,6 +38,7 @@ class TopicsViewModel @Inject constructor(
     private val _showCreateDialog = MutableStateFlow(false)
     private val _selectedTopicId = MutableStateFlow<TopicId?>(null)
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<TopicsUiState> = userRepository.observeUserId
         .distinctUntilChanged()
         .flatMapLatest { uId ->

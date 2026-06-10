@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.model.Statistics
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
@@ -27,6 +28,7 @@ class ViewViewModel @Inject constructor(
     userRepository: UserRepository,
 ) : ViewModel() {
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ViewUiState> = userRepository.observeUserId.filterNotNull()
         .flatMapLatest { uid ->
             messageRepository.observeStatistics(uid)

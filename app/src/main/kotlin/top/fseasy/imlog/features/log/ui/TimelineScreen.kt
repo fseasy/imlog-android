@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -121,8 +122,7 @@ fun TimelineContent(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .imePadding()
+                .padding(top = paddingValues.calculateTopPadding())
         ) {
             LazyColumn(
                 modifier = Modifier.weight(1f),
@@ -130,7 +130,7 @@ fun TimelineContent(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Key must be saveable in bundle => primitive String does
+                // Key must be savable in bundle => primitive String does
                 items(uiState.messages, key = { it.message.id.value }) { mState ->
                     MessageBubble(
                         messageUiState = mState,
@@ -139,7 +139,11 @@ fun TimelineContent(
                 }
             }
 
-            MessageComposer(uiState = uiState, onAction = onComposerAction)
+            MessageComposer(
+                uiState = uiState,
+                onAction = onComposerAction,
+                modifier = Modifier
+            )
         }
     }
 }
