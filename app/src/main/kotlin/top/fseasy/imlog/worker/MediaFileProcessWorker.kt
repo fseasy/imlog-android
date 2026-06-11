@@ -13,6 +13,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import timber.log.Timber
 import top.fseasy.imlog.data.file.FileManager
 import top.fseasy.imlog.data.file.MediaSaveResult
 import top.fseasy.imlog.domain.model.MessageId
@@ -67,18 +68,20 @@ class MediaFileProcessWorker @AssistedInject constructor(
     }
 
     override suspend fun doWork(): Result {
-        val messageId = inputData.getString(KEY_MESSAGE_ID)
-            ?.let(::MessageId) ?: return Result.failure()
-        val userId = inputData.getString(KEY_USER_ID)
-            ?.let(::UserId) ?: return Result.failure()
-        val topicId = inputData.getString(KEY_TOPIC_ID)
-            ?.let(::TopicId) ?: return Result.failure()
-        val messageTimestampMs = inputData.getLong(KEY_MESSAGE_TIMESTAMP_MS, -1)
-            .takeIf { it > 0 } ?: return Result.failure()
-        val srcUri = inputData.getString(KEY_SRC_URI)
-            ?.toUri() ?: return Result.failure()
-        val maxRetries = inputData.getInt(KEY_MAX_RETRIES, DEFAULT_MAX_RETRIES)
+        Timber.d("=== WORKER STARTED ===")  // 看看这条能不能打印
         try {
+            val messageId = inputData.getString(KEY_MESSAGE_ID)
+                ?.let(::MessageId) ?: return Result.failure()
+            val userId = inputData.getString(KEY_USER_ID)
+                ?.let(::UserId) ?: return Result.failure()
+            val topicId = inputData.getString(KEY_TOPIC_ID)
+                ?.let(::TopicId) ?: return Result.failure()
+            val messageTimestampMs = inputData.getLong(KEY_MESSAGE_TIMESTAMP_MS, -1)
+                .takeIf { it > 0 } ?: return Result.failure()
+            val srcUri = inputData.getString(KEY_SRC_URI)
+                ?.toUri() ?: return Result.failure()
+            val maxRetries = inputData.getInt(KEY_MAX_RETRIES, DEFAULT_MAX_RETRIES)
+
             val saveResult = fileManager.saveMessageMedia(
                 userId = userId,
                 topicId = topicId,
@@ -98,8 +101,9 @@ class MediaFileProcessWorker @AssistedInject constructor(
 
             return Result.success()
         } catch (e: Exception) {
+            Timber.e(e, "MediaFileProcessWorker get exception")
             // WorkManager 内置的重试计数
-            return if (runAttemptCount >= maxRetries) {
+            return if (runAttemptCount >= 3) {
                 Result.failure(workDataOf("cause" to "$e"))
             } else {
                 Result.retry()

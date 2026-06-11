@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION")
-
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 
@@ -46,11 +44,12 @@ android {
         compose = true
         buildConfig = true
     }
+    buildToolsVersion = "37.0.0"
 }
 
 kotlin {
     compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
+        jvmTarget = JvmTarget.JVM_21
     }
 }
 
@@ -63,6 +62,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.hilt.common)
+    implementation(libs.androidx.hilt.work)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -88,10 +88,11 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.hilt.android)
     debugImplementation(libs.androidx.ui.tooling)
-    ksp(libs.hilt.compiler)
+    ksp(libs.hilt.compiler) // for hilt kernel compile
+    ksp(libs.androidx.hilt.compiler) // for Hilt-worker annotation compile
+    ksp(libs.kotlin.metadata.jvm) // explicitly assign to overwrite the default
     implementation(libs.accompanist.permissions)
     implementation(libs.timber)
-
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 

@@ -72,10 +72,9 @@ object MessageFilePathRule {
      * 格式: ${dd-HHmmss-SSS}-utc.$suffix
      */
     private fun generateTimePrefix(timestampMs: Long): String {
-        val instant = Instant.ofEpochMilli(timestampMs)
-        val utc = instant.atOffset(ZoneOffset.UTC)
-        val time = utc.format(DateTimeFormatter.ofPattern("dd-HHmmss-SSSutc"))
-        return "$time"
+        return DateTimeFormatter.ofPattern("dd-HHmmss-SSS-'utc'")
+            .withZone(ZoneOffset.UTC)
+            .format(Instant.ofEpochMilli(timestampMs))
     }
 
     /**
