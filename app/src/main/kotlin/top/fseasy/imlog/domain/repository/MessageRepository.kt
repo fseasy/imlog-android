@@ -1,8 +1,7 @@
 package top.fseasy.imlog.domain.repository
 
-import android.net.Uri
 import kotlinx.coroutines.flow.Flow
-import top.fseasy.imlog.data.file.MediaSaveResult
+import top.fseasy.imlog.data.file.SavedMedia
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageMediaCopySource
@@ -23,5 +22,5 @@ interface MessageRepository {
         srcMediaCopySource: MessageMediaCopySource,
     ): Unit
 
-    suspend fun finishMediaProcessing(messageId: MessageId, savedMedia: MediaSaveResult.SavedMedia)
+    suspend fun finishMediaProcessing(messageId: MessageId, savedMedia: SavedMedia)
 }

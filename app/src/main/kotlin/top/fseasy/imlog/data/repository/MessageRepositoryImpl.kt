@@ -11,7 +11,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import top.fseasy.imlog.data.file.MediaSaveResult
+import top.fseasy.imlog.data.file.SavedMedia
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageFactory
 import top.fseasy.imlog.domain.model.MessageId
@@ -123,7 +123,7 @@ class MessageRepositoryImpl @Inject constructor(
 
     override suspend fun finishMediaProcessing(
         messageId: MessageId,
-        savedMedia: MediaSaveResult.SavedMedia,
+        savedMedia: SavedMedia,
     ) {
         database.transaction {
             database.messageQueries.updateMessageMediaFields(

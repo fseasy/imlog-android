@@ -2,14 +2,13 @@ package top.fseasy.imlog.worker
 
 import android.content.Context
 import android.net.Uri
-import androidx.work.CoroutineWorker
-import androidx.work.WorkerParameters
 import androidx.core.net.toUri
 import androidx.hilt.work.HiltWorker
 import androidx.work.BackoffPolicy
+import androidx.work.CoroutineWorker
 import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
+import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -17,12 +16,11 @@ import timber.log.Timber
 import top.fseasy.imlog.data.file.FileManager
 import top.fseasy.imlog.data.file.MediaSaveResult
 import top.fseasy.imlog.domain.model.MessageId
-import top.fseasy.imlog.domain.model.MessageMediaCopySource
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.MessageRepository
-import top.fseasy.imlog.util.toFile
 import java.time.Duration
+import top.fseasy.imlog.worker.failureWithLog
 
 @HiltWorker
 class MediaFileProcessWorker @AssistedInject constructor(
@@ -51,15 +49,15 @@ class MediaFileProcessWorker @AssistedInject constructor(
         ): OneTimeWorkRequest {
 
             return OneTimeWorkRequestBuilder<MediaFileProcessWorker>().setInputData(
-                    workDataOf(
-                        KEY_MESSAGE_ID to messageId.value,
-                        KEY_USER_ID to senderId.value,
-                        KEY_TOPIC_ID to topicId.value,
-                        KEY_MESSAGE_TIMESTAMP_MS to messageTimestampMs,
-                        KEY_SRC_URI to srcMediaUri.toString(),
-                        KEY_MAX_RETRIES to maxRetries
-                    )
+                workDataOf(
+                    KEY_MESSAGE_ID to messageId.value,
+                    KEY_USER_ID to senderId.value,
+                    KEY_TOPIC_ID to topicId.value,
+                    KEY_MESSAGE_TIMESTAMP_MS to messageTimestampMs,
+                    KEY_SRC_URI to srcMediaUri.toString(),
+                    KEY_MAX_RETRIES to maxRetries
                 )
+            )
                 .setBackoffCriteria(
                     BackoffPolicy.EXPONENTIAL, Duration.ofMinutes(1)
                 )
@@ -68,19 +66,18 @@ class MediaFileProcessWorker @AssistedInject constructor(
     }
 
     override suspend fun doWork(): Result {
-        Timber.d("=== WORKER STARTED ===")  // 看看这条能不能打印
+        val messageId = inputData.getString(KEY_MESSAGE_ID)
+            ?.let(::MessageId) ?: return failureWithLog("InputData: No MessageId")
+        val userId = inputData.getString(KEY_USER_ID)
+            ?.let(::UserId) ?: return failureWithLog("InputData: no UserId")
+        val topicId = inputData.getString(KEY_TOPIC_ID)
+            ?.let(::TopicId) ?: return failureWithLog("InputData: no TopicId")
+        val messageTimestampMs = inputData.getLong(KEY_MESSAGE_TIMESTAMP_MS, -1)
+            .takeIf { it > 0 } ?: return failureWithLog("InputData: no MessageTimeMs")
+        val srcUri = inputData.getString(KEY_SRC_URI)
+            ?.toUri() ?: return failureWithLog("InputData: no src-uri")
+        val maxRetries = inputData.getInt(KEY_MAX_RETRIES, DEFAULT_MAX_RETRIES)
         try {
-            val messageId = inputData.getString(KEY_MESSAGE_ID)
-                ?.let(::MessageId) ?: return Result.failure()
-            val userId = inputData.getString(KEY_USER_ID)
-                ?.let(::UserId) ?: return Result.failure()
-            val topicId = inputData.getString(KEY_TOPIC_ID)
-                ?.let(::TopicId) ?: return Result.failure()
-            val messageTimestampMs = inputData.getLong(KEY_MESSAGE_TIMESTAMP_MS, -1)
-                .takeIf { it > 0 } ?: return Result.failure()
-            val srcUri = inputData.getString(KEY_SRC_URI)
-                ?.toUri() ?: return Result.failure()
-            val maxRetries = inputData.getInt(KEY_MAX_RETRIES, DEFAULT_MAX_RETRIES)
 
             val saveResult = fileManager.saveMessageMedia(
                 userId = userId,
@@ -89,23 +86,27 @@ class MediaFileProcessWorker @AssistedInject constructor(
                 messageTimestampMs = messageTimestampMs,
             )
             val savedMedia = when (saveResult) {
-                is MediaSaveResult.MediaSavePermissionError,
-                is MediaSaveResult.MediaSaveUnexpectedError,
-                is MediaSaveResult.MediaSaveSrcInvalidError,
-                    -> return Result.failure()
+                is MediaSaveResult.Failure.TgtInvalid,
+                    -> return failureWithLog("SaveMedia tgt invalid, [${saveResult.cause}]")
 
-                is MediaSaveResult.SavedMedia -> saveResult
+                is MediaSaveResult.Failure.SrcInvalid,
+                    -> return failureWithLog("SaveMedia src invalid, [${saveResult.cause}]")
+
+                is MediaSaveResult.Failure.Unexpected,
+                    -> throw saveResult.cause // Trigger retry
+                is MediaSaveResult.Success -> saveResult.savedMedia
             }
 
             messageRepository.finishMediaProcessing(messageId, savedMedia)
 
             return Result.success()
         } catch (e: Exception) {
-            Timber.e(e, "MediaFileProcessWorker get exception")
+            Timber.e(e, "MediaFileProcessWorker get retriable exception")
             // WorkManager 内置的重试计数
-            return if (runAttemptCount >= 3) {
+            return if (runAttemptCount >= maxRetries) {
                 Result.failure(workDataOf("cause" to "$e"))
             } else {
+                Timber.i("MediaFileProcessWorker retry $runAttemptCount/$maxRetries")
                 Result.retry()
             }
         }

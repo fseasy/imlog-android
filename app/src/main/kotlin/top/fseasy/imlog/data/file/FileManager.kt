@@ -24,24 +24,31 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
+
+data class SavedMedia(
+    val filename: String,
+    val originalFilename: String,
+    val fileSize: Long,
+    val thumbnailFilename: String?,
+    val mimeType: String,
+    val duration: Long?, // for video, audio
+    val width: Int?,
+    val height: Int?,
+)
+
 sealed interface MediaSaveResult {
     /**
      * Full/relative path/uri will be dynamically calculated
      */
-    data class SavedMedia(
-        val filename: String,
-        val originalFilename: String,
-        val fileSize: Long,
-        val thumbnailFilename: String?,
-        val mimeType: String,
-        val duration: Long?, // for video, audio
-        val width: Int?,
-        val height: Int?,
-    ) : MediaSaveResult
+    data class Success(val savedMedia: SavedMedia) : MediaSaveResult
 
-    data class MediaSavePermissionError(val cause: Throwable) : MediaSaveResult
-    data class MediaSaveSrcInvalidError(val cause: Throwable) : MediaSaveResult
-    data class MediaSaveUnexpectedError(val cause: Throwable) : MediaSaveResult
+    sealed interface Failure : MediaSaveResult {
+        val cause: Throwable
+
+        data class TgtInvalid(override val cause: Throwable) : Failure
+        data class SrcInvalid(override val cause: Throwable) : Failure
+        data class Unexpected(override val cause: Throwable) : Failure
+    }
 }
 
 @Singleton
@@ -68,35 +75,25 @@ class FileManager @Inject constructor(
 
         val metaData = UriStorageUtil.resolveMetadata(context, srcUri, queryMetaFields)
 
-        val displayName = metaData.displayName
-            ?: UriStorageUtil.getFilenameFallback(srcUri) // more robust
+        val displayName =
+            metaData.displayName ?: UriStorageUtil.getFilenameFallback(srcUri) // more robust
             ?: "_" // have to assign a value. It should be ok.
 
         val storeRawFilename =
             MessageFilePathRule.generateFilenameByPrependTime(messageTimestampMs, displayName)
-        val mimeType =
-            metaData.mimeType ?: UriStorageUtil.getMimeTypeFallback(context, srcUri)
-        val rawFileTgtUri = when (val result = calcRawSharedStorageUri(
+        val mimeType = metaData.mimeType ?: UriStorageUtil.getMimeTypeFallback(context, srcUri)
+        val (calcTgtUrl, failure) = calcRawSharedStorageUri(
             userId = userId,
             topicId = topicId,
             messageTimestampMs = messageTimestampMs,
             rawFilename = storeRawFilename,
             mimeType = mimeType
-        )) {
-            is FindOrCreateFileUriResult.Success -> result.uri
-            // Will return on errors
-            is FindOrCreateFileUriResult.Error.PermissionDenied -> return MediaSavePermissionError(
-                result.cause
-            )
-
-            is FindOrCreateFileUriResult.Error.Unexpected -> return MediaSaveUnexpectedError(
-                result.cause
-            )
-
-            is FindOrCreateFileUriResult.NotFound -> return MediaSaveUnexpectedError(
-                IllegalStateException("EnsureSAFFile got Not Found")
-            )
+        )
+        if (failure != null) {
+            return failure
         }
+        val rawFileTgtUri =
+            requireNotNull(calcTgtUrl) { "save Target Uri is null on failure not null" }
 
         val bytesCopied = when (val copyResult = UriStorageUtil.copyBetweenUri(
             context,
@@ -111,19 +108,16 @@ class FileManager @Inject constructor(
             is FileCopyResult.Error.SrcPermissionDenied,
             is FileCopyResult.Error.SrcNotFound,
             is FileCopyResult.Error.SrcOpenUnexpected,
-                -> return MediaSaveSrcInvalidError(
-                copyResult.cause
-            )
-
-            is FileCopyResult.Error.TgtPermissionDenied -> return MediaSavePermissionError(
-                copyResult.cause
-            )
+                -> return Failure.SrcInvalid(copyResult.cause)
 
             is FileCopyResult.Error.TgtNotFound,
+            is FileCopyResult.Error.TgtPermissionDenied,
+                -> return Failure.TgtInvalid(copyResult.cause)
+
             is FileCopyResult.Error.TgtOpenUnexpected,
             is FileCopyResult.Error.CopyIOError,
             is FileCopyResult.Error.CopyUnexpected,
-                -> return MediaSaveUnexpectedError(
+                -> return Failure.Unexpected(
                 IllegalStateException(copyResult.cause)
             )
         }
@@ -145,7 +139,7 @@ class FileManager @Inject constructor(
                 srcUriCandidates = uriCandidates
             )
             if (!isOK) {
-                return MediaSaveUnexpectedError(lastError!!) // Exit quickly when failed
+                return Failure.Unexpected(lastError!!) // Exit quickly when failed
             }
             name
         } else null
@@ -159,15 +153,17 @@ class FileManager @Inject constructor(
         )
 
         val fileSize = metaData.fileSize ?: bytesCopied
-        return SavedMedia(
-            filename = storeRawFilename,
-            originalFilename = displayName,
-            fileSize = fileSize,
-            thumbnailFilename = thumbnailFilename,
-            mimeType = mimeType,
-            duration = finalDimensionAndDuration.duration,
-            width = finalDimensionAndDuration.width,
-            height = finalDimensionAndDuration.height
+        return MediaSaveResult.Success(
+            SavedMedia(
+                filename = storeRawFilename,
+                originalFilename = displayName,
+                fileSize = fileSize,
+                thumbnailFilename = thumbnailFilename,
+                mimeType = mimeType,
+                duration = finalDimensionAndDuration.duration,
+                width = finalDimensionAndDuration.width,
+                height = finalDimensionAndDuration.height
+            )
         )
     }
 
@@ -189,7 +185,8 @@ class FileManager @Inject constructor(
         for ((uriName, tryUri) in srcUriCandidates) {
 
             when (val generateThumbResult = generateAndSaveThumbnail(
-                context, tryUri,
+                context,
+                tryUri,
                 targetFile = thumbnailFile,
                 maxWidth = THUMBNAIL_MAX_WIDTH,
                 maxHeight = THUMBNAIL_MAX_HEIGHT
@@ -200,8 +197,7 @@ class FileManager @Inject constructor(
 
                 is GenerateThumbnailResult.Error -> {
                     Timber.i(
-                        generateThumbResult.cause,
-                        "Generate thumbnail failed for $uriName Uri "
+                        generateThumbResult.cause, "Generate thumbnail failed for $uriName Uri "
                     )
                     generateThumbnailLastError = generateThumbResult.cause
                 }
@@ -216,17 +212,14 @@ class FileManager @Inject constructor(
         messageTimestampMs: Long,
         thumbnailFilename: String,
     ): File {
-        val thumbnailFullRelativePath =
-            MessageFilePathRule.generateFullRelativePath(
-                userId = userId,
-                topicId = topicId,
-                timestampMs = messageTimestampMs,
-                filename = thumbnailFilename
-            )
+        val thumbnailFullRelativePath = MessageFilePathRule.generateFullRelativePath(
+            userId = userId,
+            topicId = topicId,
+            timestampMs = messageTimestampMs,
+            filename = thumbnailFilename
+        )
         return fileRootDir.thumbnailRootDir.resolveSubPaths(
-            thumbnailFullRelativePath,
-            true,
-            lastPathIsFile = true
+            thumbnailFullRelativePath, true, lastPathIsFile = true
         )
     }
 
@@ -236,24 +229,31 @@ class FileManager @Inject constructor(
         messageTimestampMs: Long,
         rawFilename: String,
         mimeType: String,
-    ): FindOrCreateFileUriResult {
-        val tgtRootTreeUri = fileRootDir.messageFileRootUri.firstOrNull()
-            ?: return FindOrCreateFileUriResult.Error.Unexpected(
+    ): Pair<Uri?, MediaSaveResult.Failure?> {
+        val tgtRootTreeUri =
+            fileRootDir.messageFileRootUri.firstOrNull() ?: return null to Failure.TgtInvalid(
                 IllegalStateException("messageFileRootUri is Null")
             )
-        val relativePathSegments =
-            MessageFilePathRule.generateFullRelativePath(
-                userId,
-                topicId,
-                messageTimestampMs,
-                rawFilename
-            )
-        return UriStorageUtil.ensureSAFFileUri(
-            context,
-            tgtRootTreeUri,
-            relativePathSegments,
-            mimeType
+        val relativePathSegments = MessageFilePathRule.generateFullRelativePath(
+            userId, topicId, messageTimestampMs, rawFilename
         )
+        when (val result = UriStorageUtil.ensureSAFFileUri(
+            context, tgtRootTreeUri, relativePathSegments, mimeType
+        )) {
+            is FindOrCreateFileUriResult.Success -> return result.uri to null
+            // Will return on errors
+            is FindOrCreateFileUriResult.Error.PermissionDenied -> return null to Failure.TgtInvalid(
+                result.cause
+            )
+
+            is FindOrCreateFileUriResult.Error.Unexpected -> return null to Failure.Unexpected(
+                result.cause
+            )
+
+            is FindOrCreateFileUriResult.NotFound -> return null to Failure.Unexpected(
+                IllegalStateException("EnsureSAFFile got Not Found")
+            )
+        }
     }
 
 
@@ -279,23 +279,18 @@ class FileManager @Inject constructor(
                     ?.let {
                         DimensionAndDuration(it.width, it.height, 0L)
                     } ?: DimensionAndDuration(
-                    initialMeta.width,
-                    initialMeta.height,
-                    initialMeta.duration
+                    initialMeta.width, initialMeta.height, initialMeta.duration
                 )
             }
 
             isVideo && !(isDimensionValid(
-                initialMeta.width,
-                initialMeta.height
+                initialMeta.width, initialMeta.height
             ) && isDurationValid) -> {
                 UriStorageUtil.getVideo3DimensionsFallback(context, mediaUri)
                     ?.let {
                         DimensionAndDuration(it.width, it.height, it.duration)
                     } ?: DimensionAndDuration(
-                    initialMeta.width,
-                    initialMeta.height,
-                    initialMeta.duration
+                    initialMeta.width, initialMeta.height, initialMeta.duration
                 )
             }
 
@@ -306,9 +301,7 @@ class FileManager @Inject constructor(
             }
 
             else -> DimensionAndDuration(
-                initialMeta.width,
-                initialMeta.height,
-                initialMeta.duration
+                initialMeta.width, initialMeta.height, initialMeta.duration
             )
         }
     }
