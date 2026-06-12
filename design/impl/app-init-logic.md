@@ -117,3 +117,102 @@
    建议在应用每次启动（通常在 Splash 页面或应用入口处）检查路径的可用性（使用 DocumentFile.fromTreeUri 检查）。如果失效，需要引导用户重新选择。
    依赖注入 (DI)：
    如果使用 Hilt，由于数据库路径是动态选择的，你可能无法在应用启动时立即提供一个单例的 Database 实例。可以考虑使用一个工厂类或者**延迟初始化（Lazy）**的方式来生成数据库实例。
+
+
+## DeepSeek
+
+在启动阶段基于 UserData 的状态来进入不同的页面；所有 ready 了再进入主页。
+也就是说，没有把 onboarding 步骤打平放到 navhost 里面。
+
+```
+@Composable
+fun AppInitGate(appInitViewModel: AppInitViewModel = hiltViewModel()) {
+    val initState by appInitViewModel.initState.collectAsStateWithLifecycle()
+
+    AnimatedContent(targetState = initState) { state ->
+        when (state) {
+            InitState.Loading -> LoadingScreen()
+            InitState.NeedLogin -> LoginScreen(...)
+            InitState.Ready -> MainScreen()
+            // ...
+        }
+    }
+}
+```
+
+Gemini 评价这个比较先进，称为 `混合架构（Hybrid Approach）`.
+
+因为放到 navhost 里，一方面要处理各种返回栈的移除；另一方面 viewModel 会持续保留登录的信息，导致不必要的状态保存到内存里；
+
+也就是说，这些流程本身和 main 是无关的，在外层分流比较好（是不是也就是类似不同的 activity）
+
+在一个 screen 内部，可以再进行 navhost 来处理返回、导航。
+
+## 我们要处理的流程
+
+
+```mermaid
+---
+config:
+  theme: redux
+  layout: fixed
+---
+flowchart TB
+    A(["Enter App"]) --> B{"Any Sign up User"}
+    B -- YES --> SELECT_PATH(["select storage path"])
+    B -- No --> D(["sign-in or sign-up page"])
+    D -- choose Sign IN --> SIGN_IN(["sign-in screen"])
+    D -- choose Sign up --> SIGN_UP(["Sign-up screen"])
+    SIGN_IN -- switch --> SIGN_UP
+    SIGN_UP -- switch --> SIGN_IN
+    SIGN_IN -- success --> HAS_SELECT_PATH{"has select path?"}
+    SIGN_UP -- success --> HAS_SELECT_PATH
+    HAS_SELECT_PATH -- No --> SELECT_PATH
+    SELECT_PATH -- log out / switch user --> A
+    SELECT_PATH -- success --> HAS_TOPICS{"has created topics"}
+    HAS_SELECT_PATH -- Yes --> HAS_TOPICS
+    HAS_TOPICS -- No --> CREATE_FIRST_TOPIC(["create first topic"])
+    CREATE_FIRST_TOPIC -- success --> WELCOME(["welcome"])
+    WELCOME -- click --> MAIN(["MAIN screen"])
+    HAS_TOPICS -- Yes --> MAIN
+```
+
+
+NOTE:
+1. 暂时不必再在 topic 创建页面给出修改存储位置的 nav；它不重要，没必要事事具备，反而引入太多的歧义
+
+
+STATE:
+
+- LOADING -> splash screen
+- SIGN in / SIGN up -> Sign-in/Sign-up Screen
+- SELECT_STORAGE_PATH -> select storage screen
+- CREATE_FIRST_TOPIC -> create first topic screen
+- WELCOME -> welcome screen
+- MAIN -> main screen
+
+<del>
+datastore 数据： 
+1. users
+   1. all-users [list]
+   2. current user [string]
+2. user -> storage-path [string]
+3. user -> has-created-first-topic [boolean]
+4. user -> has-shown-welcome [boolean]
+
+</del>
+
+xxxx <-- Deepseek 说 datastore 不适合存复杂数据；里面就存一个 current-user-id, 其他的都放到数据库就行！ SqlDelight 读取很快的！
+
+更正后：
+
+- datastore 数据： current-user-id
+- SqlDelight 数据：
+   Table: DeviceUsers
+
+   - id TEXT (和 users 表对应)
+   - media_file_storage_root_uri TEXT
+   - has-created-first-topic INT (boolean)
+   - has-shown-welcome INT (boolean)
+
+
