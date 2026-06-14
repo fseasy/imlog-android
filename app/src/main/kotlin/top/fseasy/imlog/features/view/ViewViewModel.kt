@@ -8,12 +8,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.UserRepository
 import javax.inject.Inject
 
@@ -29,7 +27,7 @@ class ViewViewModel @Inject constructor(
 ) : ViewModel() {
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<ViewUiState> = userRepository.observeUserId.filterNotNull()
+    val uiState: StateFlow<ViewUiState> = userRepository.observeUserIdOrNull.filterNotNull()
         .flatMapLatest { uid ->
             messageRepository.observeStatistics(uid)
                 .map { stats ->

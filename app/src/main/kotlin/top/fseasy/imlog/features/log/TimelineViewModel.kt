@@ -10,15 +10,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import top.fseasy.imlog.data.file.FileManager
@@ -62,7 +57,7 @@ class TimelineViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _topicId = MutableStateFlow<TopicId?>(null)
-    private val _currentUserId: StateFlow<UserId?> = userRepository.observeUserId.stateIn(
+    private val _currentUserId: StateFlow<UserId?> = userRepository.observeUserIdOrNull.stateIn(
         scope = viewModelScope, started = SharingStarted.WhileSubscribed(2000), initialValue = null
     )
 
@@ -199,7 +194,7 @@ class TimelineViewModel @Inject constructor(
     }
 
     private suspend fun requireCurrentUserId(): UserId {
-        return userRepository.observeUserId.firstOrNull() ?: error("未登录")
+        return userRepository.observeUserIdOrNull.firstOrNull() ?: error("未登录")
     }
 
 }

@@ -39,7 +39,6 @@ class TopicRepositoryImpl @Inject constructor(
             .asFlow()
             .mapToOneOrNull(dispatcher)
             .map { it?.toDomain() }
-            .flowOn(dispatcher)
             .catch { e ->
                 Timber.w(e, "No Topic found for id=${topicId}, emit null")
                 emit(null)

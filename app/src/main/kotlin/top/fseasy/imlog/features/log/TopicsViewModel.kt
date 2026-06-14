@@ -39,7 +39,7 @@ class TopicsViewModel @Inject constructor(
     private val _selectedTopicId = MutableStateFlow<TopicId?>(null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<TopicsUiState> = userRepository.observeUserId
+    val uiState: StateFlow<TopicsUiState> = userRepository.observeUserIdOrNull
         .distinctUntilChanged()
         .flatMapLatest { uId ->
             if (uId == null) {

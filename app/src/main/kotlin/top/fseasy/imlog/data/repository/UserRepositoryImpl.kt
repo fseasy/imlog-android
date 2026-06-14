@@ -29,10 +29,15 @@ class UserRepositoryImpl @Inject constructor(
     private val appPreferences: AppPreferencesRepository,
     private val dispatcher: CoroutineDispatcher,
 ) : UserRepository {
-    override val observeUserId: Flow<UserId?> = appPreferences.currentUserId.map { it?.let(::UserId) }
+    override val observeUserIdOrNull: Flow<UserId?> =
+        appPreferences.currentUserId.map { it?.let(::UserId) }
+            .catch { e ->
+                Timber.e(e, "observer current user id get exception")
+                emit(null)
+            }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    override fun observeUser(): Flow<User?> = observeUserId.flatMapLatest { userId ->
+    override fun observeUserOrNull(): Flow<User?> = observeUserIdOrNull.flatMapLatest { userId ->
         val id = userId?.value ?: return@flatMapLatest flowOf(null)
         database.userQueries.getUserById(id)
             .asFlow()
@@ -79,7 +84,7 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun updateCurrentUser(username: String, avatarUri: String?): Unit =
         withContext(dispatcher) {
 
-            val userId = observeUserId.first() ?: return@withContext
+            val userId = observeUserIdOrNull.first() ?: return@withContext
             database.userQueries.updateUser(
                 username = username,
                 avatar_uri = avatarUri,

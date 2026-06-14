@@ -1,12 +1,13 @@
 CREATE TABLE user_preference (
     user_id TEXT NOT NULL PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     media_storage_root_uri TEXT,
-    theme_mode TEXT NOT NULL DEFAULT "system"
+    theme_mode TEXT
 );
 
 selectByUserId:
 SELECT * FROM user_preference WHERE user_id = :user_id;
 
-insert:
-INSERT INTO user_preference
-VALUES :entity;
+-- 插入默认状态
+insertInitial:
+INSERT OR IGNORE INTO app_init_data(user_id)
+VALUES (:user_id);

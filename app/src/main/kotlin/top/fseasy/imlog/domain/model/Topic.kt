@@ -1,5 +1,6 @@
 package top.fseasy.imlog.domain.model;
 
+import androidx.compose.runtime.Immutable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -21,6 +22,7 @@ value class TopicId(val value: String) {
     }
 }
 
+@Immutable
 data class Topic(
     val id: TopicId,
     val name: String,
@@ -31,6 +33,7 @@ data class Topic(
     val isDeleted: Boolean = false,
 )
 
+@Immutable
 data class LogScreenTopic(
     val id: TopicId,
     val name: String,
@@ -51,6 +54,7 @@ enum class TopicRole(val value: String) {
     }
 }
 
+@Immutable
 data class TopicMember(
     val topicId: TopicId,
     val userId: UserId,
@@ -61,6 +65,7 @@ data class TopicMember(
     val isDeleted: Boolean,
 )
 
+@Immutable
 data class TopicPersonalState(
     val topicId: TopicId,
     val userId: UserId,
@@ -73,8 +78,9 @@ data class TopicPersonalState(
 
 /**
  * A data to represent the join query result of Topic + TopicPersonalState.
- * !NOTE: Don't use default values as it should be init from the entity directly.
+ * nb: no default values as it should be init from the entity directly.
  */
+@Immutable
 data class TopicWithPersonalState(
     val topic: Topic,
     val isArchived: Boolean,

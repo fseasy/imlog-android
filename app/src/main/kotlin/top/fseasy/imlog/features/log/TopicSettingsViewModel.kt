@@ -3,7 +3,6 @@ package top.fseasy.imlog.features.log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import top.fseasy.imlog.domain.repository.UserRepository
-import top.fseasy.imlog.domain.model.Topic
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,7 +10,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -36,7 +34,7 @@ class TopicSettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _topicId = MutableStateFlow<TopicId?>(null)
-    private val _currentUserId: StateFlow<UserId?> = userRepository.observeUserId.stateIn(
+    private val _currentUserId: StateFlow<UserId?> = userRepository.observeUserIdOrNull.stateIn(
         scope = viewModelScope, started = SharingStarted.WhileSubscribed(2000), initialValue = null
     )
 

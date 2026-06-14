@@ -3,8 +3,9 @@ package top.fseasy.imlog.domain.model
 import androidx.compose.runtime.Immutable
 
 @Immutable
-class AppInitData(
+data class AppInitData(
     val userId: UserId,
-    val mediaStorageRootUriStr: String?, // String is enough
-
+    val storageUriSelected: Boolean,
+    val firstTopicCreated: Boolean,
+    val WelcomeShown: Boolean,
 )

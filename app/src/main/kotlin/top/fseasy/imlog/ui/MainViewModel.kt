@@ -26,7 +26,7 @@ class MainViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            userRepository.observeUser().collect { user ->
+            userRepository.observeUserOrNull().collect { user ->
                 _uiState.value = MainUiState(
                     isLoading = false,
                     needsOnboarding = user == null
