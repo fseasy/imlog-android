@@ -1,7 +1,6 @@
 package top.fseasy.imlog.domain.model
 
 import android.net.Uri
-import androidx.compose.runtime.Immutable
 import java.io.File
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -21,7 +20,6 @@ enum class MessageType(val value: String) {
     }
 }
 
-@Immutable
 @JvmInline
 value class MessageId(val value: String) {
     init {
@@ -58,7 +56,6 @@ fun String?.toMessageMediaProcessStatus(): MessageMediaProcessingStatus? =
  * Time/Duration all are in MS.
  * @param fileProcessStatus: null -> no file, or processing succeeded.
  */
-@Immutable
 data class Message(
     val id: MessageId,
     val topicId: TopicId,

@@ -1,19 +1,17 @@
 package top.fseasy.imlog.domain.model
 
-import androidx.compose.runtime.Immutable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-@Immutable
 data class User(
     val id: UserId,
     val username: String,
-    val avatarUri: String?,
+    val avatarModel: AvatarModel,
+    val lastSignInAt: Long,
     val createdAt: Long,
     val attributesUpdatedAt: Long,
 )
 
-@Immutable
 @JvmInline
 value class UserId(val value: String) {
     init {

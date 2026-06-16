@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ImLog</string>
+    <string name="app_name" translatable="false">ImLog</string>
+    <string name="nav_home">Log</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="btn_confirm">Confirm</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_back">Back</string>
+    <string name="btn_save">Save</string>
+    <string name="btn_signin">Sign In</string>
+    <string name="btn_signup">Sign Up</string>
+    <string name="btn_close">Close</string>
+    <string name="signinup_create_account_intro">Now will create an account for you</string>
+    <string name="signinup_create_user_sample_success_tip">You can change it later</string>
+    <string name="btn_continue">Continue</string>
+    <string name="internal_error_head">Internal Error</string>
+    <string name="btn_retry">Retry</string>
 </resources>

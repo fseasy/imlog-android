@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nav_home">Log</string>
+    <string name="nav_dashboard">回顾</string>
+    <string name="btn_confirm">确认</string>
+    <string name="btn_cancel">取消</string>
+    <string name="btn_back">返回</string>
+    <string name="btn_save">保存</string>
+    <string name="btn_signin">注册</string>
+    <string name="btn_signup">登录</string>
+    <string name="btn_close">关闭</string>
+    <string name="signinup_create_account_intro">现在将为你创建一个账户</string>
+    <string name="signinup_create_user_sample_success_tip">你可以在稍后修改它</string>
+    <string name="btn_continue">继续</string>
+    <string name="internal_error_head">内部错误</string>
+    <string name="btn_retry">重试</string>
+</resources>

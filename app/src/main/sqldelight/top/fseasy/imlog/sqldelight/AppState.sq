@@ -1,0 +1,15 @@
+CREATE TABLE app_state (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT
+);
+
+upsert:
+INSERT INTO app_state (key, value)
+VALUES (:key, :value)
+ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+
+getByKey:
+SELECT value FROM app_state WHERE key = ?;
+
+removeByKey:
+DELETE FROM app_state WHERE key = ?;

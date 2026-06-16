@@ -3,6 +3,7 @@ package top.fseasy.imlog.features.appinit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +27,7 @@ class AppInitViewModel @Inject constructor(
     private val appInitRepository: AppInitRepository,
 ) : ViewModel() {
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val initStep: StateFlow<AppInitStep> = userRepository.observeUserIdOrNull.flatMapLatest { uid ->
         when (uid) {
             null -> flowOf(AppInitStep.SignInUp)
@@ -34,14 +36,14 @@ class AppInitViewModel @Inject constructor(
                     .map { initData -> determineInitStep(initData) }
                     .catch { e ->
                         Timber.e(e, "Observer initStep got exception")
-                        flowOf(AppInitStep.SignInUp)
+                        emit(AppInitStep.SignInUp)
                     }
         }
     }
 
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly, // It will keep running while app running
             initialValue = AppInitStep.Loading
         )
 

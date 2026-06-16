@@ -60,6 +60,9 @@ ksp {
 }
 
 dependencies {
+    implementation(libs.androidx.compose.foundation.layout)
+    implementation(libs.androidx.compose.runtime)
+    implementation(libs.androidx.compose.ui.unit)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.hilt.common)
@@ -73,11 +76,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material.icons)
+    implementation(libs.androidx.compose.material.icon)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
@@ -89,12 +91,12 @@ dependencies {
     implementation(libs.androidx.media3.common)
     implementation(libs.coil.compose)
     implementation(libs.hilt.android)
-    debugImplementation(libs.androidx.ui.tooling)
     ksp(libs.hilt.compiler) // for hilt kernel compile
     ksp(libs.androidx.hilt.compiler) // for Hilt-worker annotation compile
     ksp(libs.kotlin.metadata.jvm) // explicitly assign to overwrite the default
     implementation(libs.accompanist.permissions)
     implementation(libs.timber)
+    implementation(libs.android.image.cropper)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 

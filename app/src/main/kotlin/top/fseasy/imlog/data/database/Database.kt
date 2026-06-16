@@ -6,7 +6,7 @@ import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 
 /**
- * It will be managed by Hilt Singleton Binds. see `di.DatabseModel` package
+ * It will be provided as singleton by Hilt Singleton Binds. see `di.DatabseModel`
  */
 fun createSqlDelightDb(context: Context): SqlDelightDb {
     val driver = AndroidSqliteDriver(

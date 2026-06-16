@@ -37,7 +37,7 @@ class MainViewModel @Inject constructor(
 
     fun createUser(username: String, avatarUri: Uri? = null) {
         viewModelScope.launch {
-            userRepository.createCurrentUser(username, avatarUri)
+            userRepository.createAndSetCurrentUserOrThrow(username, avatarUri)
         }
     }
 }

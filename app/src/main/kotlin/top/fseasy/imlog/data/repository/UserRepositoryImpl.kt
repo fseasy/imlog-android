@@ -1,21 +1,21 @@
 package top.fseasy.imlog.data.repository
 
-import android.net.Uri
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.data.datastore.AppPreferencesRepository
+import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.User
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.model.toAvatarModelOrDefault
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.util.retrySQLiteOnKeyConflict
@@ -49,19 +49,33 @@ class UserRepositoryImpl @Inject constructor(
             }
     }
 
-    override suspend fun createCurrentUser(username: String, avatarUri: Uri?): User =
+    /**
+     * @throws android.database.sqlite.SQLiteException
+     */
+    override suspend fun getLocalSignedInUsers(): List<User> = withContext(dispatcher) {
+        database.userQueries.getLocalSignedInUsers()
+            .executeAsList()
+            .map { it.toDomain() }
+    }
+
+    /**
+     * @throws Exception when create  user failed
+     */
+    override suspend fun createAndSetCurrentUserOrThrow(username: String, avatarModel: AvatarModel): UserId =
         withContext(dispatcher) {
             val now = System.currentTimeMillis()
             val userId = retrySQLiteOnKeyConflict {
                 UserId.random()
                     .also { uid ->
-                        database.userQueries.insertUser(
-                            id = uid.value,
+                        val user = User(
+                            id = uid,
                             username = username,
-                            avatar_uri = avatarUri?.toString(),
-                            created_at = now,
-                            attributes_updated_at = now
+                            avatarModel = avatarModel,
+                            lastSignInAt = now,
+                            createdAt = now,
+                            attributesUpdatedAt = now
                         )
+                        database.userQueries.insertUser(user.toEntity())
                     }
             }
             // transaction to make sure currentUserId write done
@@ -72,31 +86,14 @@ class UserRepositoryImpl @Inject constructor(
                 runCatching { database.userQueries.deleteUser(userId.value) }
                 throw e
             }
-            User(
-                id = userId,
-                username = username,
-                avatarUri = avatarUri?.toString(),
-                createdAt = now,
-                attributesUpdatedAt = now
-            )
-        }
-
-    override suspend fun updateCurrentUser(username: String, avatarUri: String?): Unit =
-        withContext(dispatcher) {
-
-            val userId = observeUserIdOrNull.first() ?: return@withContext
-            database.userQueries.updateUser(
-                username = username,
-                avatar_uri = avatarUri,
-                attributes_updated_at = System.currentTimeMillis(),
-                id = userId.value
-            )
+            userId
         }
 
     private fun UserEntity.toDomain() = User(
         id = UserId(id),
         username = username,
-        avatarUri = avatar_uri,
+        avatarModel = avatar_model.toAvatarModelOrDefault(),
+        lastSignInAt = last_signin_at,
         createdAt = created_at,
         attributesUpdatedAt = attributes_updated_at,
     )

@@ -1,7 +1,8 @@
 CREATE TABLE users (
     id TEXT NOT NULL PRIMARY KEY,
     username TEXT NOT NULL,
-    avatar_uri TEXT,
+    avatar_model TEXT NOT NULL,
+    last_signin_at INTEGER NOT NULL,
     created_at INTEGER NOT NULL,
     attributes_updated_at INTEGER NOT NULL
 );
@@ -11,10 +12,41 @@ getUserById:
 SELECT * FROM users WHERE id = ?;
 
 insertUser:
-INSERT INTO users (id, username, avatar_uri, created_at, attributes_updated_at) VALUES (?, ?, ?, ?, ?);
+INSERT INTO users
+VALUES :user;
+
+updateUsername:
+UPDATE users
+SET username = :username,
+    attributes_updated_at = :updatedAt
+WHERE id = :userId;
+
+updateAvatarModel:
+UPDATE users
+SET avatar_model = :avatarModel,
+    attributes_updated_at = :updatedAt
+WHERE id = :userId;
+
+updatelastSignInAt:
+UPDATE users
+SET last_signin_at = :lastSignInAt,
+    attributes_updated_at = :updatedAt
+WHERE id = :userId;
 
 updateUser:
-UPDATE users SET username = ?, avatar_uri = ?, attributes_updated_at = ? WHERE id = ?;
+UPDATE users
+SET username = COALESCE(:username, username),
+    avatar_model = COALESCE(:avatarModel, avatar_model),
+    last_signin_at = COALESCE(:lastSignInAt, last_signin_at),
+    attributes_updated_at = :updatedAt
+WHERE id = :userId;
 
 deleteUser:
 DELETE FROM users WHERE id = :user_id;
+
+-- user joint quries
+getLocalSignedInUsers:
+SELECT u.*
+FROM users u
+INNER JOIN  app_init_data a ON a.user_id = u.id
+ORDER BY u.last_signin_at DESC;
