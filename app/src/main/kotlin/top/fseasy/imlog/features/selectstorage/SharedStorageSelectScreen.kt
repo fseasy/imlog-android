@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.sharedstorage
+package top.fseasy.imlog.features.selectstorage
 
 import android.content.Intent
 import android.net.Uri

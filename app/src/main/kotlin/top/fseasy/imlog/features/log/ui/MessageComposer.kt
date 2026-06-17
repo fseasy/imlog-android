@@ -22,10 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,12 +39,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import top.fseasy.imlog.domain.model.VoiceRecordingState
 import top.fseasy.imlog.features.log.TimelineUiState
+import top.fseasy.imlog.R
 import java.io.File
 
 sealed interface ComposerAction {
@@ -125,7 +123,7 @@ fun MessageComposer(
                                             }
                                             .padding(16.dp),
                                         verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Image, null)
+                                        Icon(painterResource(R.drawable.icon_image), null)
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text("Image")
                                     }
@@ -138,7 +136,7 @@ fun MessageComposer(
                                             }
                                             .padding(16.dp),
                                         verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.VideoFile, null)
+                                        Icon(painterResource(R.drawable.icon_video_file), null)
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text("Video")
                                     }
@@ -169,7 +167,7 @@ fun MessageComposer(
                                         )
                                     )
                                 }) {
-                                    Icon(Icons.Default.Mic, "Voice")
+                                    Icon(painterResource(R.drawable.icon_mic), "Voice")
                                 }
                             }
                         }
@@ -231,7 +229,7 @@ fun VoiceInputOverlay(
                 }, contentAlignment = Alignment.Center
         ) {
             Icon(
-                Icons.Default.Mic,
+                painterResource(R.drawable.icon_mic),
                 "Hold to record",
                 tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(32.dp)
@@ -264,7 +262,7 @@ fun VoiceRecordingOverlay(
                 Icon(Icons.Default.Close, "Cancel", tint = Color.Red)
             }
             IconButton(onClick = onStop) {
-                Icon(Icons.Default.Stop, "Stop", tint = Color.Red)
+                Icon(painterResource(R.drawable.icon_stop), "Stop", tint = Color.Red)
             }
         }
         Text(

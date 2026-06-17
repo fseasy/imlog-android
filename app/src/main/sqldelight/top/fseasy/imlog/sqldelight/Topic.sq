@@ -41,8 +41,6 @@ CREATE TABLE topic_personal_state (
     PRIMARY KEY (topic_id, user_id)
 );
 
-
-
 insertTopic:
 INSERT INTO topics (id, name, icon_uri, creator_id, created_at, attributes_updated_at) VALUES (?, ?, ?, ?, ?, ?);
 
@@ -50,7 +48,6 @@ insertMember:
 INSERT
 INTO topic_members (topic_id, user_id, user_nickname, role, joined_at, attributes_updated_at)
 VALUES (?, ?, ?, ?, ?, ?);
-
 
 insertPersonalState:
 INSERT INTO topic_personal_state (topic_id, user_id, archived, pinned, background, last_read_at, attributes_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);

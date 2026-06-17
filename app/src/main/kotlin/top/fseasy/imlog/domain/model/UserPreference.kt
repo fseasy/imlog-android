@@ -5,5 +5,5 @@ import android.net.Uri
 data class UserPreference(
     val userId: UserId,
     val mediaStorageRootUri: Uri?,
-    val themeMode: String,
+    val themeMode: String?,
 )

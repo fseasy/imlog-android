@@ -15,4 +15,23 @@
     <string name="btn_continue">Continue</string>
     <string name="internal_error_head">Internal Error</string>
     <string name="btn_retry">Retry</string>
+    <string name="signinup_signin_intro_line1">Then, sailors dropped logs to mark their journeys and the unknown</string>
+    <string name="signinup_signin_intro_line2">now, you send a message to mark this moment and the world.</string>
+    <string name="signinup_goto_create_user">Create a new user</string>
+    <string-array name="random_username_adjectives">
+        <item>Happy</item>
+        <item>Brave</item>
+        <item>Smart</item>
+        <item>Cool</item>
+        <item>Lucky</item>
+    </string-array>
+    <string-array name="random_username_nouns">
+        <item>Tiger</item>
+        <item>Star</item>
+        <item>Adventurer</item>
+        <item>Pilot</item>
+        <item>Knight</item>
+    </string-array>
+    <string name="signinup_signup_welcome">Welcome back</string>
+    <string name="signinup_signup_select_account">Please select account</string>
 </resources>

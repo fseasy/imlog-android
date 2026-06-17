@@ -6,17 +6,23 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.features.appinit.AppInitStep
 import top.fseasy.imlog.features.appinit.AppInitViewModel
+import top.fseasy.imlog.features.signinup.ui.SignInUpNavigation
+import top.fseasy.imlog.ui.components.InternalErrorInfoText
 
 @Composable
 fun appInitGate(appInitViewModel: AppInitViewModel = hiltViewModel()) {
-    val initStep by appInitViewModel.initStep.collectAsStateWithLifecycle()
+    val uiState by appInitViewModel.uiState.collectAsStateWithLifecycle()
 
-    when(initStep) {
-        AppInitStep.Loading -> Splash()
-        AppInitStep.SignInUp -> TODO()
-        AppInitStep.SelectMediaStorageUri -> TODO()
-        AppInitStep.CreateFirstTopic -> TODO()
-        AppInitStep.Welcome -> TODO()
-        AppInitStep.Finished -> TODO()
+    if (uiState.error != null) {
+        InternalErrorInfoText(uiState.error?.message ?: "Unknown Error")
+    } else {
+        when (uiState.initStep) {
+            AppInitStep.Loading -> Splash()
+            AppInitStep.SignInUp -> SignInUpNavigation()
+            AppInitStep.SelectMediaStorageUri -> TODO()
+            AppInitStep.CreateFirstTopic -> TODO()
+            AppInitStep.Welcome -> TODO()
+            AppInitStep.Finished -> TODO()
+        }
     }
 }

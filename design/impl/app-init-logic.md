@@ -256,3 +256,45 @@ xxx
 【welcome】
 标记此刻、回溯过往
 I'm Logging
+
+
+## 更新2：感觉展示出用户的的信息+topic其实也毫无意义，那并不是重点
+
+onboarding 进入条件：init state 不是 FINISHED
+
+
+【Account】
+
+进入条件：无 current user
+- 有登录过的用户：展示 select 界面
+- 无登录过的用户： 展示 intro，后台创建 user
+
+  - intro
+   大航海时代，水手抛下原木，测量未知的海域；
+   数字时代，你发出一条消息，标记此刻的坐标。
+
+   大航海时代，水手抛下原木，标记航程与未知；
+   数字时代，你发出一条消息，标记此刻与世界。
+
+   ImLog
+
+【Storage】
+
+进入条件：已有 current-user
+- 但未选中 storage
+
+副作用：
+- 写入一个标识文件
+- 设置 storage uri
+- 设置 storage flag
+
+【Welcome】
+
+进入条件：已有 current-user, storage 选中，但 welcome-shown 为false
+副作用：
+1. 如果无 topic, 建立第一个 topic
+2. 设置 welcome-shown = true
+
+UI：
+- 显示已创建用户、已创建 topic
+- 显示欢迎使用

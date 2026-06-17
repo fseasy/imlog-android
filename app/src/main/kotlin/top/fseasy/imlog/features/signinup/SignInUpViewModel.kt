@@ -6,25 +6,27 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.User
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
+import top.fseasy.imlog.domain.usecase.SampleUserProfileUseCase
 import top.fseasy.imlog.ui.components.AvatarUiModel
 import top.fseasy.imlog.ui.components.toUIModel
 import javax.inject.Inject
 
 data class LocalUser(val id: UserId, val name: String, val avatar: AvatarUiModel)
 
-data class SampledUserProfile(val name: String, val avatar: AvatarUiModel)
+sealed interface CreateUserState {
+    data object Loading : CreateUserState
+    data object Success : CreateUserState
 
-data class CreateUserState(
-    val isLoading: Boolean = true,
-    val sampledUser: SampledUserProfile? = null,
-    val sampleError: String? = null,
-    val createError: String? = null,
-)
+    @Immutable
+    data class Failure(val message: String) : CreateUserState
+}
 
 @Immutable
 data class SignInUpUiState(
@@ -37,6 +39,8 @@ data class SignInUpUiState(
 @HiltViewModel
 class SignInUpViewModel @Inject constructor(
     private val userRepository: UserRepository,
+    private val appStateRepository: AppStateRepository,
+    private val sampleUserUseCase: SampleUserProfileUseCase,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SignInUpUiState())
     val uiState = _uiState.asStateFlow()
@@ -59,13 +63,35 @@ class SignInUpViewModel @Inject constructor(
                     id = u.id, name = u.username, avatar = u.avatarModel.toUIModel()
                 )
             }
-            _uiState.value = SignInUpUiState(isLoading = false, users = localUsers, error = error)
+            _uiState.update { it.copy(isLoading = false, users = localUsers, error = error) }
         }
     }
 
-    suspend fun createUser(sampledUser: SampledUserProfile) {
+    fun createUser() {
         viewModelScope.launch {
+            _uiState.update { it.copy(createUserState = CreateUserState.Loading) }
+            val username = sampleUserUseCase.sampleUsername()
+            val avatar = sampleUserUseCase.samplePresetAvatar()
+            try {
+                userRepository.createAndSetCurrentUserOrThrow(
+                    username = username, avatarModel = avatar
+                )
+                _uiState.update { it.copy(createUserState = CreateUserState.Success) }
+            } catch (e: Exception) {
+                Timber.e(e, "Create User failed, msg = [${e.message}]")
+                _uiState.update {
+                    it.copy(
+                        createUserState = CreateUserState.Failure(e.message ?: "unknown error")
+                    )
+                }
+            }
+        }
+    }
 
+    fun selectUser(user: LocalUser) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) } // make UI change!
+            appStateRepository.setCurrentId(user.id)
         }
     }
 }

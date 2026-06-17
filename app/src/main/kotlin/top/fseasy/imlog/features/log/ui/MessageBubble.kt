@@ -16,9 +16,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -38,16 +36,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import top.fseasy.imlog.domain.model.Message
+import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.ResourceModel
 import top.fseasy.imlog.features.log.MessageUiState
+import top.fseasy.imlog.util.secondsToMinutesSeconds
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import top.fseasy.imlog.util.secondsToMinutesSeconds
 
 
 @Composable
@@ -189,7 +188,10 @@ fun VideoPlayer(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { isPlaying = !isPlaying }) {
-                Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Play/Pause")
+                when (isPlaying) {
+                    true -> Icon(painterResource(R.drawable.icon_pause), "Pause")
+                    false -> Icon(Icons.Default.PlayArrow, "Play")
+                }
             }
             IconButton(onClick = {
                 playbackSpeed = when (playbackSpeed) {
@@ -217,9 +219,10 @@ fun AudioPlayer(
             modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = { isPlaying = !isPlaying }) {
-                Icon(
-                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Play/Pause"
-                )
+                when (isPlaying) {
+                    true -> Icon(painterResource(R.drawable.icon_pause), "Pause")
+                    false -> Icon(Icons.Default.PlayArrow, "Play")
+                }
             }
             Column(modifier = Modifier.weight(1f)) {
                 Slider(
@@ -250,7 +253,7 @@ fun AudioPlayer(
                 else -> 1f
             }
         }) {
-            Icon(Icons.Default.Speed, null, modifier = Modifier.size(16.dp))
+            Icon(painterResource(R.drawable.icon_speed), null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(4.dp))
             Text("${playbackSpeed}x")
         }

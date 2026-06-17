@@ -119,9 +119,9 @@ fun AppOutlinedButton(
 @Composable
 fun AppTextButton(
     onClick: () -> Unit,
+    text: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    text: String,
 ) {
     TextButton(
         onClick = onClick,

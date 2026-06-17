@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.HorizontalDivider
@@ -31,9 +29,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import top.fseasy.imlog.ui.MainViewModel
+import top.fseasy.imlog.R
 
 @Composable
 fun SettingsDrawer(
@@ -98,14 +100,14 @@ fun SettingsDrawer(
                     }
                 }
 
-                Icon(Icons.Default.ChevronRight, contentDescription = null)
+                Icon(painterResource(R.drawable.icon_chevron_right), contentDescription = null)
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
             // Settings Options
             SettingsItem(
-                icon = Icons.AutoMirrored.Filled.HelpOutline,
+                icon = ImageVector.vectorResource(R.drawable.icon_help),
                 title = "Feedback",
                 subtitle = "Send us your feedback",
                 onClick = { onNavigate("feedback") }
@@ -135,7 +137,7 @@ fun SettingsDrawer(
         OnboardingDialog(
             onDismiss = { showEditProfile = false },
             onConfirm = { username ->
-                viewModel.createUser(username)
+//                viewModel.createUser(username)
                 showEditProfile = false
             }
         )
@@ -144,7 +146,7 @@ fun SettingsDrawer(
 
 @Composable
 fun SettingsItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     subtitle: String,
     onClick: () -> Unit
@@ -174,7 +176,7 @@ fun SettingsItem(
             )
         }
         Icon(
-            Icons.Default.ChevronRight,
+            painterResource(R.drawable.icon_chevron_right),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )

@@ -17,9 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -47,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,6 +54,7 @@ import top.fseasy.imlog.domain.model.LogScreenTopic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.log.TopicsUiState
 import top.fseasy.imlog.features.log.TopicsViewModel
+import top.fseasy.imlog.R
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -223,7 +223,7 @@ fun TopicCard(
                     )
                     if (topic.isPinned) {
                         Icon(
-                            Icons.Default.PushPin,
+                            painterResource(R.drawable.icon_keep),
                             contentDescription = "Pinned",
                             modifier = Modifier
                                 .padding(start = 4.dp)
@@ -249,7 +249,7 @@ fun TopicCard(
                 ) {
                     DropdownMenuItem(
                         text = { Text(if (topic.isPinned) "Unpin" else "Pin") },
-                        leadingIcon = { Icon(Icons.Default.PushPin, null) },
+                        leadingIcon = { Icon(painterResource(R.drawable.icon_keep), null) },
                         onClick = {
                             showMenu = false
                             onTopicCardAction(TopicCardAction.Pin(topic.id))
@@ -257,7 +257,7 @@ fun TopicCard(
                     )
                     DropdownMenuItem(
                         text = { Text("Archive") },
-                        leadingIcon = { Icon(Icons.Default.Archive, null) },
+                        leadingIcon = { Icon(painterResource(R.drawable.icon_archive), null) },
                         onClick = {
                             showMenu = false
                             onTopicCardAction(TopicCardAction.Archive(topic.id))

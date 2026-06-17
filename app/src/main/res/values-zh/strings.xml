@@ -14,4 +14,23 @@
     <string name="btn_continue">继续</string>
     <string name="internal_error_head">内部错误</string>
     <string name="btn_retry">重试</string>
+    <string name="signinup_signin_intro_line1">大航海时代，水手抛下原木，标记航程与未知</string>
+    <string name="signinup_signin_intro_line2">数字时代，你发出一条消息，标记此刻与世界</string>
+    <string name="signinup_goto_create_user">创建新用户</string>
+    <string-array name="random_username_adjectives">
+        <item>快乐</item>
+        <item>勇敢</item>
+        <item>聪明</item>
+        <item>可爱</item>
+        <item>酷炫</item>
+    </string-array>
+    <string-array name="random_username_nouns">
+        <item>小猫</item>
+        <item>老虎</item>
+        <item>星星</item>
+        <item>冒险家</item>
+        <item>飞行员</item>
+    </string-array>
+    <string name="signinup_signup_welcome">欢迎回来</string>
+    <string name="signinup_signup_select_account">请选择账户</string>
 </resources>

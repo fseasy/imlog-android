@@ -1,53 +1,74 @@
 package top.fseasy.imlog.data.repository
 
+import android.net.Uri
+import androidx.core.net.toUri
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import top.fseasy.imlog.data.datastore.AppPreferencesRepository
+import top.fseasy.imlog.domain.model.AppInitData
 import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.User
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.model.UserPreference
 import top.fseasy.imlog.domain.model.toAvatarModelOrDefault
+import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.util.retrySQLiteOnKeyConflict
 import javax.inject.Inject
 import javax.inject.Singleton
+import top.fseasy.imlog.sqldelight.App_init_data as AppInitDataEntity
+import top.fseasy.imlog.sqldelight.User_preference as UserPreferenceEntity
 import top.fseasy.imlog.sqldelight.Users as UserEntity
 
 @Singleton
 class UserRepositoryImpl @Inject constructor(
     private val database: SqlDelightDb,
-    private val appPreferences: AppPreferencesRepository,
+    private val appStateRepository: AppStateRepository,
     private val dispatcher: CoroutineDispatcher,
 ) : UserRepository {
-    override val observeUserIdOrNull: Flow<UserId?> =
-        appPreferences.currentUserId.map { it?.let(::UserId) }
-            .catch { e ->
-                Timber.e(e, "observer current user id get exception")
-                emit(null)
-            }
 
+    override fun observeCurrentUserIdOrNull(): Flow<UserId?> =
+        appStateRepository.observeCurrentUserIdOrNull()
+
+    /**
+     * no exception will throw
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    override fun observeUserOrNull(): Flow<User?> = observeUserIdOrNull.flatMapLatest { userId ->
-        val id = userId?.value ?: return@flatMapLatest flowOf(null)
-        database.userQueries.getUserById(id)
+    override fun observeUserOrNull(): Flow<User?> = appStateRepository.observeCurrentUserIdOrNull()
+        .flatMapLatest { userId ->
+            val id = userId?.value ?: return@flatMapLatest flowOf(null)
+            database.userQueries.getUserById(id)
+                .asFlow()
+                .mapToOneOrNull(dispatcher)
+                .map { it?.toDomain() }
+                .catch { e ->
+                    Timber.w(e, "Observe User Get exception")
+                    emit(null)
+                }
+        }
+
+    override fun observeUserAppInitDataOrNull(userId: UserId): Flow<AppInitData?> {
+        return database.appInitDataQueries.selectByUserId(userId.value)
             .asFlow()
             .mapToOneOrNull(dispatcher)
-            .map { it?.toDomain() }
+            .map { row -> row?.toDomain() }
             .catch { e ->
-                Timber.w(e, "Observe User Get exception")
+                Timber.e(e, "Failed to observe AppInit data, just emit null")
                 emit(null)
             }
+            .distinctUntilChanged()
     }
+
 
     /**
      * @throws android.database.sqlite.SQLiteException
@@ -59,35 +80,58 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     /**
-     * @throws Exception when create  user failed
+     * @throws Exception when create user failed. parent should process it based on the business logic.
      */
-    override suspend fun createAndSetCurrentUserOrThrow(username: String, avatarModel: AvatarModel): UserId =
-        withContext(dispatcher) {
-            val now = System.currentTimeMillis()
-            val userId = retrySQLiteOnKeyConflict {
-                UserId.random()
-                    .also { uid ->
-                        val user = User(
-                            id = uid,
-                            username = username,
-                            avatarModel = avatarModel,
-                            lastSignInAt = now,
-                            createdAt = now,
-                            attributesUpdatedAt = now
+    override suspend fun createAndSetCurrentUserOrThrow(
+        username: String,
+        avatarModel: AvatarModel,
+    ): UserId = withContext(dispatcher) {
+        val userId = retrySQLiteOnKeyConflict {
+            UserId.random()
+                .also { uid ->
+                    database.transaction {
+                        syncInsertNewUserIntoUserTable(
+                            userId = uid, username = username, avatarModel = avatarModel
                         )
-                        database.userQueries.insertUser(user.toEntity())
+                        syncInsertNewUserIntoAppInitDataTable(uid)
+                        appStateRepository.syncSetCurrentId(uid)
                     }
-            }
-            // transaction to make sure currentUserId write done
-            try {
-                appPreferences.setCurrentUserId(userId.value)
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to set current user ID in preferences, rolling back DB...")
-                runCatching { database.userQueries.deleteUser(userId.value) }
-                throw e
-            }
-            userId
+                }
         }
+        userId
+    }
+
+    // === User Preference data
+    override suspend fun getUserPreference(userId: UserId): UserPreference? =
+        withContext(dispatcher) {
+            database.userPreferenceQueries.getByUserId(userId.value)
+                .executeAsOneOrNull()
+                ?.toDomain()
+        }
+
+    private val storageUriCache = mutableMapOf<UserId, Uri?>()
+
+    override suspend fun getMediaStorageRootUriWithCache(userId: UserId): Uri? {
+        if (storageUriCache.containsKey(userId)) {
+            return storageUriCache[userId]
+        }
+        // lookup db
+        val uri = getUserPreference(userId)?.mediaStorageRootUri
+        storageUriCache[userId] = uri
+        return uri
+    }
+
+    override suspend fun setMediaStorageRootUriAndMark(userId: UserId, uri: Uri?) {
+        withContext(dispatcher) {
+            database.transaction {
+                database.userPreferenceQueries.upsertStorageRootUri(
+                    userId = userId.value, storageRootUri = uri?.toString()
+                )
+                database.appInitDataQueries.markStorageUriSelected(userId.value)
+            }
+        }
+        storageUriCache[userId] = uri
+    }
 
     private fun UserEntity.toDomain() = User(
         id = UserId(id),
@@ -97,4 +141,48 @@ class UserRepositoryImpl @Inject constructor(
         createdAt = created_at,
         attributesUpdatedAt = attributes_updated_at,
     )
+
+    private fun UserPreferenceEntity.toDomain(): UserPreference = UserPreference(
+        userId = UserId(user_id),
+        mediaStorageRootUri = media_storage_root_uri?.toUri(),
+        themeMode = theme_mode
+    )
+
+    private fun AppInitDataEntity.toDomain(): AppInitData {
+        return AppInitData(
+            userId = UserId(user_id),
+            storageUriSelected = storage_uri_selected == 1L,
+            firstTopicCreated = first_topic_created == 1L,
+            WelcomeShown = welcome_shown == 1L,
+        )
+    }
+
+    private fun syncInsertNewUserIntoUserTable(
+        userId: UserId,
+        username: String,
+        avatarModel: AvatarModel,
+        now: Long = System.currentTimeMillis(),
+    ) {
+        database.userQueries.insertUser(
+            UserEntity(
+                id = userId.value,
+                username = username,
+                avatar_model = avatarModel.toString(),
+                last_signin_at = now,
+                created_at = now,
+                attributes_updated_at = now
+            )
+        )
+    }
+
+    private fun syncInsertNewUserIntoAppInitDataTable(userId: UserId) {
+        database.appInitDataQueries.insert(
+            AppInitDataEntity(
+                user_id = userId.value,
+                storage_uri_selected = 0,
+                first_topic_created = 0,
+                welcome_shown = 0
+            )
+        )
+    }
 }

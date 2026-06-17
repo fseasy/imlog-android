@@ -4,9 +4,12 @@ import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import org.jetbrains.annotations.ApiStatus
+import timber.log.Timber
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
@@ -19,16 +22,30 @@ class AppStateRepositoryImpl @Inject constructor(
     private val database: SqlDelightDb,
     private val dispatcher: CoroutineDispatcher,
 ) : AppStateRepository {
-    override fun observeCurrentUserId(): Flow<UserId?> {
+    @ApiStatus.Internal
+    override fun observeCurrentUserIdOrNull(): Flow<UserId?> {
         return database.appStateQueries
             .getByKey(StateKey.CURRENT_USER_ID.rawKey)
             .asFlow()
             .mapToOneOrNull(dispatcher)
             .map { it?.value_?.let(::UserId) }
             .distinctUntilChanged()
+            .catch { e ->
+                Timber.e(e, "Observer current user id failed")
+                emit(null)
+            }
     }
 
+    @ApiStatus.Internal
     override suspend fun setCurrentId(userId: UserId) = withContext(dispatcher) {
+        put(StateKey.CURRENT_USER_ID, userId.value)
+    }
+
+    /**
+     * A blocking version to set current id, typically used in transaction.
+     */
+    @ApiStatus.Internal
+    override fun syncSetCurrentId(userId: UserId) {
         put(StateKey.CURRENT_USER_ID, userId.value)
     }
 

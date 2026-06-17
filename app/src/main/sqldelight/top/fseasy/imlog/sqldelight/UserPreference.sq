@@ -4,10 +4,21 @@ CREATE TABLE user_preference (
     theme_mode TEXT
 );
 
-selectByUserId:
+getByUserId:
 SELECT * FROM user_preference WHERE user_id = :user_id;
 
--- 插入默认状态
-insertInitial:
-INSERT OR IGNORE INTO app_init_data(user_id)
-VALUES (:user_id);
+insertOrReplace:
+INSERT OR REPLACE INTO user_preference
+VALUES :entity;
+
+-- `ON CONFLICT` only available on sqlight 3.24+ ==> Android API 30+
+upsertStorageRootUri:
+INSERT INTO user_preference (user_id, media_storage_root_uri)
+VALUES (:userId, :storageRootUri)
+ON CONFLICT(user_id) DO UPDATE SET
+    media_storage_root_uri = excluded.media_storage_root_uri;
+
+updateThemeMode:
+UPDATE user_preference
+SET theme_mode = :themeMode
+WHERE user_id = :userId;

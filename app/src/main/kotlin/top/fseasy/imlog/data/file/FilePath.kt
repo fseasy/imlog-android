@@ -3,8 +3,6 @@ package top.fseasy.imlog.data.file
 import android.content.Context
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.Flow
-import top.fseasy.imlog.data.datastore.AppPreferencesRepository
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.util.splitNameAndExtension
@@ -21,12 +19,12 @@ private const val THUMBNAIL_DIR_NAME = "thumbnail"
 @Singleton
 class FileRootDir @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val appPreferencesRepository: AppPreferencesRepository,
+    private val userPreferenceRepository: UserPreferenceRepository,
 ) {
     val thumbnailRootDir: File = File(context.filesDir, THUMBNAIL_DIR_NAME).apply { mkdirs() }
-    val messageFileRootUri: Flow<Uri?> = appPreferencesRepository.sharedStorageRootUri
-
-
+    suspend fun getUserMessageFileRootUri(userId: UserId): Uri? {
+        return userPreferenceRepository.getMediaStorageRootUriWithCache(userId)
+    }
 }
 
 /**

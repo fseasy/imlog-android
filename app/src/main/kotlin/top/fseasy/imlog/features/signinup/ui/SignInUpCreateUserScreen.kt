@@ -1,114 +1,79 @@
 package top.fseasy.imlog.features.signinup.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.time.delay
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.sp
 import top.fseasy.imlog.R
 import top.fseasy.imlog.features.signinup.CreateUserState
-import top.fseasy.imlog.features.signinup.SampledUserProfile
-import top.fseasy.imlog.features.signinup.SignInUpUiState
-import top.fseasy.imlog.ui.components.AppPrimaryButton
-import top.fseasy.imlog.ui.components.AppTextButton
-import top.fseasy.imlog.ui.components.UserAvatar
-import top.fseasy.imlog.ui.theme.errorSmall
-import java.time.Duration
+import top.fseasy.imlog.ui.components.AnimatedTextLineConfig
+import top.fseasy.imlog.ui.components.HighlightConfig
+import top.fseasy.imlog.ui.components.InternalErrorInfoText
+import top.fseasy.imlog.ui.components.StackedAnimatedText
+import top.fseasy.imlog.ui.components.StackedAnimationTiming
 
 @Composable
 fun SignInUpCreateUserScreen(
     uiState: CreateUserState?,
-    onCreateClick: (SampledUserProfile) -> Unit,
-    onSampleUser: () -> Unit,
+    onCreateUser: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(Unit) {
-        delay(Duration.ofMillis(100))
-        onSampleUser()
+        onCreateUser()
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            stringResource(R.string.signinup_create_account_intro),
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-
-        when {
-            uiState == null || uiState.isLoading -> {
-                CircularProgressIndicator()
-            }
-
-            uiState.sampledUser != null -> {
-                val user = uiState.sampledUser
-
-                UserAvatar(user.avatar)
-                Text(user.name, style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    stringResource(R.string.signinup_create_user_sample_success_tip),
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                if (uiState.createError == null) {
-                    AppPrimaryButton(onClick = { onCreateClick(user) }) {
-                        Text(stringResource(R.string.btn_continue))
-                    }
-                } else {
-                    ErrorMessage(uiState.createError, onRetry = { onCreateClick(user) })
-                }
-                // once create done,
-                // the AppInit part will refresh this page and redirect to next step
-            }
-
-            uiState.sampleError != null -> {
-                ErrorMessage(
-                    message = uiState.sampleError, onRetry = onSampleUser
-                )
-            }
-
-            // Unknown condition
-            else -> {
-                ErrorMessage(message = "Unknown condition", onRetry = null)
-            }
-        }
-    }
+    OnboardingIntroContent(uiState, modifier = modifier)
 }
 
 @Composable
-private fun ErrorMessage(
-    message: String?,
-    onRetry: (() -> Unit)?,
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "${stringResource(R.string.internal_error_head)}: ${message ?: "Unknown error"}",
-            style = MaterialTheme.typography.errorSmall
-        )
-        if (onRetry != null) {
-            Spacer(modifier = Modifier.height(12.dp))
-            AppTextButton(onClick = onRetry, text = stringResource(R.string.btn_retry))
+fun OnboardingIntroContent(uiState: CreateUserState?, modifier: Modifier = Modifier) {
+    val text1 = stringResource(R.string.signinup_signin_intro_line1)
+    val text2 = stringResource(R.string.signinup_signin_intro_line2)
+
+    when (uiState) {
+        is CreateUserState.Failure -> {
+            InternalErrorInfoText(uiState.message)
+        }
+
+        else -> {
+            StackedAnimatedText(
+                textLines = listOf(
+                    AnimatedTextLineConfig(
+                        text = text1, style = MaterialTheme.typography.titleMedium.copy(
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 16.sp,
+                            lineHeight = 26.sp,
+                            fontWeight = FontWeight.Normal
+                        ), durationMs = 1200, stayDurationMs = 800, alignment = TextAlign.Center
+                    ), AnimatedTextLineConfig(
+                        text = text2, style = MaterialTheme.typography.headlineMedium.copy(
+                            color = Color.White,
+                            fontSize = 24.sp,
+                            lineHeight = 38.sp,
+                            fontWeight = FontWeight.Bold
+                        ), durationMs = 800, stayDurationMs = 3000, // 停留时间长一些
+                        alignment = TextAlign.Center, highlight = HighlightConfig(
+                            color = Color(0xFFFFD54F), scale = 1.05f
+                        )
+                    )
+                ), timingConfig = StackedAnimationTiming(
+                    initialDelay = 300, lineGap = 500, overlap = false
+                ), modifier = Modifier.fillMaxWidth()
+            )
         }
     }
+
+}
+
+@Preview
+@Composable
+fun PreviewOnboardingIntroContent() {
+    OnboardingIntroContent(null)
 }

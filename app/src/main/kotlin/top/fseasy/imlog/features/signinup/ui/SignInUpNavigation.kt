@@ -30,15 +30,19 @@ fun SignInUpNavigation(
                 })
         }
         composable<SignInUpRoute.SelectUser> {
-
+            SignInUpSelectUserScreen(
+                uiState.users,
+                onSelectUserClick = { u -> viewModel.selectUser(u) },
+                onNavigateToCreateUser = {
+                    navController.navigate(SignInUpRoute.CreateUser) {
+                        popUpTo(SignInUpRoute.SelectUser) { inclusive = true }
+                    }
+                })
         }
         composable<SignInUpRoute.CreateUser> {
             SignInUpCreateUserScreen(
                 uiState.createUserState,
-                onCreateClick = { sampledUser ->
-                    viewModel.createUser(sampledUser)
-                },
-                onSampleUser = { viewModel.sampleUserProfile() },
+                onCreateUser = { viewModel.createUser() },
             )
         }
     }
