@@ -5,27 +5,24 @@ CREATE TABLE  app_init_data (
     welcome_shown INTEGER NOT NULL
 );
 
--- 查询
 selectByUserId:
-SELECT * FROM app_init_data WHERE user_id = :user_id;
+SELECT * FROM app_init_data WHERE user_id = :userId;
 
 insert:
 INSERT INTO app_init_data
 VALUES :entity;
 
--- 更新存储选择标识
-markStorageUriSelected:
+updateStorageUriSelected:
 UPDATE app_init_data
-SET storage_uri_selected = 1
-WHERE user_id = :user_id;
+SET storage_uri_selected = :isSelected
+WHERE user_id = :userId;
 
--- 标记已完成步骤
 markFirstTopicCreated:
 UPDATE app_init_data
 SET first_topic_created = 1
-WHERE user_id = :user_id;
+WHERE user_id = :userId;
 
 markWelcomeShown:
 UPDATE app_init_data
 SET welcome_shown = 1
-WHERE user_id = :user_id;
+WHERE user_id = :userId;

@@ -1,6 +1,5 @@
 package top.fseasy.imlog.data.repository
 
-import android.net.Uri
 import androidx.core.net.toUri
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToOneOrNull
@@ -20,6 +19,7 @@ import top.fseasy.imlog.domain.model.User
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.UserPreference
 import top.fseasy.imlog.domain.model.toAvatarModelOrDefault
+import top.fseasy.imlog.domain.model.toJsonString
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
@@ -109,29 +109,6 @@ class UserRepositoryImpl @Inject constructor(
                 ?.toDomain()
         }
 
-    private val storageUriCache = mutableMapOf<UserId, Uri?>()
-
-    override suspend fun getMediaStorageRootUriWithCache(userId: UserId): Uri? {
-        if (storageUriCache.containsKey(userId)) {
-            return storageUriCache[userId]
-        }
-        // lookup db
-        val uri = getUserPreference(userId)?.mediaStorageRootUri
-        storageUriCache[userId] = uri
-        return uri
-    }
-
-    override suspend fun setMediaStorageRootUriAndMark(userId: UserId, uri: Uri?) {
-        withContext(dispatcher) {
-            database.transaction {
-                database.userPreferenceQueries.upsertStorageRootUri(
-                    userId = userId.value, storageRootUri = uri?.toString()
-                )
-                database.appInitDataQueries.markStorageUriSelected(userId.value)
-            }
-        }
-        storageUriCache[userId] = uri
-    }
 
     private fun UserEntity.toDomain() = User(
         id = UserId(id),
@@ -144,7 +121,7 @@ class UserRepositoryImpl @Inject constructor(
 
     private fun UserPreferenceEntity.toDomain(): UserPreference = UserPreference(
         userId = UserId(user_id),
-        mediaStorageRootUri = media_storage_root_uri?.toUri(),
+        mediaStorageRootUri = shared_storage_root_uri?.toUri(),
         themeMode = theme_mode
     )
 
@@ -167,7 +144,7 @@ class UserRepositoryImpl @Inject constructor(
             UserEntity(
                 id = userId.value,
                 username = username,
-                avatar_model = avatarModel.toString(),
+                avatar_model = avatarModel.toJsonString(),
                 last_signin_at = now,
                 created_at = now,
                 attributes_updated_at = now

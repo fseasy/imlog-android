@@ -1,7 +1,7 @@
 package top.fseasy.imlog.domain.repository
 
 import kotlinx.coroutines.flow.Flow
-import top.fseasy.imlog.data.file.SavedMedia
+import top.fseasy.imlog.data.repository.SavedMedia
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageMediaCopySource

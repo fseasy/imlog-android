@@ -6,7 +6,6 @@ import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -48,34 +47,30 @@ class TopicRepositoryImpl @Inject constructor(
     override fun observeTopicPersonalState(
         userId: UserId,
         topicId: TopicId,
-    ): Flow<TopicPersonalState?> =
-        database.topicSelectQueries.getPersonalState(
-            topic_id = topicId.value,
-            user_id = userId.value
-        )
-            .asFlow()
-            .mapToOneOrNull(dispatcher)
-            .map { it?.toDomain() }
-            .catch { e ->
-                Timber.i(e, "Observe TopicPersonalState failed on id=${topicId}, emit null")
-                emit(null)
-            }
+    ): Flow<TopicPersonalState?> = database.topicSelectQueries.getPersonalState(
+        topic_id = topicId.value, user_id = userId.value
+    )
+        .asFlow()
+        .mapToOneOrNull(dispatcher)
+        .map { it?.toDomain() }
+        .catch { e ->
+            Timber.i(e, "Observe TopicPersonalState failed on id=${topicId}, emit null")
+            emit(null)
+        }
 
     override fun observeTopicWithPersonalState(
         topicId: TopicId,
         userId: UserId,
-    ): Flow<TopicWithPersonalState?> =
-        database.topicSelectQueries.getTopicWithPersonalState(
-            topic_id = topicId.value,
-            user_id = userId.value
-        )
-            .asFlow()
-            .mapToOneOrNull(dispatcher)
-            .map { it?.toDomain() }
-            .catch { e ->
-                Timber.i(e, "Observer TopicWithPersonalState failed on id=$topicId")
-                emit(null)
-            }
+    ): Flow<TopicWithPersonalState?> = database.topicSelectQueries.getTopicWithPersonalState(
+        topic_id = topicId.value, user_id = userId.value
+    )
+        .asFlow()
+        .mapToOneOrNull(dispatcher)
+        .map { it?.toDomain() }
+        .catch { e ->
+            Timber.i(e, "Observer TopicWithPersonalState failed on id=$topicId")
+            emit(null)
+        }
 
     /**
      * Used for Log Screen Topics lists (home screen)
@@ -86,6 +81,12 @@ class TopicRepositoryImpl @Inject constructor(
             .mapToList(dispatcher)
             .map { rows -> rows.map { it.toDomain() } }
     }
+
+    override suspend fun countAllRelatedTopicsForUser(userId: UserId): Long =
+        withContext(dispatcher) {
+            database.topicSelectQueries.countAllRelatedTopicsForUser(userId.value)
+                .executeAsOne()
+        }
 
     @OptIn(ExperimentalUuidApi::class)
     override suspend fun createTopic(
@@ -116,6 +117,7 @@ class TopicRepositoryImpl @Inject constructor(
             background = null
         )
     }
+
 
     override suspend fun updateTopicName(
         userId: UserId,
@@ -172,17 +174,16 @@ class TopicRepositoryImpl @Inject constructor(
         userId: UserId,
         topicId: TopicId,
         archived: Boolean,
-    ): Boolean =
-        withContext(dispatcher) {
-            val now = System.currentTimeMillis()
-            val rowsAffected = database.topicUpdateQueries.updateTopicPersonalArchived(
-                newArchived = if (archived) 1L else 0L,
-                updatedAt = now,
-                topicId = topicId.value,
-                userId = userId.value
-            ).value;
-            rowsAffected > 0L;
-        }
+    ): Boolean = withContext(dispatcher) {
+        val now = System.currentTimeMillis()
+        val rowsAffected = database.topicUpdateQueries.updateTopicPersonalArchived(
+            newArchived = if (archived) 1L else 0L,
+            updatedAt = now,
+            topicId = topicId.value,
+            userId = userId.value
+        ).value;
+        rowsAffected > 0L;
+    }
 
     override suspend fun deleteTopic(userId: UserId, topicId: TopicId): Boolean =
         withContext(dispatcher) {

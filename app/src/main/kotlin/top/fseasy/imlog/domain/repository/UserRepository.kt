@@ -15,8 +15,6 @@ interface UserRepository {
 
     suspend fun getLocalSignedInUsers(): List<User>
     suspend fun getUserPreference(userId: UserId): UserPreference?
-    suspend fun getMediaStorageRootUriWithCache(userId: UserId): Uri?
     fun observeUserAppInitDataOrNull(userId: UserId): Flow<AppInitData?>
     fun observeCurrentUserIdOrNull(): Flow<UserId?>
-    suspend fun setMediaStorageRootUriAndMark(userId: UserId, uri: Uri?)
 }

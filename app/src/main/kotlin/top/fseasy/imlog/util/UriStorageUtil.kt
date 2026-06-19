@@ -127,9 +127,13 @@ enum class FileWriteMode(val value: String) {
 
 sealed interface WriteDataResult {
     data object Success : WriteDataResult
-    data class PermissionDeniedError(val cause: Throwable) : WriteDataResult
-    data class FileOpenError(val cause: Throwable) : WriteDataResult
-    data class UnexpectedError(val cause: Throwable) : WriteDataResult
+    sealed interface Error : WriteDataResult {
+        val cause: Throwable
+        
+        data class PermissionDenied(override val cause: Throwable) : Error
+        data class FileOpenFailed(override val cause: Throwable) : Error
+        data class Unexpected(override val cause: Throwable) : Error
+    }
 }
 
 sealed interface FileCopyResult {
@@ -173,19 +177,22 @@ object UriStorageUtil {
     /**
      * A combined contextResolver Query to get multiple metadata in one query.
      * STABLE result expectation Fields: DISPLAY_NAME, SIZE
-     * Sync BLOCKING io.
+     *
+     * RUN IN **IO thread**.
+     *
+     * @throws Exception
      */
-    fun resolveMetadata(
+    suspend fun resolveMetadata(
         context: Context,
         uri: Uri,
         fields: List<ContentResolverQueryField<*>>,
-    ): ContentResolverQueriedResult {
+    ): ContentResolverQueriedResult = withContext(Dispatchers.IO) {
         // 提取所有要查询的列名
         val projection = fields.map { it.column }
             .distinct()
             .toTypedArray()
         var fileMeta = ContentResolverQueriedResult()
-        return context.contentResolver.query(uri, projection, null, null, null)
+        context.contentResolver.query(uri, projection, null, null, null)
             ?.use { cursor ->
                 if (!cursor.moveToFirst()) return@use fileMeta
 
@@ -213,10 +220,24 @@ object UriStorageUtil {
         return mimeType ?: "application/octet-stream"
     }
 
-    /**
+    /** A quick util to get path's last part name (filepath -> filename, dirpath -> dirname)
+     * 1. get from content resolver metadata 2. fallback
+     * If you need to get multiple fields of metadata, you can use `resolveMetadata` for better perf.
+     *
+     * RUN IN **IO** thread.
+     *
+     * @throws Exception
+     */
+    suspend fun getDisplayNameWithFallback(context: Context, uri: Uri): String? {
+        return resolveMetadata(
+            context, uri = uri, fields = listOf(MediaFields.DISPLAY_NAME)
+        ).displayName ?: getDisplayNameFallback(uri)
+    }
+
+    /** FALLBACK: Get path's last part name (filepath -> filename, dirpath -> dirname)
      * use This only when metadata.displayName is null
      */
-    fun getFilenameFallback(uri: Uri): String? {
+    fun getDisplayNameFallback(uri: Uri): String? {
         // Uri.lastPathSegment could be null.
         return uri.lastPathSegment?.let { Uri.decode(it) }
     }
@@ -302,15 +323,16 @@ object UriStorageUtil {
     ): WriteDataResult = withContext(Dispatchers.IO) {
         try {
             context.contentResolver.openOutputStream(tgtFileUri, FileWriteMode.WRITE_TRUNCATE.value)
-                ?.use { it.write(content) }
-                ?: WriteDataResult.UnexpectedError(IllegalStateException("open output stream get null"))
+                ?.use { it.write(content) } ?: WriteDataResult.Error.Unexpected(
+                IllegalStateException("open output stream get null")
+            )
             WriteDataResult.Success
         } catch (e: SecurityException) {
-            WriteDataResult.PermissionDeniedError(e)
+            WriteDataResult.Error.PermissionDenied(e)
         } catch (e: FileNotFoundException) {
-            WriteDataResult.FileOpenError(e)
+            WriteDataResult.Error.FileOpenFailed(e)
         } catch (e: Exception) {
-            WriteDataResult.UnexpectedError(e)
+            WriteDataResult.Error.Unexpected(e)
         }
     }
 
@@ -384,35 +406,57 @@ object UriStorageUtil {
     }
 
     /**
-     * find for given subDirs.
-     * run in IO coroutine
+     * find for given subDirs / file paths. It **can't** distinguish if it's a file/dir.
+     * run in IO thread
      */
-    suspend fun findSAFFileUri(
+    suspend fun findSAFUri(
         context: Context,
         rootTreeUri: Uri,
         relativePathSegments: List<String>,
-    ): FindOrCreateFileUriResult = resolveSAFFileUri(
+    ): FindOrCreateFileUriResult = resolveSAFUri(
         context = context,
         rootTreeUri = rootTreeUri,
         relativePathSegments = relativePathSegments,
-        mimeType = "plain/text", // a dummy value
+        isTargetDirectory = false, // a dummy value => it actually won't check if it's dir/file
+        fileMimeType = "plain/text", // a dummy value
         createIfMissing = false,
     )
 
     /**
-     * find or create uri for given subDirs.
+     * find or create uri for the given relative file path.
      * run in IO coroutine
+     * @param relativePathSegments last segment should be the file name.
+     * @param fileMimeType should be the right MimeType for the file
      */
     suspend fun ensureSAFFileUri(
         context: Context,
         rootTreeUri: Uri,
         relativePathSegments: List<String>,
-        mimeType: String,
-    ): FindOrCreateFileUriResult = resolveSAFFileUri(
+        fileMimeType: String,
+    ): FindOrCreateFileUriResult = resolveSAFUri(
         context = context,
         rootTreeUri = rootTreeUri,
         relativePathSegments = relativePathSegments,
-        mimeType = mimeType,
+        isTargetDirectory = false,
+        fileMimeType = fileMimeType,
+        createIfMissing = true,
+    )
+
+    /**
+     * find or create uri for given sub Dirs.
+     * run in IO coroutine
+     * @param relativePathSegments it should be the dir segments
+     */
+    suspend fun ensureSAFDirectoryUri(
+        context: Context,
+        rootTreeUri: Uri,
+        relativePathSegments: List<String>,
+    ): FindOrCreateFileUriResult = resolveSAFUri(
+        context = context,
+        rootTreeUri = rootTreeUri,
+        relativePathSegments = relativePathSegments,
+        isTargetDirectory = true,
+        fileMimeType = null,
         createIfMissing = true,
     )
 
@@ -420,15 +464,22 @@ object UriStorageUtil {
     private val uriCache = LruCache<String, Uri>(100)
 
     /**
-     * @param relativePathSegments: [dir1, ..., file]
+     * @param relativePathSegments: [dir1, dir2, ...] or [dir1, ..., file]
      */
-    private suspend fun resolveSAFFileUri(
+    private suspend fun resolveSAFUri(
         context: Context,
         rootTreeUri: Uri,
         relativePathSegments: List<String>,
-        mimeType: String,
+        isTargetDirectory: Boolean,
+        fileMimeType: String?,
         createIfMissing: Boolean,
     ): FindOrCreateFileUriResult = withContext(Dispatchers.IO) {
+        if (!isTargetDirectory && fileMimeType == null) {
+            return@withContext FindOrCreateFileUriResult.Error.Unexpected(
+                IllegalArgumentException("Target is file while mimeType hasn't been assigned")
+            )
+        }
+
         val resolver = context.contentResolver
 
         try {
@@ -464,7 +515,6 @@ object UriStorageUtil {
             // 4. 从找到的最近有效节点开始，向下级继续查找或创建
             for (i in startIndex until relativePathSegments.size) {
                 val nodeName = relativePathSegments[i]
-                val isFile = (i == relativePathSegments.lastIndex) // 判断当前节点是不是最后的文件
 
                 val childUri = findChild(context, currentUri, nodeName)
 
@@ -472,8 +522,13 @@ object UriStorageUtil {
                     childUri != null -> childUri
 
                     createIfMissing -> {
-                        val targetMimeType =
-                            if (isFile) mimeType else DocumentsContract.Document.MIME_TYPE_DIR
+                        val isFile = (i == relativePathSegments.lastIndex) && !isTargetDirectory
+
+                        val targetMimeType = if (isFile) {
+                            fileMimeType!!
+                        } else {
+                            DocumentsContract.Document.MIME_TYPE_DIR
+                        }
                         DocumentsContract.createDocument(
                             resolver, currentUri, targetMimeType, nodeName
                         ) ?: return@withContext FindOrCreateFileUriResult.Error.Unexpected(

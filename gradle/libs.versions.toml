@@ -5,6 +5,8 @@ agp = "9.2.1"
 androidImageCropper = "4.7.0"
 # @keep package name constants
 appPackageName = "top.fseasy.imlog"
+# @keep (used in code internal to escape the i18n app_name field)
+appStaticName = "imlog"
 coil = "3.5.0"
 composeBom = "2026.05.01"
 coreKtx = "1.19.0"

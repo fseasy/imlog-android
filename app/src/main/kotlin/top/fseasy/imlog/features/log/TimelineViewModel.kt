@@ -16,12 +16,11 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import top.fseasy.imlog.data.file.FileManager
+import top.fseasy.imlog.data.repository.FileManager
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageFactory
 import top.fseasy.imlog.domain.model.MessageMediaCopySource
 import top.fseasy.imlog.domain.model.MessageType
-import top.fseasy.imlog.domain.model.ResourceModel
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
@@ -167,7 +166,7 @@ class TimelineViewModel @Inject constructor(
             return null
         }
         return message.thumbnailName?.let { name ->
-            ResourceModel.File(
+            ResourceModel.FromFile(
                 fileManager.calcThumbnailFile(
                     userId = userId,
                     topicId = message.topicId,
@@ -176,7 +175,7 @@ class TimelineViewModel @Inject constructor(
                 )
             )
         } ?: message.originalFileUri?.let { uri ->
-            ResourceModel.Uri(uri)
+            ResourceModel.FromUri(uri)
         }
     }
 

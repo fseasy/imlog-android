@@ -47,7 +47,7 @@ fun HighlightedText(
     text: String,
     style: TextStyle,
     highlight: HighlightConfig,
-    alignment: TextAlign = TextAlign.Center,
+    textAlign: TextAlign = TextAlign.Center,
 ) {
     val glowAlpha = remember { Animatable(0f) }
 
@@ -76,7 +76,7 @@ fun HighlightedText(
                     shadow = Shadow(
                         color = highlight.glowColor, offset = Offset(0f, 0f), blurRadius = 20f
                     ),
-                ), textAlign = alignment, modifier = baseModifier.graphicsLayer {
+                ), textAlign = textAlign, modifier = baseModifier.graphicsLayer {
                     alpha = glowAlpha.value
                     // 使用 Compose 的 asComposeRenderEffect 包装器
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -92,7 +92,7 @@ fun HighlightedText(
         Text(
             text = text, style = style.copy(
                 color = if (highlight.color != Color.Unspecified) highlight.color else style.color
-            ), textAlign = alignment, modifier = baseModifier
+            ), textAlign = textAlign, modifier = baseModifier
         )
     }
 }

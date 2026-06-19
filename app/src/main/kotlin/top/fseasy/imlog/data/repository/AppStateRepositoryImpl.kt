@@ -22,6 +22,9 @@ class AppStateRepositoryImpl @Inject constructor(
     private val database: SqlDelightDb,
     private val dispatcher: CoroutineDispatcher,
 ) : AppStateRepository {
+    /**
+     * proxy by UserRepo
+     */
     @ApiStatus.Internal
     override fun observeCurrentUserIdOrNull(): Flow<UserId?> {
         return database.appStateQueries

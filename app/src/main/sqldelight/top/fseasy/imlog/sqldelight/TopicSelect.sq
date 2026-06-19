@@ -17,7 +17,7 @@ SELECT * FROM topic_personal_state WHERE topic_id = :topic_id AND user_id = :use
 -- Business Select
 --|||||||||||||||||||
 
--- 查询用于渲染 Log Screen 的 Topic 列表数据
+-- Log Screen Topic list
 getCurrentUserLogScreenTopics:
 SELECT
     t.id,
@@ -62,3 +62,11 @@ LEFT JOIN topic_personal_state p ON t.id = p.topic_id
 WHERE
 t.id = :topic_id
 AND p.user_id = :user_id;
+
+-- for CreateFirstTopic usecase. topics includes
+-- 1. deleted 2. archived 3. other created 4. self created
+countAllRelatedTopicsForUser:
+SELECT COUNT(DISTINCT t.id)
+FROM topics t
+INNER JOIN topic_members m ON t.id = m.topic_id
+WHERE m.user_id = :userId;

@@ -52,8 +52,7 @@ fun AppPrimaryButton(
         ),
         shape = MaterialTheme.shapes.medium,
         elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = 0.dp,
-            pressedElevation = 2.dp
+            defaultElevation = 0.dp, pressedElevation = 2.dp
         )
     ) {
         when {
@@ -73,9 +72,7 @@ fun AppPrimaryButton(
                 }
                 text?.let {
                     Text(
-                        text = it,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium
+                        text = it, fontSize = 15.sp, fontWeight = FontWeight.Medium
                     )
                 }
             }
@@ -88,12 +85,13 @@ fun AppOutlinedButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    loading: Boolean = false,
     text: String,
     icon: ImageVector? = null,
 ) {
     OutlinedButton(
         onClick = onClick,
-        enabled = enabled,
+        enabled = enabled && !loading,
         modifier = modifier
             .height(48.dp)
             .defaultMinSize(minWidth = 120.dp),
@@ -104,17 +102,28 @@ fun AppOutlinedButton(
         ),
         shape = MaterialTheme.shapes.medium
     ) {
-        icon?.let {
-            Icon(it, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
+        when {
+            loading -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    strokeWidth = 2.5.dp
+                )
+            }
+
+            else -> {
+                icon?.let {
+                    Icon(it, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Text(
+                    text = text, fontSize = 15.sp, fontWeight = FontWeight.Medium
+                )
+            }
         }
-        Text(
-            text = text,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium
-        )
     }
 }
+
 
 @Composable
 fun AppTextButton(
@@ -133,9 +142,7 @@ fun AppTextButton(
         shape = MaterialTheme.shapes.medium
     ) {
         Text(
-            text = text,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium
+            text = text, fontSize = 15.sp, fontWeight = FontWeight.Medium
         )
     }
 }
@@ -152,9 +159,7 @@ fun AppIconButton(
     tint: Color? = null,
 ) {
     IconButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier
+        onClick = onClick, enabled = enabled, modifier = modifier
     ) {
         Icon(
             imageVector = icon,

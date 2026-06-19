@@ -4,7 +4,7 @@ package top.fseasy.imlog.util
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
-import top.fseasy.imlog.constants.FILE_PROVIDER_AUTHORITIES
+import top.fseasy.imlog.data.constants.FILE_PROVIDER_AUTHORITIES
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException

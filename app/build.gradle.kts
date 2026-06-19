@@ -17,13 +17,19 @@ android {
 
     defaultConfig {
         applicationId = libs.versions.appPackageName.get()
-        // after 2020
-        minSdk = 30
-        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
 
+        targetSdk = 37
+        // after 2020
+        minSdk = 30
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField(
+            "String",
+            "APP_STATIC_NAME",
+            libs.versions.appStaticName.get()
+        )
     }
 
     buildTypes {

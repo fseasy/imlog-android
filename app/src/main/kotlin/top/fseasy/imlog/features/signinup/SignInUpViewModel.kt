@@ -14,14 +14,16 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.SampleUserProfileUseCase
+import top.fseasy.imlog.features.log.ui.CreateTopicDialogAction
 import top.fseasy.imlog.ui.components.AvatarUiModel
 import top.fseasy.imlog.ui.components.toUIModel
+import top.fseasy.imlog.util.retryOnAnyException
 import javax.inject.Inject
 
 data class LocalUser(val id: UserId, val name: String, val avatar: AvatarUiModel)
 
 sealed interface CreateUserState {
-    data object Loading : CreateUserState
+    data object Running : CreateUserState
     data object Success : CreateUserState
 
     @Immutable
@@ -67,17 +69,24 @@ class SignInUpViewModel @Inject constructor(
         }
     }
 
+    private var hasInitializedUserCreation = false;
+
     fun createUser() {
+        // Guard duplicated creation! use this following sync-checking to avoid
+        if (hasInitializedUserCreation) return
+        hasInitializedUserCreation = true
+
         viewModelScope.launch {
-            _uiState.update { it.copy(createUserState = CreateUserState.Loading) }
+            _uiState.update { it.copy(createUserState = CreateUserState.Running) }
             val username = sampleUserUseCase.sampleUsername()
             val avatar = sampleUserUseCase.samplePresetAvatar()
-            try {
-                userRepository.createAndSetCurrentUserOrThrow(
-                    username = username, avatarModel = avatar
-                )
-                _uiState.update { it.copy(createUserState = CreateUserState.Success) }
-            } catch (e: Exception) {
+            runCatching {
+                retryOnAnyException {
+                    userRepository.createAndSetCurrentUserOrThrow(
+                        username = username, avatarModel = avatar
+                    )
+                }
+            }.onFailure { e ->
                 Timber.e(e, "Create User failed, msg = [${e.message}]")
                 _uiState.update {
                     it.copy(
@@ -85,6 +94,11 @@ class SignInUpViewModel @Inject constructor(
                     )
                 }
             }
+                .onSuccess {
+                    _uiState.update { it.copy(createUserState = CreateUserState.Success) }
+
+                }
+
         }
     }
 

@@ -1,15 +1,23 @@
-package top.fseasy.imlog.data.file
+package top.fseasy.imlog.data.repository
 
 import android.content.Context
 import android.net.Uri
+import androidx.core.net.toUri
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.withContext
 import timber.log.Timber
-import top.fseasy.imlog.constants.THUMBNAIL_MAX_HEIGHT
-import top.fseasy.imlog.constants.THUMBNAIL_MAX_WIDTH
-import top.fseasy.imlog.data.file.MediaSaveResult.*
+import top.fseasy.imlog.data.constants.THUMBNAIL_MAX_HEIGHT
+import top.fseasy.imlog.data.constants.THUMBNAIL_MAX_WIDTH
+import top.fseasy.imlog.data.mapper.toUriOrThrow
+import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.repository.MediaSaveResult
+import top.fseasy.imlog.domain.repository.SavedMedia
+import top.fseasy.imlog.domain.repository.StorageRepository
+import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.util.ContentResolverQueriedResult
 import top.fseasy.imlog.util.FileCopyResult
 import top.fseasy.imlog.util.FileWriteMode
@@ -17,6 +25,7 @@ import top.fseasy.imlog.util.FindOrCreateFileUriResult
 import top.fseasy.imlog.util.GenerateThumbnailResult
 import top.fseasy.imlog.util.MediaFields
 import top.fseasy.imlog.util.UriStorageUtil
+import top.fseasy.imlog.util.WriteDataResult
 import top.fseasy.imlog.util.generateAndSaveThumbnail
 import top.fseasy.imlog.util.isDimensionValid
 import top.fseasy.imlog.util.resolveSubPaths
@@ -25,46 +34,138 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 
-data class SavedMedia(
-    val filename: String,
-    val originalFilename: String,
-    val fileSize: Long,
-    val thumbnailFilename: String?,
-    val mimeType: String,
-    val duration: Long?, // for video, audio
-    val width: Int?,
-    val height: Int?,
-)
-
-sealed interface MediaSaveResult {
-    /**
-     * Full/relative path/uri will be dynamically calculated
-     */
-    data class Success(val savedMedia: SavedMedia) : MediaSaveResult
-
-    sealed interface Failure : MediaSaveResult {
-        val cause: Throwable
-
-        data class TgtInvalid(override val cause: Throwable) : Failure
-        data class SrcInvalid(override val cause: Throwable) : Failure
-        data class Unexpected(override val cause: Throwable) : Failure
-    }
-}
-
 @Singleton
-class FileManager @Inject constructor(
+class StorageRepositoryImpl @Inject constructor(
+    private val database: SqlDelightDb,
     @param:ApplicationContext private val context: Context,
-    private val fileRootDir: FileRootDir,
-) {
-    /**
-     * Perform media (img, video) saving logics:
-     * 1. copy raw to shared storage
-     * 2. generate thumbnail, save to private external storage
-     */
-    suspend fun saveMessageMedia(
+    private val dispatcher: CoroutineDispatcher,
+) : StorageRepository {
+
+    private val storageUriCache = mutableMapOf<UserId, Uri?>()
+
+    private suspend fun getSharedStorageRootUriWithCache(userId: UserId): Uri? {
+        if (storageUriCache.containsKey(userId)) {
+            return storageUriCache[userId]
+        }
+        // lookup db
+        val uri = withContext(dispatcher) {
+            database.userPreferenceQueries.getSharedStorageRootUri(userId.value)
+                .executeAsOneOrNull()?.shared_storage_root_uri?.toUri()
+        }
+        storageUriCache[userId] = uri
+        return uri
+    }
+
+    override suspend fun setSharedStorageRootUriAndUpdateInitData(
+        userId: UserId,
+        uriStr: UriStr?,
+    ): Result<Unit> = runCatching {
+        val uri = uriStr?.toUriOrThrow() // Parse first to verify
+        withContext(dispatcher) {
+            database.transaction {
+                database.userPreferenceQueries.upsertSharedStorageRootUri(
+                    userId = userId.value, storageRootUri = uriStr?.value
+                )
+                database.appInitDataQueries.updateStorageUriSelected(
+                    isSelected = if (uriStr != null) 1L else 0L, userId = userId.value
+                )
+            }
+        }
+        storageUriCache[userId] = uri
+    }
+
+    override suspend fun getDisplayNameOrThrow(uriStr: UriStr): String {
+        val uri = uriStr.toUriOrThrow()
+        return UriStorageUtil.getDisplayNameWithFallback(context, uri = uri)
+            ?: throw IllegalArgumentException(
+                "Given Uri $uriStr can't be parsed to get dir name"
+            )
+    }
+
+    override suspend fun mkdirsBasedOnUriRoot(
+        subDirs: List<String>,
+        rootUriStr: UriStr,
+    ): UriStr = mkdirsBasedOnUriRoot(subDirs, rootUriStr.toUriOrThrow()).toUriStr()
+
+
+    override suspend fun mkdirsBasedOnUserSharedStorageRoot(
+        userId: UserId,
+        subDirs: List<String>,
+    ): UriStr {
+        val rootUri = getSharedStorageRootUriWithCache(userId)
+            ?: throw IllegalStateException("Storage root URI for current user $userId is null.")
+
+        return mkdirsBasedOnUriRoot(
+            subDirs, rootUri
+        ).toUriStr()
+    }
+
+    private suspend fun mkdirsBasedOnUriRoot(
+        subDirs: List<String>,
+        rootUri: Uri,
+    ): Uri {
+        val result = UriStorageUtil.ensureSAFDirectoryUri(
+            context = context, rootTreeUri = rootUri, relativePathSegments = subDirs
+        )
+        return when (result) {
+            is FindOrCreateFileUriResult.Success -> result.uri
+
+            is FindOrCreateFileUriResult.NotFound -> throw IllegalStateException("Get NotFound while calling ensureUri")
+            is FindOrCreateFileUriResult.Error -> throw result.cause
+        }
+    }
+
+    override suspend fun writeFileBasedOnRootUri(
+        relativePaths: List<String>,
+        rootUriStr: UriStr,
+        mimeType: String,
+        content: ByteArray,
+    ): UriStr = writeFileBasedOnRootUri(
+        relativePaths, rootUriStr.toUriOrThrow(), mimeType = mimeType, content = content
+    ).toUriStr()
+
+    override suspend fun writeFileBasedOnUserSharedStorageRoot(
+        userId: UserId,
+        relativePaths: List<String>,
+        mimeType: String,
+        content: ByteArray,
+    ): UriStr {
+        val rootUri = getSharedStorageRootUriWithCache(userId)
+            ?: throw IllegalStateException("Storage root URI for current user $userId is null.")
+
+        return writeFileBasedOnRootUri(
+            relativePaths = relativePaths, rootUri = rootUri, mimeType = mimeType, content = content
+        ).toUriStr()
+    }
+
+    private suspend fun writeFileBasedOnRootUri(
+        relativePaths: List<String>,
+        rootUri: Uri,
+        mimeType: String,
+        content: ByteArray,
+    ): Uri {
+        val fileUri = when (val result = UriStorageUtil.ensureSAFFileUri(
+            context = context,
+            rootTreeUri = rootUri,
+            relativePathSegments = relativePaths,
+            fileMimeType = mimeType,
+        )) {
+            is FindOrCreateFileUriResult.Success -> result.uri
+
+            is FindOrCreateFileUriResult.NotFound -> throw IllegalStateException("Get NotFound while calling ensureUri")
+            is FindOrCreateFileUriResult.Error -> throw result.cause
+        }
+        return when (val result =
+            UriStorageUtil.writeData(context, tgtFileUri = fileUri, content = content)) {
+            is WriteDataResult.Error -> throw result.cause
+            is WriteDataResult.Success -> fileUri
+        }
+    }
+
+    override suspend fun saveMessageMedia(
         userId: UserId,
         topicId: TopicId,
-        srcUri: Uri,
+        srcUriStr: UriStr,
         messageTimestampMs: Long,
     ): MediaSaveResult {
         val queryMetaFields = with(MediaFields) {
@@ -72,15 +173,21 @@ class FileManager @Inject constructor(
                 DISPLAY_NAME, FILE_SIZE, MIME_TYPE, DURATION, HEIGHT, WIDTH
             )
         }
+        val srcUri = try {
+            srcUriStr.toUriOrThrow()
+        } catch (e: Exception) {
+            Timber.i(e, "Can't parse srcUriStr to a valid Uri")
+            return MediaSaveResult.Failure.SrcInvalid(e)
+        }
 
         val metaData = UriStorageUtil.resolveMetadata(context, srcUri, queryMetaFields)
 
         val displayName =
-            metaData.displayName ?: UriStorageUtil.getFilenameFallback(srcUri) // more robust
+            metaData.displayName ?: UriStorageUtil.getDisplayNameFallback(srcUri) // more robust
             ?: "_" // have to assign a value. It should be ok.
 
         val storeRawFilename =
-            MessageFilePathRule.generateFilenameByPrependTime(messageTimestampMs, displayName)
+            messageFilePathUseCase.generateFilenameByPrependTime(messageTimestampMs, displayName)
         val mimeType = metaData.mimeType ?: UriStorageUtil.getMimeTypeFallback(context, srcUri)
         val (calcTgtUrl, failure) = calcRawSharedStorageUri(
             userId = userId,
@@ -108,16 +215,16 @@ class FileManager @Inject constructor(
             is FileCopyResult.Error.SrcPermissionDenied,
             is FileCopyResult.Error.SrcNotFound,
             is FileCopyResult.Error.SrcOpenUnexpected,
-                -> return Failure.SrcInvalid(copyResult.cause)
+                -> return MediaSaveResult.Failure.SrcInvalid(copyResult.cause)
 
             is FileCopyResult.Error.TgtNotFound,
             is FileCopyResult.Error.TgtPermissionDenied,
-                -> return Failure.TgtInvalid(copyResult.cause)
+                -> return MediaSaveResult.Failure.TgtInvalid(copyResult.cause)
 
             is FileCopyResult.Error.TgtOpenUnexpected,
             is FileCopyResult.Error.CopyIOError,
             is FileCopyResult.Error.CopyUnexpected,
-                -> return Failure.Unexpected(
+                -> return MediaSaveResult.Failure.Unexpected(
                 IllegalStateException(copyResult.cause)
             )
         }
@@ -128,8 +235,9 @@ class FileManager @Inject constructor(
 
         // generate thumbnail
         val thumbnailFilename = if (isImage || isVideo) {
-            val name =
-                MessageFilePathRule.generateFilenameByPrependTime(messageTimestampMs, "thumb.webp")
+            val name = messageFilePathUseCase.generateFilenameByPrependTime(
+                messageTimestampMs, "thumb.webp"
+            )
             val uriCandidates = listOf("src" to srcUri, "tgt" to rawFileTgtUri)
             val (isOK, lastError) = generateImageOrVideoThumbnailFromSrcCandidates(
                 userId = userId,
@@ -139,7 +247,7 @@ class FileManager @Inject constructor(
                 srcUriCandidates = uriCandidates
             )
             if (!isOK) {
-                return Failure.Unexpected(lastError!!) // Exit quickly when failed
+                return MediaSaveResult.Failure.Unexpected(lastError!!) // Exit quickly when failed
             }
             name
         } else null
@@ -167,7 +275,7 @@ class FileManager @Inject constructor(
         )
     }
 
-    suspend fun generateImageOrVideoThumbnailFromSrcCandidates(
+    private suspend fun generateImageOrVideoThumbnailFromSrcCandidates(
         userId: UserId,
         topicId: TopicId,
         messageTimestampMs: Long,
@@ -206,35 +314,35 @@ class FileManager @Inject constructor(
         return false to generateThumbnailLastError
     }
 
-    fun calcThumbnailFile(
+    private fun calcThumbnailFile(
         userId: UserId,
         topicId: TopicId,
         messageTimestampMs: Long,
         thumbnailFilename: String,
     ): File {
-        val thumbnailFullRelativePath = MessageFilePathRule.generateFullRelativePath(
+        val thumbnailFullRelativePath = messageFilePathUseCase.generateFullRelativePath(
             userId = userId,
             topicId = topicId,
             timestampMs = messageTimestampMs,
             filename = thumbnailFilename
         )
-        return fileRootDir.thumbnailRootDir.resolveSubPaths(
+        return thumbnailRootDir.resolveSubPaths(
             thumbnailFullRelativePath, true, lastPathIsFile = true
         )
     }
 
-    suspend fun calcRawSharedStorageUri(
+    private suspend fun calcRawSharedStorageUri(
         userId: UserId,
         topicId: TopicId,
         messageTimestampMs: Long,
         rawFilename: String,
         mimeType: String,
     ): Pair<Uri?, MediaSaveResult.Failure?> {
-        val tgtRootTreeUri =
-            fileRootDir.messageFileRootUri.firstOrNull() ?: return null to Failure.TgtInvalid(
+        val tgtRootTreeUri = getSharedStorageRootUriWithCache(userId)
+            ?: return null to MediaSaveResult.Failure.TgtInvalid(
                 IllegalStateException("messageFileRootUri is Null")
             )
-        val relativePathSegments = MessageFilePathRule.generateFullRelativePath(
+        val relativePathSegments = messageFilePathUseCase.generateFullRelativePath(
             userId, topicId, messageTimestampMs, rawFilename
         )
         when (val result = UriStorageUtil.ensureSAFFileUri(
@@ -242,15 +350,15 @@ class FileManager @Inject constructor(
         )) {
             is FindOrCreateFileUriResult.Success -> return result.uri to null
             // Will return on errors
-            is FindOrCreateFileUriResult.Error.PermissionDenied -> return null to Failure.TgtInvalid(
+            is FindOrCreateFileUriResult.Error.PermissionDenied -> return null to MediaSaveResult.Failure.TgtInvalid(
                 result.cause
             )
 
-            is FindOrCreateFileUriResult.Error.Unexpected -> return null to Failure.Unexpected(
+            is FindOrCreateFileUriResult.Error.Unexpected -> return null to MediaSaveResult.Failure.Unexpected(
                 result.cause
             )
 
-            is FindOrCreateFileUriResult.NotFound -> return null to Failure.Unexpected(
+            is FindOrCreateFileUriResult.NotFound -> return null to MediaSaveResult.Failure.Unexpected(
                 IllegalStateException("EnsureSAFFile got Not Found")
             )
         }

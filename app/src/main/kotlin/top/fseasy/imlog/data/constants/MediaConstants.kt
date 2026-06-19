@@ -1,4 +1,4 @@
-package top.fseasy.imlog.constants
+package top.fseasy.imlog.data.constants
 
 import top.fseasy.imlog.BuildConfig
 

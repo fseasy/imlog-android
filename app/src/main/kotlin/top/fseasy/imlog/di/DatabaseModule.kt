@@ -1,8 +1,6 @@
 package top.fseasy.imlog.di
 
 import android.content.Context
-import androidx.sqlite.db.SupportSQLiteDatabase
-import app.cash.sqldelight.driver.android.AndroidSqliteDriver
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

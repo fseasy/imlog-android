@@ -34,4 +34,11 @@
     </string-array>
     <string name="signinup_signup_welcome">Welcome back</string>
     <string name="signinup_signup_select_account">Please select account</string>
+    <string name="select_storage_slogan">Your data, your rules.</string>
+    <string name="select_storage_select_tip">Choose where your log data is stored. You can directly back them up and even view them using other apps.</string>
+    <string name="btn_choose_storage">Choose Storage Location</string>
+    <string name="error_unknown">Unknown Error</string>
+    <string name="select_storage_btn_content_success">Set Done</string>
+    <string name="select_storage_all_set">All Set</string>
+    <string name="topic_initial_name">The Moment</string>
 </resources>

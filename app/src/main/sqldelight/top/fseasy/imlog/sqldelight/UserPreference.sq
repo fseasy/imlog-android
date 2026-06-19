@@ -1,6 +1,6 @@
 CREATE TABLE user_preference (
     user_id TEXT NOT NULL PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    media_storage_root_uri TEXT,
+    shared_storage_root_uri TEXT,
     theme_mode TEXT
 );
 
@@ -11,12 +11,17 @@ insertOrReplace:
 INSERT OR REPLACE INTO user_preference
 VALUES :entity;
 
+getSharedStorageRootUri:
+SELECT shared_storage_root_uri
+FROM user_preference
+WHERE  user_id = :userId;
+
 -- `ON CONFLICT` only available on sqlight 3.24+ ==> Android API 30+
-upsertStorageRootUri:
-INSERT INTO user_preference (user_id, media_storage_root_uri)
+upsertSharedStorageRootUri:
+INSERT INTO user_preference (user_id, shared_storage_root_uri)
 VALUES (:userId, :storageRootUri)
 ON CONFLICT(user_id) DO UPDATE SET
-    media_storage_root_uri = excluded.media_storage_root_uri;
+    shared_storage_root_uri = excluded.shared_storage_root_uri;
 
 updateThemeMode:
 UPDATE user_preference

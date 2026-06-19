@@ -103,7 +103,7 @@ fun StackedAnimatedText(
                         text = config.text,
                         style = config.style,
                         highlight = config.highlight,
-                        alignment = config.alignment
+                        textAlign = config.alignment
                     )
                 } else {
                     Text(

@@ -26,4 +26,6 @@ interface TopicRepository {
         topicId: TopicId,
         userId: UserId
     ): Flow<TopicWithPersonalState?>
+
+    suspend fun countAllRelatedTopicsForUser(userId: UserId): Long
 }

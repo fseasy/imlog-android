@@ -65,7 +65,7 @@ fun OnboardingIntroContent(uiState: CreateUserState?, modifier: Modifier = Modif
                     )
                 ), timingConfig = StackedAnimationTiming(
                     initialDelay = 300, lineGap = 500, overlap = false
-                ), modifier = Modifier.fillMaxWidth()
+                ), modifier = modifier.fillMaxWidth()
             )
         }
     }

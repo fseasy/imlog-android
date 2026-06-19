@@ -33,4 +33,11 @@
     </string-array>
     <string name="signinup_signup_welcome">欢迎回来</string>
     <string name="signinup_signup_select_account">请选择账户</string>
+    <string name="select_storage_slogan">数据由你掌控</string>
+    <string name="select_storage_select_tip">请选择一个位置存储你的 log 数据。你可以直接用第三方工具备份、查看他们</string>
+    <string name="btn_choose_storage">选择存储位置</string>
+    <string name="error_unknown">未知错误</string>
+    <string name="select_storage_btn_content_success">完成设置</string>
+    <string name="select_storage_all_set">设置完成</string>
+    <string name="topic_initial_name">这一刻</string>
 </resources>
