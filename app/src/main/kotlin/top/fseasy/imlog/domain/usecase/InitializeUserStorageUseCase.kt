@@ -1,5 +1,7 @@
 package top.fseasy.imlog.domain.usecase
 
+import top.fseasy.imlog.domain.model.FilePathModel
+import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.ResourceProvider
@@ -50,10 +52,15 @@ class InitializeUserStorageUseCase @Inject constructor(
         val dirName = storageRepository.getDisplayNameOrThrow(userSelectedUriStr)
         if (storagePathUseCase.needsSubDirForActualSharedStorageRoot(dirName)) {
             val rootDirName = storagePathUseCase.defaultSharedStorageRootDirName
-            val determinedRootUriName = storageRepository.mkdirsForSharedStorageUri(
-                subDirs = listOf(rootDirName), rootUriStr = userSelectedUriStr,
+            val createdUri = storageRepository.mkdirs(
+                FilePathModel.SharedStorageOnly(
+                    listOf(rootDirName),
+                    root = SharedStorageRootSource.Direct(userSelectedUriStr)
+                )
             )
-            DetermineStorageRootUriSuccessResult(determinedRootUriName, rootDirName)
+            val effectiveCreatedUri =
+                requireNotNull(createdUri) { "mkdir for SharedStorage while no uri returned" }
+            DetermineStorageRootUriSuccessResult(effectiveCreatedUri, rootDirName)
         } else {
             DetermineStorageRootUriSuccessResult(userSelectedUriStr, dirName)
         }
@@ -72,11 +79,12 @@ class InitializeUserStorageUseCase @Inject constructor(
             On $formattedDate
         """.trimIndent()
         val markerPath = storagePathUseCase.buildSharedStorageRootMarkerFilePath(userId)
-        storageRepository.writeFileBasedOnUserSharedStorageRoot(
-            userId = userId,
-            relativePaths = markerPath.fullRelativePath,
+        storageRepository.writeFile(
+            FilePathModel.SharedStorageOnly(
+                markerPath.fullRelativePath, root = SharedStorageRootSource.LookupByUser(userId)
+            ),
+            content = content.toByteArray(),
             mimeType = "plain/text",
-            content = content.toByteArray()
         )
         markerPath.fullRelativePath.last()
     }

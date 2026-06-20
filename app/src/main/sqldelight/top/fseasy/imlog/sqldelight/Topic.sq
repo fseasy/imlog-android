@@ -1,14 +1,21 @@
 -- share across all members
+-- Topic 的删除逻辑：
+-- - creator 才可以删除这个 topic；
+-- - 如果 creator 注销了，不会自动删除起创建的 topic, 而是
+--   1. 先将关联的 topic creator 设为 null; topic_members 删掉对应行
+--   2. 然后定义了一个 trigger, 当 topic_members 删除时，看是否有 Topic 已经没有任何的 member 关联了，
+--      这时才会触发删除！
 CREATE TABLE topics (
     id TEXT NOT NULL PRIMARY KEY,
     name TEXT NOT NULL,
-    icon_uri TEXT,
+    avatar_model TEXT NOT NULL,
+    description TEXT,
     -- 注意！这里可以为空：因为当 creator 注销账户后，不能直接删除这个 Topic!
     -- 只有群成员全部注销后才能删除这个 Topic；对应到 Trigger 里基于 topic_members 的删除
     creator_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     created_at INTEGER NOT NULL,
     attributes_updated_at INTEGER NOT NULL,
-    is_deleted INTEGER NOT NULL DEFAULT 0
+    is_deleted INTEGER NOT NULL DEFAULT 0 -- soft delete
 );
 -- share across all members
 CREATE TABLE topic_members (
@@ -42,12 +49,14 @@ CREATE TABLE topic_personal_state (
 );
 
 insertTopic:
-INSERT INTO topics (id, name, icon_uri, creator_id, created_at, attributes_updated_at) VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO topics
+VALUES :topicEntity;
 
 insertMember:
 INSERT
-INTO topic_members (topic_id, user_id, user_nickname, role, joined_at, attributes_updated_at)
-VALUES (?, ?, ?, ?, ?, ?);
+INTO topic_members
+VALUES :topicMemberEntity;
 
 insertPersonalState:
-INSERT INTO topic_personal_state (topic_id, user_id, archived, pinned, background, last_read_at, attributes_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO topic_personal_state
+VALUES :personalStateEntity;

@@ -22,22 +22,25 @@ value class TopicId(val value: String) {
     }
 }
 
-@Immutable
 data class Topic(
     val id: TopicId,
     val name: String,
-    val iconUri: String?,
+    val avatarModel: AvatarModel,
+    val description: String?,
     val creatorId: UserId?, // Can be null if creator is deleted
     val createdAt: Long,
     val attributesUpdatedAt: Long,
     val isDeleted: Boolean = false,
 )
 
-@Immutable
-data class LogScreenTopic(
+/**
+ * Element to show in Home screen topic lists.
+ */
+data class HomeTopic(
     val id: TopicId,
     val name: String,
-    val iconUri: String?,
+    val avatarModel: AvatarModel,
+    val description: String?,
     val isPinned: Boolean,
     val hasUnread: Boolean,
     val messageUpdatedAt: Long,

@@ -5,6 +5,8 @@ import top.fseasy.imlog.domain.repository.ResourceProvider
 import top.fseasy.imlog.domain.repository.StringResId
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.data.util.retryOnAnyException
+import top.fseasy.imlog.domain.model.AvatarModel
+import top.fseasy.imlog.domain.model.TopicPresetAvatar
 import javax.inject.Inject
 
 sealed interface CreateDefaultTopicResult {
@@ -24,6 +26,7 @@ class CreateDefaultTopicUseCase @Inject constructor(
             return@runCatching CreateDefaultTopicResult.SkipCreate
         }
         val defaultName = resourceProvider.getString(StringResId.TopicInitialName)
+        val defaultAvatar = AvatarModel.TopicPreset(TopicPresetAvatar.random())
 
     }
 
@@ -35,8 +38,5 @@ class CreateDefaultTopicUseCase @Inject constructor(
         }.getOrNull() ?: 0L
         return topicNum == 0L
     }
-
-    private suspend fun InsertDefaultTopic(userId: UserId, topicName: String) {
-
-    }
+    
 }

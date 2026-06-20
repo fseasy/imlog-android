@@ -1,9 +1,9 @@
 package top.fseasy.imlog.domain.model
 
 /**
- * To flag it is in external-persistent or external-cache location
+ * To flag it is in internal-persistent or internal-cache location
  */
-enum class ExternalLocation {
+enum class InternalLocation {
     Persistent, Cache
 }
 
@@ -12,6 +12,10 @@ sealed interface SharedStorageRootSource {
     data class LookupByUser(val userId: UserId) : SharedStorageRootSource
 }
 
+/**
+ * Used to fit the clean architecture requirements
+ * @see top.fseasy.imlog.domain.usecase.StoragePathUseCase to know the storage choose reason
+ */
 sealed interface FilePathModel {
     val fullRelativePath: List<String>
 
@@ -23,18 +27,18 @@ sealed interface FilePathModel {
         val root: SharedStorageRootSource,
     ) : FilePathModel
 
-    data class ExternalOnly(
+    data class InternalOnly(
         override val fullRelativePath: List<String>,
-        val externalLocation: ExternalLocation,
+        val internalLocation: InternalLocation,
     ) : FilePathModel
 
     data class DualWrite(
         override val fullRelativePath: List<String>,
         val root: SharedStorageRootSource,
-        val externalLocation: ExternalLocation,
+        val internalLocation: InternalLocation,
     ) : FilePathModel {
         fun toSharedStorageOnly() = SharedStorageOnly(fullRelativePath, root)
-        fun toExternalOnly() = ExternalOnly(fullRelativePath, externalLocation)
+        fun toInternalOnly() = InternalOnly(fullRelativePath, internalLocation)
     }
 }
 

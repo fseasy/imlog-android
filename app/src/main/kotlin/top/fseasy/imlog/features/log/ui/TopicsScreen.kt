@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import timber.log.Timber
-import top.fseasy.imlog.domain.model.LogScreenTopic
+import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.log.TopicsUiState
 import top.fseasy.imlog.features.log.TopicsViewModel
@@ -175,7 +175,7 @@ fun TopicsScreenContent(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopicCard(
-    topic: LogScreenTopic,
+    topic: HomeTopic,
     onTopicCardAction: (TopicCardAction) -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }

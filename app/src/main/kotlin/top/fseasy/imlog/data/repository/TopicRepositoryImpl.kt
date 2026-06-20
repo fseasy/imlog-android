@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import top.fseasy.imlog.domain.model.LogScreenTopic
+import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicPersonalState
@@ -19,10 +19,11 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
+import top.fseasy.imlog.domain.model.AvatarModel
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.uuid.ExperimentalUuidApi
-import top.fseasy.imlog.sqldelight.GetCurrentUserLogScreenTopics as UserLogScreenTopicEntity
+import top.fseasy.imlog.sqldelight.GetCurrentUserHomeScreenTopics as UserLogScreenTopicEntity
 import top.fseasy.imlog.sqldelight.GetTopicWithPersonalState as GetTopicWithPersonalStateEntity
 import top.fseasy.imlog.sqldelight.Topic_personal_state as PersonalStateEntity
 import top.fseasy.imlog.sqldelight.Topics as TopicEntity
@@ -42,7 +43,6 @@ class TopicRepositoryImpl @Inject constructor(
                 Timber.w(e, "No Topic found for id=${topicId}, emit null")
                 emit(null)
             }
-
 
     override fun observeTopicPersonalState(
         userId: UserId,
@@ -75,13 +75,16 @@ class TopicRepositoryImpl @Inject constructor(
     /**
      * Used for Log Screen Topics lists (home screen)
      */
-    override fun observeLogScreenTopics(userId: UserId): Flow<List<LogScreenTopic>> {
-        return database.topicSelectQueries.getCurrentUserLogScreenTopics(userId.value)
+    override fun observeLogScreenTopics(userId: UserId): Flow<List<HomeTopic>> {
+        return database.topicSelectQueries.getCurrentUserHomeScreenTopics(userId.value)
             .asFlow()
             .mapToList(dispatcher)
             .map { rows -> rows.map { it.toDomain() } }
     }
 
+    /**
+     * @see top.fseasy.imlog.domain.usecase.CreateDefaultTopicUseCase
+     */
     override suspend fun countAllRelatedTopicsForUser(userId: UserId): Long =
         withContext(dispatcher) {
             database.topicSelectQueries.countAllRelatedTopicsForUser(userId.value)
@@ -90,8 +93,8 @@ class TopicRepositoryImpl @Inject constructor(
 
     @OptIn(ExperimentalUuidApi::class)
     override suspend fun createTopic(
-        creatorId: UserId, name: String, iconUri: String?,
-    ): LogScreenTopic = withContext(dispatcher) {
+        creatorId: UserId, name: String, avatarModel: AvatarModel,
+    ): HomeTopic = withContext(dispatcher) {
         val now = System.currentTimeMillis()
         val topicId = retrySQLiteOnKeyConflict {
             TopicId.random()
@@ -99,14 +102,14 @@ class TopicRepositoryImpl @Inject constructor(
                     executeInsertTopicTransaction(
                         topicId = newId,
                         topicName = name,
-                        iconUri = iconUri,
+                        avatarModel = avatarModel,
                         creatorId = creatorId,
                         nowTimestamp = now,
                     )
                 }
         }
 
-        LogScreenTopic(
+        HomeTopic(
             id = topicId,
             name = name,
             iconUri = iconUri,
@@ -251,10 +254,10 @@ class TopicRepositoryImpl @Inject constructor(
         attributesUpdatedAt = attributes_updated_at
     )
 
-    private fun UserLogScreenTopicEntity.toDomain() = LogScreenTopic(
+    private fun UserLogScreenTopicEntity.toDomain() = HomeTopic(
         id = TopicId(id),
         name = name,
-        iconUri = icon_uri,
+        iconUri = avatar_model,
         isPinned = pinned == 1L,
         hasUnread = has_unread == 1L,
         messageUpdatedAt = topic_message_update_at,
@@ -265,7 +268,7 @@ class TopicRepositoryImpl @Inject constructor(
     private fun GetTopicWithPersonalStateEntity.toTopicEntity() = TopicEntity(
         id = id,
         name = name,
-        icon_uri = icon_uri,
+        icon_uri = avatar_model,
         creator_id = creator_id,
         created_at = created_at,
         attributes_updated_at = attributes_updated_at,

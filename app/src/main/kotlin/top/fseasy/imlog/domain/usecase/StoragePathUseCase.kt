@@ -1,6 +1,6 @@
 package top.fseasy.imlog.domain.usecase
 
-import top.fseasy.imlog.domain.model.ExternalLocation
+import top.fseasy.imlog.domain.model.InternalLocation
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.FilePathModel
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
@@ -18,18 +18,22 @@ import javax.inject.Inject
  * - shared storage: mainly for user message data (backup, sync)
  * - app-specific storage:
  *
- *    internal storage: mainly for db. We don't manage it here (hardcode it)
+ *    internal storage: in Modern phone, we usually choose this.
+ *      Same volume with external storage (if only built-in chip memory)
+ *      More stable to access compared to the external storage
  *
- *    external storage - persistent
+ *    external storage: can be access by MTP (connecting to the PC).
+ *      Main be unaccessible in legacy device or unknown condition.
+ *      I don't know it well.
  *
- *    external storage - cache: like message media thumbnail
+ *    Let's choose Internal Storage instead.
  *
  * basic rule:
  * - shared storage:
  *    root-uri: dirname contains app-name
  *    user storage root: $root/$user_id
  *
- * - external persistent+cache:
+ * - internal persistent+cache:
  *
  *    root-uri: platform dependent, don't care here.
  *
@@ -71,7 +75,7 @@ class StoragePathUseCase @Inject constructor(
             fullRelativePath = buildAvatarRelativePath(
                 signInUserId, AvatarTargetName.USER, filename
             ),
-            externalLocation = ExternalLocation.Persistent,
+            internalLocation = InternalLocation.Persistent,
             root = SharedStorageRootSource.LookupByUser(signInUserId)
         )
     }
@@ -84,7 +88,7 @@ class StoragePathUseCase @Inject constructor(
             fullRelativePath = buildAvatarRelativePath(
                 signInUserId, AvatarTargetName.TOPIC, filename
             ),
-            externalLocation = ExternalLocation.Persistent,
+            internalLocation = InternalLocation.Persistent,
             root = SharedStorageRootSource.LookupByUser(signInUserId)
         )
     }
@@ -130,14 +134,14 @@ class StoragePathUseCase @Inject constructor(
         topicId: TopicId,
         timestampMs: Long,
         filename: String,
-    ): FilePathModel.ExternalOnly = FilePathModel.ExternalOnly(
+    ): FilePathModel.InternalOnly = FilePathModel.InternalOnly(
         buildMessageFileFullRelativePath(
             userId = userId,
             resourceName = ResourceName.MessageThumbnail,
             topicId = topicId,
             timestampMs = timestampMs,
             filename = filename
-        ), externalLocation = ExternalLocation.Cache
+        ), internalLocation = InternalLocation.Cache
     )
 
     /**

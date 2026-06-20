@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import top.fseasy.imlog.domain.model.LogScreenTopic
+import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.TopicRepository
@@ -23,7 +23,7 @@ import javax.inject.Inject
 
 data class TopicsUiState(
     val isLoading: Boolean = true,
-    val topics: List<LogScreenTopic> = emptyList(),
+    val topics: List<HomeTopic> = emptyList(),
     val currentUserId: UserId? = null,
     val showCreateDialog: Boolean = false,
     val selectedTopicId: TopicId? = null,

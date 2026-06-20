@@ -7,7 +7,6 @@ import top.fseasy.imlog.domain.model.UserId
 import java.io.File
 
 
-
 data class SavedMedia(
     val filename: String,
     val originalFilename: String,
@@ -40,7 +39,7 @@ sealed interface MediaSaveResult {
  */
 interface StorageRepository {
 
-    /**
+    /** StorageRepo will hold the shared storage root uri for each user.
      * save uri to user preference and update flag field in app-init-data table.
      * @param uriStr if null, will reset the init-data.
      */
@@ -63,33 +62,6 @@ interface StorageRepository {
 
     suspend fun getDisplayNameOrThrow(uriStr: UriStr): String
 
-    /**
-     * @param rootUriStr specify the uri
-     * @throws Exception
-     */
-    suspend fun mkdirsForSharedStorageUri(subDirs: List<String>, rootUriStr: UriStr): UriStr
-
-    suspend fun writeFile(filePath: FilePathModel): UriStr
-
-    /**
-     * @param userId used to get the corresponding root shared storage uri
-     * @throws Exception
-     */
-    suspend fun mkdirsForUserSharedStorageUriRoot(subDirs: List<String>, userId: UserId): UriStr
-    suspend fun writeFileBasedOnUserSharedStorageRoot(
-        userId: UserId,
-        relativePaths: List<String>,
-        mimeType: String,
-        content: ByteArray
-    ): UriStr
-
-    suspend fun writeFileBasedOnRootUri(
-        relativePaths: List<String>,
-        rootUriStr: UriStr,
-        mimeType: String,
-        content: ByteArray
-    ): UriStr
-
-    suspend fun mkdirsBasedOnUriRoot(subDirs: List<String>, rootUriStr: UriStr): UriStr
-    suspend fun mkdirsBasedOnUserSharedStorageRoot(userId: UserId, subDirs: List<String>): UriStr
+    suspend fun writeFile(filePath: FilePathModel, content: ByteArray, mimeType: String?): UriStr?
+    suspend fun mkdirs(filePath: FilePathModel): UriStr?
 }

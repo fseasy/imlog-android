@@ -19,6 +19,6 @@ class SampleUserProfileUseCase @Inject constructor(
         return "${adjectives.random()}${nouns.random()}$order"
     }
 
-    fun samplePresetAvatar(): AvatarModel = AvatarModel.UserPreset(UserPresetAvatar.random().dbName)
+    fun samplePresetAvatar(): AvatarModel = AvatarModel.UserPreset(UserPresetAvatar.random())
 }
 

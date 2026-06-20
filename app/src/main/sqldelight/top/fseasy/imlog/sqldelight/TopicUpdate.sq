@@ -19,7 +19,7 @@ updateTopicIconUri:
 -- with user permission check: role = admin; role is effective
 UPDATE topics
 SET
-    icon_uri = :newIconUri,
+    avatar_model = :newIconUri,
     attributes_updated_at = :updatedAt
 WHERE id = :topicId
 AND EXISTS (

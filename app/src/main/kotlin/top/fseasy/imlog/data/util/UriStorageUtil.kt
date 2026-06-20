@@ -129,7 +129,7 @@ sealed interface WriteDataResult {
     data object Success : WriteDataResult
     sealed interface Error : WriteDataResult {
         val cause: Throwable
-        
+
         data class PermissionDenied(override val cause: Throwable) : Error
         data class FileOpenFailed(override val cause: Throwable) : Error
         data class Unexpected(override val cause: Throwable) : Error
@@ -316,6 +316,10 @@ object UriStorageUtil {
         }
     }
 
+    /**
+     * Run in IO thread.
+     * No exception thrown.
+     */
     suspend fun writeData(
         context: Context,
         tgtFileUri: Uri,

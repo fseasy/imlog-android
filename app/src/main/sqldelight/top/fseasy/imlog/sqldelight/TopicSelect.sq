@@ -17,12 +17,13 @@ SELECT * FROM topic_personal_state WHERE topic_id = :topic_id AND user_id = :use
 -- Business Select
 --|||||||||||||||||||
 
--- Log Screen Topic list
-getCurrentUserLogScreenTopics:
+-- Home Screen Topic list
+getCurrentUserHomeScreenTopics:
 SELECT
     t.id,
     t.name,
-    t.icon_uri,
+    t.avatar_model,
+    t.description,
     -- 个性化状态（可能为 NULL）
     COALESCE(tps.pinned, 0) AS pinned,
     tps.background,
