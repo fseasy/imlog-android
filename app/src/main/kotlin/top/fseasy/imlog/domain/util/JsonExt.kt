@@ -1,4 +1,4 @@
-package top.fseasy.imlog.util
+package top.fseasy.imlog.domain.util
 
 import kotlinx.serialization.json.Json
 

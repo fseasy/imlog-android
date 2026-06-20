@@ -1,10 +1,8 @@
-package top.fseasy.imlog.util
+package top.fseasy.imlog.data.util
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
-import androidx.core.graphics.drawable.toBitmap
 import androidx.core.graphics.drawable.toBitmapOrNull
 import coil3.asDrawable
 import coil3.imageLoader

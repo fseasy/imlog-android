@@ -3,7 +3,7 @@ package top.fseasy.imlog.domain.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import timber.log.Timber
-import top.fseasy.imlog.util.defaultJson
+import top.fseasy.imlog.domain.util.defaultJson
 
 @Serializable
 sealed interface AvatarModel {

@@ -1,4 +1,4 @@
-package top.fseasy.imlog.util
+package top.fseasy.imlog.data.util
 
 import android.database.sqlite.SQLiteConstraintException
 import kotlinx.coroutines.delay

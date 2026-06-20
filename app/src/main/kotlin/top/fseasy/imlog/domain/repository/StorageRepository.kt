@@ -1,5 +1,6 @@
 package top.fseasy.imlog.domain.repository
 
+import top.fseasy.imlog.domain.model.FilePathModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
@@ -67,6 +68,8 @@ interface StorageRepository {
      * @throws Exception
      */
     suspend fun mkdirsForSharedStorageUri(subDirs: List<String>, rootUriStr: UriStr): UriStr
+
+    suspend fun writeFile(filePath: FilePathModel): UriStr
 
     /**
      * @param userId used to get the corresponding root shared storage uri

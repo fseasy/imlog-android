@@ -24,7 +24,7 @@ import top.fseasy.imlog.domain.model.toMessageMediaProcessStatus
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.sqldelight.Message_media_processing_temp_states
 import top.fseasy.imlog.sqldelight.SqlDelightDb
-import top.fseasy.imlog.util.retrySQLiteOnKeyConflict
+import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
 import top.fseasy.imlog.worker.DeleteFileWorker
 import top.fseasy.imlog.worker.MediaFileProcessWorker
 import javax.inject.Inject

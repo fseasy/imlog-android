@@ -23,7 +23,7 @@ import top.fseasy.imlog.domain.model.toJsonString
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
-import top.fseasy.imlog.util.retrySQLiteOnKeyConflict
+import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
 import javax.inject.Inject
 import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.App_init_data as AppInitDataEntity

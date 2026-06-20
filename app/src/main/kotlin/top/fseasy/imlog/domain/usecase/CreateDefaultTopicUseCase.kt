@@ -4,7 +4,7 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.ResourceProvider
 import top.fseasy.imlog.domain.repository.StringResId
 import top.fseasy.imlog.domain.repository.TopicRepository
-import top.fseasy.imlog.util.retryOnAnyException
+import top.fseasy.imlog.data.util.retryOnAnyException
 import javax.inject.Inject
 
 sealed interface CreateDefaultTopicResult {

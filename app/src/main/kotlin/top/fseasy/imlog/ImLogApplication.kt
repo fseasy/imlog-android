@@ -8,7 +8,7 @@ import coil3.SingletonImageLoader
 import coil3.request.crossfade
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
-import top.fseasy.imlog.util.CrashReportingTree
+import top.fseasy.imlog.data.util.CrashReportingTree
 import javax.inject.Inject
 
 @HiltAndroidApp

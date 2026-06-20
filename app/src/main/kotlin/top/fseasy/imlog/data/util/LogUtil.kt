@@ -1,4 +1,4 @@
-package top.fseasy.imlog.util
+package top.fseasy.imlog.data.util
 
 import android.annotation.SuppressLint
 import android.util.Log

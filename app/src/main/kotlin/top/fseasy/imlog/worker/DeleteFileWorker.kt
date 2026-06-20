@@ -15,7 +15,7 @@ import dagger.assisted.AssistedInject;
 import timber.log.Timber
 import top.fseasy.imlog.data.repository.FileManager;
 import top.fseasy.imlog.domain.repository.MessageRepository;
-import top.fseasy.imlog.util.toFile
+import top.fseasy.imlog.domain.util.toFile
 import java.time.Duration
 
 @HiltWorker

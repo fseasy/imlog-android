@@ -26,7 +26,9 @@ sealed interface UserAvatarUiModel {
 }
 
 
-fun AvatarModel.toUserAvatarUIModel(): UserAvatarUiModel {
+fun AvatarModel.toUserAvatarUIModel(
+
+): UserAvatarUiModel {
     return when (this) {
         is AvatarModel.FilePath -> UserAvatarUiModel.FilePath(Paths.get(this.path))
         is AvatarModel.UserPreset -> UserAvatarUiModel.Preset(

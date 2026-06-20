@@ -14,10 +14,9 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.SampleUserProfileUseCase
-import top.fseasy.imlog.features.log.ui.CreateTopicDialogAction
 import top.fseasy.imlog.ui.components.AvatarUiModel
 import top.fseasy.imlog.ui.components.toUIModel
-import top.fseasy.imlog.util.retryOnAnyException
+import top.fseasy.imlog.data.util.retryOnAnyException
 import javax.inject.Inject
 
 data class LocalUser(val id: UserId, val name: String, val avatar: AvatarUiModel)

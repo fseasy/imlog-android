@@ -11,6 +11,8 @@ import top.fseasy.imlog.data.constants.THUMBNAIL_MAX_HEIGHT
 import top.fseasy.imlog.data.constants.THUMBNAIL_MAX_WIDTH
 import top.fseasy.imlog.data.mapper.toUriOrThrow
 import top.fseasy.imlog.data.mapper.toUriStr
+import top.fseasy.imlog.domain.model.FilePathModel
+import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
@@ -18,17 +20,17 @@ import top.fseasy.imlog.domain.repository.MediaSaveResult
 import top.fseasy.imlog.domain.repository.SavedMedia
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
-import top.fseasy.imlog.util.ContentResolverQueriedResult
-import top.fseasy.imlog.util.FileCopyResult
-import top.fseasy.imlog.util.FileWriteMode
-import top.fseasy.imlog.util.FindOrCreateFileUriResult
-import top.fseasy.imlog.util.GenerateThumbnailResult
-import top.fseasy.imlog.util.MediaFields
-import top.fseasy.imlog.util.UriStorageUtil
-import top.fseasy.imlog.util.WriteDataResult
-import top.fseasy.imlog.util.generateAndSaveThumbnail
-import top.fseasy.imlog.util.isDimensionValid
-import top.fseasy.imlog.util.resolveSubPaths
+import top.fseasy.imlog.data.util.ContentResolverQueriedResult
+import top.fseasy.imlog.data.util.FileCopyResult
+import top.fseasy.imlog.data.util.FileWriteMode
+import top.fseasy.imlog.data.util.FindOrCreateFileUriResult
+import top.fseasy.imlog.data.util.GenerateThumbnailResult
+import top.fseasy.imlog.data.util.MediaFields
+import top.fseasy.imlog.data.util.UriStorageUtil
+import top.fseasy.imlog.data.util.WriteDataResult
+import top.fseasy.imlog.data.util.generateAndSaveThumbnail
+import top.fseasy.imlog.data.util.isDimensionValid
+import top.fseasy.imlog.domain.util.resolveSubPaths
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,6 +45,9 @@ class StorageRepositoryImpl @Inject constructor(
 
     private val storageUriCache = mutableMapOf<UserId, Uri?>()
 
+    /**
+     * 1. try to get from cache 2. else get from DB (run in IO thread)
+     */
     private suspend fun getSharedStorageRootUriWithCache(userId: UserId): Uri? {
         if (storageUriCache.containsKey(userId)) {
             return storageUriCache[userId]
@@ -115,52 +120,69 @@ class StorageRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun writeFileBasedOnRootUri(
-        relativePaths: List<String>,
-        rootUriStr: UriStr,
-        mimeType: String,
+    /**
+     * @param mimeType: set it properly when filePathModel includes Uri.
+     */
+    override suspend fun writeFile(
+        filePath: FilePathModel,
         content: ByteArray,
-    ): UriStr = writeFileBasedOnRootUri(
-        relativePaths, rootUriStr.toUriOrThrow(), mimeType = mimeType, content = content
-    ).toUriStr()
-
-    override suspend fun writeFileBasedOnUserSharedStorageRoot(
-        userId: UserId,
-        relativePaths: List<String>,
-        mimeType: String,
-        content: ByteArray,
+        mimeType: String?,
     ): UriStr {
-        val rootUri = getSharedStorageRootUriWithCache(userId)
-            ?: throw IllegalStateException("Storage root URI for current user $userId is null.")
+        when (filePath) {
+            is FilePathModel.DualWrite -> {
+                val effectiveMimeType =
+                    requireNotNull(mimeType) { "Must Set mimeType for DualWrite path" }
+                writeExternal()
+                writeFileForSharedStorageOnly(
+                    filePath.toSharedStorageOnly(),
+                    content,
+                    effectiveMimeType
+                )
+            }
 
-        return writeFileBasedOnRootUri(
-            relativePaths = relativePaths, rootUri = rootUri, mimeType = mimeType, content = content
-        ).toUriStr()
+            is FilePathModel.SharedStorageOnly -> {
+                val effectiveMimeType =
+                    requireNotNull(mimeType) { "Must Set mimeType for SharedStorageOnly path" }
+                writeFileForSharedStorageOnly(filePath, content, effectiveMimeType)
+            }
+
+            is FilePathModel.ExternalOnly -> {
+                writeExternal()
+            }
+        }
     }
 
-    private suspend fun writeFileBasedOnRootUri(
-        relativePaths: List<String>,
-        rootUri: Uri,
-        mimeType: String,
+    /** Run in IO in necessary parts.
+     * @throws Exception
+     */
+    private suspend fun writeFileForSharedStorageOnly(
+        filePath: FilePathModel.SharedStorageOnly,
         content: ByteArray,
-    ): Uri {
+        mimeType: String,
+    ): UriStr {
+        val rootUri = when (val root = filePath.root) {
+            is SharedStorageRootSource.Direct -> root.uriStr.toUriOrThrow()
+            is SharedStorageRootSource.LookupByUser -> getSharedStorageRootUriWithCache(root.userId)
+                ?: throw IllegalStateException("Storage root URI for current user ${root.userId} is null.")
+        }
+
         val fileUri = when (val result = UriStorageUtil.ensureSAFFileUri(
             context = context,
             rootTreeUri = rootUri,
-            relativePathSegments = relativePaths,
+            relativePathSegments = filePath.fullRelativePath,
             fileMimeType = mimeType,
         )) {
             is FindOrCreateFileUriResult.Success -> result.uri
-
             is FindOrCreateFileUriResult.NotFound -> throw IllegalStateException("Get NotFound while calling ensureUri")
             is FindOrCreateFileUriResult.Error -> throw result.cause
         }
-        return when (val result =
-            UriStorageUtil.writeData(context, tgtFileUri = fileUri, content = content)) {
-            is WriteDataResult.Error -> throw result.cause
-            is WriteDataResult.Success -> fileUri
+        when (val r = UriStorageUtil.writeData(context, tgtFileUri = fileUri, content = content)) {
+            is WriteDataResult.Error -> throw r.cause
+            is WriteDataResult.Success -> Unit
         }
+        return fileUri.toUriStr()
     }
+
 
     override suspend fun saveMessageMedia(
         userId: UserId,

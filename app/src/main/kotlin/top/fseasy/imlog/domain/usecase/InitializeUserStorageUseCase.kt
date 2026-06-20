@@ -25,8 +25,6 @@ class InitializeUserStorageUseCase @Inject constructor(
     private val storagePathUseCase: StoragePathUseCase,
     private val storageRepository: StorageRepository,
 ) {
-    private val appStaticName = resourceProvider.getConstString(StringConstantId.AppStaticName)
-    private val defaultSharedStorageRootDirName = "${appStaticName}-storage"
 
     suspend operator fun invoke(
         userId: UserId,
@@ -50,8 +48,8 @@ class InitializeUserStorageUseCase @Inject constructor(
         userSelectedUriStr: UriStr,
     ) = runCatching {
         val dirName = storageRepository.getDisplayNameOrThrow(userSelectedUriStr)
-        if (shouldCreateSubDirOnUserSelectedDir(dirName)) {
-            val rootDirName = defaultSharedStorageRootDirName
+        if (storagePathUseCase.needsSubDirForActualSharedStorageRoot(dirName)) {
+            val rootDirName = storagePathUseCase.defaultSharedStorageRootDirName
             val determinedRootUriName = storageRepository.mkdirsForSharedStorageUri(
                 subDirs = listOf(rootDirName), rootUriStr = userSelectedUriStr,
             )
@@ -73,18 +71,14 @@ class InitializeUserStorageUseCase @Inject constructor(
             Created by app ${resourceProvider.getString(StringResId.AppName)}
             On $formattedDate
         """.trimIndent()
-        val markerFilename = "${appStaticName}.txt"
-
+        val markerPath = storagePathUseCase.buildSharedStorageRootMarkerFilePath(userId)
         storageRepository.writeFileBasedOnUserSharedStorageRoot(
             userId = userId,
-            relativePaths = listOf(storagePathUseCase.getUserRootDirName(userId), markerFilename),
+            relativePaths = markerPath.fullRelativePath,
             mimeType = "plain/text",
             content = content.toByteArray()
         )
-        markerFilename
+        markerPath.fullRelativePath.last()
     }
 
-    private fun shouldCreateSubDirOnUserSelectedDir(selectedDirName: String): Boolean {
-        return selectedDirName.contains(appStaticName, ignoreCase = true)
-    }
 }

@@ -1,4 +1,4 @@
-package top.fseasy.imlog.util;
+package top.fseasy.imlog.domain.util
 
 fun Int.secondsToMinutesSeconds(): String = toLong().secondsToMinutesSeconds()
 

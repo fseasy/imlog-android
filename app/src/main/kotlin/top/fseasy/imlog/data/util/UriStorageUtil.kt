@@ -1,4 +1,4 @@
-package top.fseasy.imlog.util
+package top.fseasy.imlog.data.util
 
 import android.content.Context
 import android.database.Cursor
