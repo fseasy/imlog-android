@@ -15,17 +15,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import top.fseasy.imlog.features.signinup.SignInUpRoute
-import top.fseasy.imlog.features.signinup.SignInUpUiState
+import top.fseasy.imlog.features.signinup.SignInUpHostUiState
 
 @Composable
 fun SignInUpLoadingScreen(
-    uiState: SignInUpUiState,
+    uiState: SignInUpHostUiState,
     onNavigate: (SignInUpRoute) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(uiState) {
         when {
-            uiState.isLoading || uiState.error != null -> {}
+            uiState.isLoading || uiState.loadingErrorMessage != null -> {}
             uiState.users.isEmpty() -> onNavigate(SignInUpRoute.CreateUser)
             else -> onNavigate(SignInUpRoute.SelectUser)
         }
@@ -33,7 +33,7 @@ fun SignInUpLoadingScreen(
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
             uiState.isLoading -> CircularProgressIndicator()
-            uiState.error != null -> {
+            uiState.loadingErrorMessage != null -> {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -43,7 +43,7 @@ fun SignInUpLoadingScreen(
                         style = MaterialTheme.typography.headlineSmall
                     )
                     Text(
-                        text = uiState.error,
+                        text = uiState.loadingErrorMessage,
                         color = MaterialTheme.colorScheme.error,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 32.dp)

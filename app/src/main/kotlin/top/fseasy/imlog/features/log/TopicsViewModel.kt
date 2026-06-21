@@ -46,7 +46,7 @@ class TopicsViewModel @Inject constructor(
                 flowOf(TopicsUiState())
             } else {
                 combine(
-                    topicRepository.observeLogScreenTopics(uId),
+                    topicRepository.observeHomeTopics(uId),
                     _showCreateDialog,
                     _selectedTopicId
                 ) { topics, showDialog, selectedId ->

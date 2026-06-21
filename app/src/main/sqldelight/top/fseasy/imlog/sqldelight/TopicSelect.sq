@@ -26,7 +26,6 @@ SELECT
     t.description,
     -- 个性化状态（可能为 NULL）
     COALESCE(tps.pinned, 0) AS pinned,
-    tps.background,
     tps.last_read_at,
     tlm.last_message_at,
     tlm.last_message_snippet,
@@ -44,9 +43,7 @@ LEFT JOIN topic_personal_state tps ON t.id = tps.topic_id AND tps.user_id = :cur
 LEFT JOIN topic_last_message tlm ON t.id = tlm.topic_id  -- LEFT JOIN 以应对没有消息的新主题
 WHERE
     tm.user_id = :current_user_id
-    AND t.is_deleted = 0
-    AND tm.is_deleted = 0
-    -- 默认过滤掉归档的 Topic
+    -- 过滤掉归档的 Topic
     AND COALESCE(tps.archived, 0) = 0
 ORDER BY
     -- 1. pin 2. topic last message at + new topic 3. has unread msg

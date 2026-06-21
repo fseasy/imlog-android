@@ -41,4 +41,8 @@
     <string name="select_storage_btn_content_success">Set Done</string>
     <string name="select_storage_all_set">All Set</string>
     <string name="topic_initial_name">The Moment</string>
+    <string name="topic_initial_description">Time is the luggage I carry, through every laugh and tear.\n- Lyrics by Justin Chen</string>
+    <string name="welcome_headline">Living with @string/app_name</string>
+    <string name="welcome_body">Record the moment, Connect the dots, Shape the future</string>
+    <string name="btn_start">Start</string>
 </resources>

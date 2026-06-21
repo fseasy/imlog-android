@@ -12,10 +12,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.AppInitData
-import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.UserRepository
 import javax.inject.Inject
 
@@ -52,15 +50,6 @@ class AppInitViewModel @Inject constructor(
             started = SharingStarted.Eagerly, // It will keep running while app running
             initialValue = AppInitUiState()
         )
-
-    private var hasInitializedFirstTopicCreation = false
-    suspend fun createFirstTopic(userId: UserId) {
-        if (hasInitializedFirstTopicCreation) return
-        hasInitializedFirstTopicCreation = true
-        viewModelScope.launch {
-
-        }
-    }
 
     private fun determineInitStep(initData: AppInitData?): AppInitStep = when {
         initData == null -> AppInitStep.SignInUp

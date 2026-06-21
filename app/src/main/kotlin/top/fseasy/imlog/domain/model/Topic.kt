@@ -30,7 +30,6 @@ data class Topic(
     val creatorId: UserId?, // Can be null if creator is deleted
     val createdAt: Long,
     val attributesUpdatedAt: Long,
-    val isDeleted: Boolean = false,
 )
 
 /**
@@ -45,15 +44,14 @@ data class HomeTopic(
     val hasUnread: Boolean,
     val messageUpdatedAt: Long,
     val lastMessageSnippet: String?,
-    val background: String? = null,
 )
 
-enum class TopicRole(val value: String) {
-    ADMIN("admin"), LOGGER("logger"), WATCHER("watcher");
+enum class TopicMemberRole(val value: String) {
+    Admin("admin"), Logger("logger"), Watcher("watcher");
 
     companion object {
         private val valueMap = entries.associateBy { it.value }
-        fun fromValue(value: String): TopicRole? = valueMap[value]
+        fun fromValue(value: String): TopicMemberRole? = valueMap[value]
     }
 }
 

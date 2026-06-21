@@ -26,6 +26,7 @@ class ResourceProviderImpl @Inject constructor(
             when (id) {
                 StringResId.AppName -> R.string.app_name
                 StringResId.TopicInitialName -> R.string.topic_initial_name
+                StringResId.TopicInitialDescription -> R.string.topic_initial_description
             }
         )
     }

@@ -1,4 +1,4 @@
--- 删除那些在成员表里已经没有任何人关联的 topics
+-- 删除那些在成员表里已经没有任何人关联的 topics: 如果 topic 里的所有 User 都退出了，就直接删掉 Topic
 CREATE TRIGGER IF NOT EXISTS delete_orphaned_topics
 AFTER DELETE ON topic_members
 BEGIN

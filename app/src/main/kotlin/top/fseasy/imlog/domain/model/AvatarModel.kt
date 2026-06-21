@@ -20,13 +20,19 @@ sealed interface AvatarModel {
     data class TopicPreset(val value: TopicPresetAvatar) : AvatarModel
 }
 
-fun AvatarModel.toJsonString(): String = defaultJson.encodeToString(this)
+/**
+ * Don't name to `toString` as it'll be  shadowed by member: Any.toString!
+ */
+fun AvatarModel.serialize(): String = defaultJson.encodeToString(this)
 fun String.toAvatarModelOrNull(): AvatarModel? = runCatching {
     defaultJson.decodeFromString<AvatarModel>(this)
 }.getOrElse { e ->
     Timber.w(e, "Deserialization AvatarModel failed, s=[$this]")
     null // Provide null is a more concise way compared to pass a default value
 }
+
+fun defaultTopicPresetAvatar() = AvatarModel.TopicPreset(TopicPresetAvatar.first())
+fun defaultUserPresetAvatar() = AvatarModel.UserPreset(UserPresetAvatar.first())
 
 enum class UserPresetAvatar {
     Rabbit,

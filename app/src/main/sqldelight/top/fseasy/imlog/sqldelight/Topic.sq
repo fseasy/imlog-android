@@ -1,3 +1,7 @@
+-- TODO
+-- 在考虑数据同步的时候，数据库可能要重新设计，特别的，可能要把 delete 变成 soft-delete!
+-- 当前阶段先不弄了（之前写了，但是后面忘了，就把 soft-delete 给去掉了。下次做操作前记得备注！）
+
 -- share across all members
 -- Topic 的删除逻辑：
 -- - creator 才可以删除这个 topic；
@@ -14,23 +18,24 @@ CREATE TABLE topics (
     -- 只有群成员全部注销后才能删除这个 Topic；对应到 Trigger 里基于 topic_members 的删除
     creator_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     created_at INTEGER NOT NULL,
-    attributes_updated_at INTEGER NOT NULL,
-    is_deleted INTEGER NOT NULL DEFAULT 0 -- soft delete
+    attributes_updated_at INTEGER NOT NULL
 );
 -- share across all members
 CREATE TABLE topic_members (
+    -- 删除了 topic, 关联的记录全部删掉！
     topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    -- 删除了 user_id, 关联的 member 也要删
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     user_nickname TEXT,
     role TEXT NOT NULL,
     joined_at INTEGER NOT NULL,
     attributes_updated_at INTEGER NOT NULL,
-    is_deleted INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (topic_id, user_id)
 );
 -- share across all members
 -- 专门追踪每个 Topic 的最新消息时间
 CREATE TABLE topic_last_message (
+    -- 删除了 topic, 关联的记录全部删掉！
     topic_id TEXT PRIMARY KEY REFERENCES topics(id) ON DELETE CASCADE,
     last_message_at INTEGER NOT NULL,
     last_message_snippet TEXT NOT NULL
@@ -38,6 +43,7 @@ CREATE TABLE topic_last_message (
 
 -- only for current user
 CREATE TABLE topic_personal_state (
+    -- 删除了 user / topic, 关联的个性化设置全部删掉！
     topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     archived INTEGER NOT NULL DEFAULT 0,
@@ -60,3 +66,16 @@ VALUES :topicMemberEntity;
 insertPersonalState:
 INSERT INTO topic_personal_state
 VALUES :personalStateEntity;
+
+
+-- it will trigger all the referenced records
+deleteTopic:
+DELETE FROM topics
+WHERE id = :topicId
+  AND EXISTS (
+      SELECT 1
+      FROM topic_members
+      WHERE topic_id = topics.id
+        AND user_id = :triggerUserId
+        AND role = :adminRoleValue
+  );

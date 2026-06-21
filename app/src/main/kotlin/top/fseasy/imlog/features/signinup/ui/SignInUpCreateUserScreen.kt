@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -11,35 +12,40 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.R
-import top.fseasy.imlog.features.signinup.CreateUserState
+import top.fseasy.imlog.features.signinup.SignInUpCreateUserUiState
+import top.fseasy.imlog.features.signinup.SignInUpCreateUserViewModel
 import top.fseasy.imlog.ui.components.AnimatedTextLineConfig
 import top.fseasy.imlog.ui.components.HighlightConfig
 import top.fseasy.imlog.ui.components.InternalErrorInfoText
 import top.fseasy.imlog.ui.components.StackedAnimatedText
 import top.fseasy.imlog.ui.components.StackedAnimationTiming
+import top.fseasy.imlog.ui.model.TaskExecuteState
 
 @Composable
 fun SignInUpCreateUserScreen(
-    uiState: CreateUserState?,
-    onCreateUser: () -> Unit,
     modifier: Modifier = Modifier,
+    viewModel: SignInUpCreateUserViewModel = hiltViewModel(),
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
     LaunchedEffect(Unit) {
-        onCreateUser()
+        viewModel.createUser()
     }
 
-    OnboardingIntroContent(uiState, modifier = modifier)
+    SignInIntroContent(uiState, modifier = modifier)
 }
 
 @Composable
-fun OnboardingIntroContent(uiState: CreateUserState?, modifier: Modifier = Modifier) {
+private fun SignInIntroContent(uiState: SignInUpCreateUserUiState, modifier: Modifier = Modifier) {
     val text1 = stringResource(R.string.signinup_signin_intro_line1)
     val text2 = stringResource(R.string.signinup_signin_intro_line2)
 
-    when (uiState) {
-        is CreateUserState.Failure -> {
-            InternalErrorInfoText(uiState.message)
+    when (val createState = uiState.createUserState) {
+        is TaskExecuteState.Failure -> {
+            InternalErrorInfoText(createState.reason)
         }
 
         else -> {
@@ -69,11 +75,10 @@ fun OnboardingIntroContent(uiState: CreateUserState?, modifier: Modifier = Modif
             )
         }
     }
-
 }
 
 @Preview
 @Composable
-fun PreviewOnboardingIntroContent() {
-    OnboardingIntroContent(null)
+fun PreviewSignInIntroContent() {
+    SignInIntroContent(SignInUpCreateUserUiState())
 }

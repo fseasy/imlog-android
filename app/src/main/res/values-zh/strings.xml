@@ -40,4 +40,8 @@
     <string name="select_storage_btn_content_success">完成设置</string>
     <string name="select_storage_all_set">设置完成</string>
     <string name="topic_initial_name">这一刻</string>
+    <string name="topic_initial_description">「时间变成行李，越过生命悲喜，陪伴着我前进」\n—— 林忠义</string>
+    <string name="welcome_headline">让 @string/app_name 伴你左右</string>
+    <string name="welcome_body">记录此刻，串联过往，指引未来</string>
+    <string name="btn_start">开始</string>
 </resources>

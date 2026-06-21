@@ -19,11 +19,13 @@ import top.fseasy.imlog.domain.model.User
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.UserPreference
 import top.fseasy.imlog.domain.model.toAvatarModelOrDefault
-import top.fseasy.imlog.domain.model.toJsonString
+import top.fseasy.imlog.domain.model.serialize
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
+import top.fseasy.imlog.domain.model.defaultUserPresetAvatar
+import top.fseasy.imlog.domain.model.toAvatarModelOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.App_init_data as AppInitDataEntity
@@ -69,6 +71,13 @@ class UserRepositoryImpl @Inject constructor(
             .distinctUntilChanged()
     }
 
+    /**
+     * SYNC fun. expected to be used in withContext(IO)
+     */
+    override fun syncUpdateAppInitFirstTopicCreated(userId: UserId): Boolean {
+        val affectedLine = database.appInitDataQueries.markFirstTopicCreated(userId.value).value
+        return affectedLine > 0L
+    }
 
     /**
      * @throws android.database.sqlite.SQLiteException
@@ -79,10 +88,7 @@ class UserRepositoryImpl @Inject constructor(
             .map { it.toDomain() }
     }
 
-    /**
-     * @throws Exception when create user failed. parent should process it based on the business logic.
-     */
-    override suspend fun createAndSetCurrentUserOrThrow(
+    override suspend fun createAndSetCurrentUser(
         username: String,
         avatarModel: AvatarModel,
     ): UserId = withContext(dispatcher) {
@@ -108,12 +114,12 @@ class UserRepositoryImpl @Inject constructor(
                 .executeAsOneOrNull()
                 ?.toDomain()
         }
-
+    // === END of User Preference
 
     private fun UserEntity.toDomain() = User(
         id = UserId(id),
         username = username,
-        avatarModel = avatar_model.toAvatarModelOrDefault(),
+        avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultUserPresetAvatar(),
         lastSignInAt = last_signin_at,
         createdAt = created_at,
         attributesUpdatedAt = attributes_updated_at,
@@ -144,7 +150,7 @@ class UserRepositoryImpl @Inject constructor(
             UserEntity(
                 id = userId.value,
                 username = username,
-                avatar_model = avatarModel.toJsonString(),
+                avatar_model = avatarModel.serialize(),
                 last_signin_at = now,
                 created_at = now,
                 attributes_updated_at = now

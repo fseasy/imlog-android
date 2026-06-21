@@ -1,9 +1,12 @@
 
 CREATE TABLE messages (
     id TEXT NOT NULL PRIMARY KEY,
+    -- 如果删除了 Topic，所有的内部 messages 全部要删掉！
     topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
-    -- 这里不关联 UserId, 而不是 reference + set null;
-    -- why: 1. 减少 reference 开销 2. 还能显示出 id，有一定区分性
+    -- 这里不关联 UserId, 也不是 reference + set null;
+    -- why: user 删除不代表数据就要抹掉！！
+    --     在此基础设定上，不设置 reference + set null 的原因：
+    --     1. 减少 reference 开销 2. 保留 id 值，还能显示出 id，有一定区分性
     sender_id TEXT NOT NULL,
     type TEXT NOT NULL,
     content TEXT,

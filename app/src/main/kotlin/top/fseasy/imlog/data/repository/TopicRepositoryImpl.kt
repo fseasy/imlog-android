@@ -13,19 +13,26 @@ import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicPersonalState
-import top.fseasy.imlog.domain.model.TopicRole
+import top.fseasy.imlog.domain.model.TopicMemberRole
 import top.fseasy.imlog.domain.model.TopicWithPersonalState
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
 import top.fseasy.imlog.domain.model.AvatarModel
+import top.fseasy.imlog.domain.model.defaultTopicPresetAvatar
+import top.fseasy.imlog.domain.model.serialize
+import top.fseasy.imlog.domain.model.toAvatarModelOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.Duration
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
 import kotlin.uuid.ExperimentalUuidApi
-import top.fseasy.imlog.sqldelight.GetCurrentUserHomeScreenTopics as UserLogScreenTopicEntity
+import top.fseasy.imlog.sqldelight.GetCurrentUserHomeScreenTopics as HomeTopicEntity
 import top.fseasy.imlog.sqldelight.GetTopicWithPersonalState as GetTopicWithPersonalStateEntity
 import top.fseasy.imlog.sqldelight.Topic_personal_state as PersonalStateEntity
+import top.fseasy.imlog.sqldelight.Topic_members as TopicMemberEntity
 import top.fseasy.imlog.sqldelight.Topics as TopicEntity
 
 @Singleton
@@ -75,7 +82,7 @@ class TopicRepositoryImpl @Inject constructor(
     /**
      * Used for Log Screen Topics lists (home screen)
      */
-    override fun observeLogScreenTopics(userId: UserId): Flow<List<HomeTopic>> {
+    override fun observeHomeTopics(userId: UserId): Flow<List<HomeTopic>> {
         return database.topicSelectQueries.getCurrentUserHomeScreenTopics(userId.value)
             .asFlow()
             .mapToList(dispatcher)
@@ -83,7 +90,7 @@ class TopicRepositoryImpl @Inject constructor(
     }
 
     /**
-     * @see top.fseasy.imlog.domain.usecase.CreateDefaultTopicUseCase
+     * @see top.fseasy.imlog.domain.usecase.WelcomeUseCase
      */
     override suspend fun countAllRelatedTopicsForUser(userId: UserId): Long =
         withContext(dispatcher) {
@@ -91,36 +98,69 @@ class TopicRepositoryImpl @Inject constructor(
                 .executeAsOne()
         }
 
-    @OptIn(ExperimentalUuidApi::class)
-    override suspend fun createTopic(
-        creatorId: UserId, name: String, avatarModel: AvatarModel,
-    ): HomeTopic = withContext(dispatcher) {
-        val now = System.currentTimeMillis()
-        val topicId = retrySQLiteOnKeyConflict {
-            TopicId.random()
-                .also { newId ->
-                    executeInsertTopicTransaction(
-                        topicId = newId,
-                        topicName = name,
-                        avatarModel = avatarModel,
-                        creatorId = creatorId,
-                        nowTimestamp = now,
-                    )
-                }
-        }
+    /**
+     * NOTE: it's SYNC. Not In IO thread, not in transaction.
+     *      It's expected to be used in withContext(IO) and transaction block!
+     * @throws Exception
+     */
+    override fun syncCreateNewTopic(
+        creatorId: UserId, name: String, avatarModel: AvatarModel, description: String?,
+        createdAtTimestampMs: Long,
+    ): TopicId {
+        val topicId = TopicId.random()
 
-        HomeTopic(
-            id = topicId,
-            name = name,
-            iconUri = iconUri,
-            isPinned = false,
-            hasUnread = false,
-            messageUpdatedAt = now,
-            lastMessageSnippet = null,
-            background = null
+        // needs to insert to 3 tables: 1. topic 2. personal state 3. topic-members
+        database.topicQueries.insertTopic(
+            TopicEntity(
+                id = topicId.value,
+                name = name,
+                avatar_model = avatarModel.serialize(),
+                description = description,
+                creator_id = creatorId.value,
+                created_at = createdAtTimestampMs,
+                attributes_updated_at = createdAtTimestampMs,
+            )
         )
+        database.topicQueries.insertPersonalState(
+            PersonalStateEntity(
+                topic_id = topicId.value,
+                user_id = creatorId.value,
+                archived = 0L,
+                pinned = 0L,
+                background = null,
+                last_read_at = createdAtTimestampMs, // set to now when init
+                attributes_updated_at = createdAtTimestampMs
+            )
+        )
+        database.topicQueries.insertMember(
+            TopicMemberEntity(
+                topic_id = topicId.value,
+                user_id = creatorId.value,
+                user_nickname = null, // use null so it can adapt to the latest name
+                role = TopicMemberRole.Admin.value,
+                joined_at = createdAtTimestampMs,
+                attributes_updated_at = createdAtTimestampMs
+            )
+        )
+        return topicId
     }
 
+    override suspend fun createNewTopic(
+        creatorId: UserId, name: String, avatarModel: AvatarModel, description: String?,
+        createdAtTimestampMs: Long,
+    ): TopicId = withContext(dispatcher) {
+        retrySQLiteOnKeyConflict {
+            database.transactionWithResult {
+                syncCreateNewTopic(
+                    creatorId = creatorId,
+                    name = name,
+                    avatarModel = avatarModel,
+                    description = description,
+                    createdAtTimestampMs = createdAtTimestampMs
+                )
+            }
+        }
+    }
 
     override suspend fun updateTopicName(
         userId: UserId,
@@ -129,19 +169,27 @@ class TopicRepositoryImpl @Inject constructor(
     ): Boolean = withContext(dispatcher) {
         val now = System.currentTimeMillis()
         val rowsAffected = database.topicUpdateQueries.updateTopicName(
-            newName = newName, updatedAt = now, topicId = topicId.value, userId = userId.value
+            newName = newName,
+            updatedAt = now,
+            topicId = topicId.value,
+            triggerUserId = userId.value,
+            adminRoleValue = TopicMemberRole.Admin.value
         ).value;
         rowsAffected > 0L;
     }
 
-    override suspend fun updateTopicIcon(
+    override suspend fun updateAvatarModel(
         userId: UserId,
         topicId: TopicId,
-        newIconUri: String,
+        newAvatarModel: AvatarModel,
     ): Boolean = withContext(dispatcher) {
         val now = System.currentTimeMillis()
-        val rowsAffected = database.topicUpdateQueries.updateTopicIconUri(
-            newIconUri = newIconUri, updatedAt = now, topicId = topicId.value, userId = userId.value
+        val rowsAffected = database.topicUpdateQueries.updateTopicAvatarModel(
+            newAvatarModel = newAvatarModel.serialize(),
+            updatedAt = now,
+            topicId = topicId.value,
+            triggerUserId = userId.value,
+            adminRoleValue = TopicMemberRole.Admin.value
         ).value;
         rowsAffected > 0L;
     }
@@ -156,7 +204,7 @@ class TopicRepositoryImpl @Inject constructor(
             newBackground = background,
             updatedAt = now,
             topicId = topicId.value,
-            userId = userId.value
+            triggerUserId = userId.value
         ).value;
         rowsAffected > 0L;
     }
@@ -168,7 +216,7 @@ class TopicRepositoryImpl @Inject constructor(
                 newPinned = if (pinned) 1L else 0L,
                 updatedAt = now,
                 topicId = topicId.value,
-                userId = userId.value
+                triggerUserId = userId.value
             ).value;
             rowsAffected > 0L;
         }
@@ -183,65 +231,29 @@ class TopicRepositoryImpl @Inject constructor(
             newArchived = if (archived) 1L else 0L,
             updatedAt = now,
             topicId = topicId.value,
-            userId = userId.value
+            triggerUserId = userId.value
         ).value;
         rowsAffected > 0L;
     }
 
     override suspend fun deleteTopic(userId: UserId, topicId: TopicId): Boolean =
         withContext(dispatcher) {
-            val now = System.currentTimeMillis()
-            val rowsAffected = database.topicUpdateQueries.softDeleteTopic(
-                updatedAt = now, topicId = topicId.value, userId = userId.value
+            val rowsAffected = database.topicQueries.deleteTopic(
+                topicId = topicId.value,
+                triggerUserId = userId.value,
+                adminRoleValue = TopicMemberRole.Admin.value
             ).value;
             rowsAffected > 0L;
         }
 
-    private fun executeInsertTopicTransaction(
-        topicId: TopicId,
-        topicName: String,
-        iconUri: String?,
-        creatorId: UserId,
-        nowTimestamp: Long,
-    ) {
-        database.transaction {
-            // needs to insert to 3 tables: 1. topic 2. personal state 3. topic-members
-            database.topicQueries.insertTopic(
-                id = topicId.value,
-                name = topicName,
-                icon_uri = iconUri,
-                creator_id = creatorId.value,
-                created_at = nowTimestamp,
-                attributes_updated_at = nowTimestamp
-            )
-            database.topicQueries.insertPersonalState(
-                topic_id = topicId.value,
-                user_id = creatorId.value,
-                archived = 0L,
-                pinned = 0L,
-                background = null,
-                last_read_at = nowTimestamp, // set to now when init
-                attributes_updated_at = nowTimestamp
-            )
-            database.topicQueries.insertMember(
-                topic_id = topicId.value,
-                user_id = creatorId.value,
-                user_nickname = null, // use null so it can adapt to the latest name
-                role = TopicRole.ADMIN.value,
-                joined_at = nowTimestamp,
-                attributes_updated_at = nowTimestamp
-            )
-        }
-    }
-
     private fun TopicEntity.toDomain() = Topic(
         id = TopicId(id),
         name = name,
-        iconUri = icon_uri,
+        avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
+        description = description,
         creatorId = creator_id?.let(::UserId),
         createdAt = created_at,
         attributesUpdatedAt = attributes_updated_at,
-        isDeleted = is_deleted == 1L,
     )
 
     private fun PersonalStateEntity.toDomain() = TopicPersonalState(
@@ -254,25 +266,25 @@ class TopicRepositoryImpl @Inject constructor(
         attributesUpdatedAt = attributes_updated_at
     )
 
-    private fun UserLogScreenTopicEntity.toDomain() = HomeTopic(
+    private fun HomeTopicEntity.toDomain() = HomeTopic(
         id = TopicId(id),
         name = name,
-        iconUri = avatar_model,
+        avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
+        description = description,
         isPinned = pinned == 1L,
         hasUnread = has_unread == 1L,
         messageUpdatedAt = topic_message_update_at,
         lastMessageSnippet = last_message_snippet,
-        background = background
     )
 
     private fun GetTopicWithPersonalStateEntity.toTopicEntity() = TopicEntity(
         id = id,
         name = name,
-        icon_uri = avatar_model,
+        avatar_model = avatar_model,
+        description = description,
         creator_id = creator_id,
         created_at = created_at,
         attributes_updated_at = attributes_updated_at,
-        is_deleted = is_deleted
     )
 
     private fun GetTopicWithPersonalStateEntity.toDomain() = TopicWithPersonalState(

@@ -8,7 +8,8 @@ enum class StringArrayResId {
 
 enum class StringResId {
     AppName,
-    TopicInitialName;
+    TopicInitialName,
+    TopicInitialDescription
 }
 
 enum class StringConstantId {

@@ -9,12 +9,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import top.fseasy.imlog.features.signinup.SignInUpRoute
-import top.fseasy.imlog.features.signinup.SignInUpViewModel
+import top.fseasy.imlog.features.signinup.SignInUpSharedViewModel
 
 @Composable
-fun SignInUpNavigation(
+fun SignInUpHost(
     navController: NavHostController = rememberNavController(),
-    viewModel: SignInUpViewModel = hiltViewModel(),
+    viewModel: SignInUpSharedViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     NavHost(
@@ -40,10 +40,7 @@ fun SignInUpNavigation(
                 })
         }
         composable<SignInUpRoute.CreateUser> {
-            SignInUpCreateUserScreen(
-                uiState.createUserState,
-                onCreateUser = { viewModel.createUser() },
-            )
+            SignInUpCreateUserScreen()
         }
     }
 }

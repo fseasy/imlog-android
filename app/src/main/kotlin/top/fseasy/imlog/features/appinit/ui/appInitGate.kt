@@ -7,7 +7,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.features.appinit.AppInitStep
 import top.fseasy.imlog.features.appinit.AppInitViewModel
 import top.fseasy.imlog.features.selectstorage.SharedStorageSelectScreen
-import top.fseasy.imlog.features.signinup.ui.SignInUpNavigation
+import top.fseasy.imlog.features.signinup.ui.SignInUpHost
 import top.fseasy.imlog.ui.components.InternalErrorInfoText
 
 @Composable
@@ -19,7 +19,7 @@ fun appInitGate(appInitViewModel: AppInitViewModel = hiltViewModel()) {
     } else {
         when (val step = uiState.initStep) {
             AppInitStep.Loading -> Splash()
-            AppInitStep.SignInUp -> SignInUpNavigation()
+            AppInitStep.SignInUp -> SignInUpHost()
             is AppInitStep.SelectMediaStorageUri -> SharedStorageSelectScreen(
                 currentUserId = step.userId,
             )
