@@ -37,12 +37,12 @@ class WelcomeViewModel @Inject constructor(
      * */
     private var hasInitializedFirstTopicCreation = false
 
-    suspend fun createFirstTopic(userId: UserId) {
+    fun createFirstTopic(userId: UserId) {
         if (hasInitializedFirstTopicCreation) return
         hasInitializedFirstTopicCreation = true
         viewModelScope.launch {
             _uiState.update { it.copy(topicCreateState = TaskExecuteState.Executing) }
-            when (val r = welcomeUseCase.createDefaultTopic(userId)) {
+            when (val r = welcomeUseCase.createFirstTopicWithDefaultValueAndMarkInit(userId)) {
                 is CreateFirstTopicResult.SkipCreate,
                 is CreateFirstTopicResult.Success,
                     -> _uiState.update { it.copy(topicCreateState = TaskExecuteState.Success) }
@@ -58,11 +58,21 @@ class WelcomeViewModel @Inject constructor(
         }
     }
 
-    suspend fun markWelcomeDone(userId: UserId) {
+    fun markWelcomeShown(userId: UserId) {
         viewModelScope.launch {
-            _uiState.update {
-
-            }
+            _uiState.update { it.copy(markWelcomeState = TaskExecuteState.Executing) }
+            welcomeUseCase.markWelcomeShown(userId)
+                .fold(
+                    onSuccess = { _uiState.update { it.copy(markWelcomeState = TaskExecuteState.Success) } },
+                    onFailure = { e ->
+                        _uiState.update {
+                            it.copy(
+                                markWelcomeState = TaskExecuteState.Failure(
+                                    e.message ?: context.getString(R.string.error_unknown)
+                                )
+                            )
+                        }
+                    })
         }
     }
 }

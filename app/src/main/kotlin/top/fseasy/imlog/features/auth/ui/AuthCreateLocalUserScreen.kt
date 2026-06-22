@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.signinup.ui
+package top.fseasy.imlog.features.auth.ui
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
@@ -15,8 +15,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.R
-import top.fseasy.imlog.features.signinup.SignInUpCreateUserUiState
-import top.fseasy.imlog.features.signinup.SignInUpCreateUserViewModel
+import top.fseasy.imlog.features.auth.SignInUpCreateUserUiState
+import top.fseasy.imlog.features.auth.SignInUpCreateUserViewModel
 import top.fseasy.imlog.ui.components.AnimatedTextLineConfig
 import top.fseasy.imlog.ui.components.HighlightConfig
 import top.fseasy.imlog.ui.components.InternalErrorInfoText

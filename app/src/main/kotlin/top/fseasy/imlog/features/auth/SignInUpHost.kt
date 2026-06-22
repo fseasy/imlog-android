@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.signinup.ui
+package top.fseasy.imlog.features.auth
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -8,8 +8,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import top.fseasy.imlog.features.signinup.SignInUpRoute
-import top.fseasy.imlog.features.signinup.SignInUpSharedViewModel
+import top.fseasy.imlog.features.auth.ui.SignInUpCreateUserScreen
+import top.fseasy.imlog.features.auth.ui.SignInUpLoadingScreen
+import top.fseasy.imlog.features.auth.ui.AuthSelectLocalUserScreen
 
 @Composable
 fun SignInUpHost(
@@ -30,7 +31,7 @@ fun SignInUpHost(
                 })
         }
         composable<SignInUpRoute.SelectUser> {
-            SignInUpSelectUserScreen(
+            AuthSelectLocalUserScreen(
                 uiState.users,
                 onSelectUserClick = { u -> viewModel.selectUser(u) },
                 onNavigateToCreateUser = {

@@ -7,11 +7,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.features.appinit.AppInitStep
 import top.fseasy.imlog.features.appinit.AppInitViewModel
 import top.fseasy.imlog.features.selectstorage.SharedStorageSelectScreen
-import top.fseasy.imlog.features.signinup.ui.SignInUpHost
+import top.fseasy.imlog.features.auth.SignInUpHost
 import top.fseasy.imlog.ui.components.InternalErrorInfoText
 
 @Composable
-fun appInitGate(appInitViewModel: AppInitViewModel = hiltViewModel()) {
+fun appInitHost(appInitViewModel: AppInitViewModel = hiltViewModel()) {
     val uiState by appInitViewModel.uiState.collectAsStateWithLifecycle()
 
     if (uiState.error != null) {
@@ -26,12 +26,10 @@ fun appInitGate(appInitViewModel: AppInitViewModel = hiltViewModel()) {
 
             is AppInitStep.Welcome -> {
                 val needCreateTopic = step.needCreateFirstTopic
-                if (needCreateTopic) {
-                    appInitViewModel.createFirstTopic(step.userId)
-                }
-                WelcomeScreen(isCreatingFirstTopic = needCreateTopic)
+                WelcomeScreen(
+                    userId = step.userId, needCreateFirstTopic = step.needCreateFirstTopic
+                )
             }
-
             AppInitStep.Finished -> TODO()
         }
     }

@@ -1,9 +1,11 @@
 package top.fseasy.imlog.data.util
 
 import android.database.sqlite.SQLiteConstraintException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
+
 
 suspend fun <T> retry(
     maxAttempts: Int,
@@ -13,39 +15,50 @@ suspend fun <T> retry(
     block: suspend () -> T,
 ): T {
     val totalAttempts = maxAttempts.coerceAtLeast(1)
+    val actualDelayMs = delayMs.coerceAtLeast(1).milliseconds
 
-    repeat(totalAttempts - 1) { index ->
-        val attempt = index + 1
+    var attempt = 1
+    while (true) {
         try {
             return block()
         } catch (e: Throwable) {
-            if (shouldRetry(e)) {
+            // 1. Must throw CancellationException to ensure coroutine cancellation
+            if (e is CancellationException) {
+                throw e
+            }
+            // 2. check exception to see if it can retry.
+            if (!shouldRetry(e)) {
                 Timber.w(
                     e,
-                    "%s attempt %d/%d failed, retrying in %d ms...",
+                    "%s attempt %d/%d reach non-retriable condition. Throw",
                     blockLogName,
                     attempt,
                     totalAttempts,
-                    delayMs
                 )
-                if (delayMs > 0) {
-                    delay(delayMs.milliseconds)
-                }
-            } else {
                 throw e
             }
-        }
-    }
-
-    try {
-        return block()
-    } catch (e: Throwable) {
-        if (shouldRetry(e)) {
+            // 3. if reach max attempts
+            if (attempt >= totalAttempts) {
+                Timber.w(
+                    e,
+                    "%s failed all (%d) attempts, raising last exception",
+                    blockLogName,
+                    totalAttempts
+                )
+                throw e
+            }
+            // retry continue, log here and increase counter
             Timber.w(
-                e, "%s failed all (%d) attempts, raising exception", blockLogName, totalAttempts
+                e,
+                "%s attempt %d/%d failed, retrying in %d ms...",
+                blockLogName,
+                attempt,
+                totalAttempts,
+                delayMs
             )
+            attempt++
+            delay(actualDelayMs)
         }
-        throw e
     }
 }
 

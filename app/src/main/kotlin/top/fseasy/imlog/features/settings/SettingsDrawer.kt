@@ -34,7 +34,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import top.fseasy.imlog.ui.MainViewModel
+import top.fseasy.imlog.features.appinit.MainViewModel
 import top.fseasy.imlog.R
 
 @Composable

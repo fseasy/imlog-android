@@ -298,3 +298,37 @@ onboarding 进入条件：init state 不是 FINISHED
 UI：
 - 显示已创建用户、已创建 topic
 - 显示欢迎使用
+
+## 从 app 到 init、main 的流
+
+usecase1 启动
+
+[MainActivity]
+       │
+       ▼ (渲染)
+ [RootNavHost] ──(默认启动)──► [AppInitHost] (开始执行初始化逻辑)
+                                     │
+                                     ▼ (检测到 AppInitStep.Finished)
+ [RootNavHost] ◄──(触发回调)─── onInitFinished()
+       │
+       ├─► 1. 执行 navigate(RootScreen.Main.route)
+       ├─► 2. 执行 popUpTo(RootScreen.Init.route) { inclusive = true } (销毁初始化界面及 VM)
+       │
+       ▼ (渲染)
+ [MainNavHost] (进入主界面，展示底栏和侧边栏)
+
+usecase2：登出
+
+[SettingsDrawer] ──(点击退出)──► [MainViewModel.logout()]
+                                         │
+                                         ▼ (开始清理：删除 Token/数据库等)
+                                 [数据清理完毕]
+                                         │
+                                         ▼ (状态变更：isLoggedOut = true)
+ [RootNavHost] ◄──(触发回调)─── onLoggedOut()
+       │
+       ├─► 1. 执行 navigate(RootScreen.Init.route)
+       └─► 2. 执行 popUpTo(0) { inclusive = true } (清空整个主界面及 VM，防止内存泄露)
+       │
+       ▼ (重新渲染)
+ [AppInitHost] (创建全新的初始化 VM，由于检测到无登录状态，自动展示登录界面)

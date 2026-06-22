@@ -8,8 +8,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineDispatcher
 import top.fseasy.imlog.data.database.createSqlDelightDb
-import top.fseasy.imlog.data.datastore.SqlDelightTransactionRunner
-import top.fseasy.imlog.domain.repository.DbTransactionRunner
+import top.fseasy.imlog.data.datastore.SqlDelightRunner
+import top.fseasy.imlog.domain.repository.DbRunner
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import javax.inject.Singleton
 
@@ -28,7 +28,7 @@ object DatabaseModule {
     fun provideTransactionRunner(
         database: SqlDelightDb,
         dispatcher: CoroutineDispatcher,
-    ): DbTransactionRunner {
-        return SqlDelightTransactionRunner(database, dispatcher)
+    ): DbRunner {
+        return SqlDelightRunner(database, dispatcher)
     }
 }

@@ -1,6 +1,5 @@
-package top.fseasy.imlog.ui
+package top.fseasy.imlog.features.appinit
 
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import top.fseasy.imlog.domain.repository.UserRepository

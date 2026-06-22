@@ -18,7 +18,6 @@ import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.User
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.UserPreference
-import top.fseasy.imlog.domain.model.toAvatarModelOrDefault
 import top.fseasy.imlog.domain.model.serialize
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
@@ -74,8 +73,16 @@ class UserRepositoryImpl @Inject constructor(
     /**
      * SYNC fun. expected to be used in withContext(IO)
      */
-    override fun syncUpdateAppInitFirstTopicCreated(userId: UserId): Boolean {
+    override fun syncMarkAppInitFirstTopicCreated(userId: UserId): Boolean {
         val affectedLine = database.appInitDataQueries.markFirstTopicCreated(userId.value).value
+        return affectedLine > 0L
+    }
+
+    /**
+     * SYNC fun. expected to be used in withContext(IO)
+     */
+    override fun syncMarkAppInitWelcomeShown(userId: UserId): Boolean {
+        val affectedLine = database.appInitDataQueries.markWelcomeShown(userId.value).value
         return affectedLine > 0L
     }
 

@@ -1,10 +1,12 @@
 package top.fseasy.imlog.domain.model;
 
 import androidx.compose.runtime.Immutable
+import kotlinx.serialization.Serializable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 @JvmInline
+@Serializable
 value class TopicId(val value: String) {
     init {
         require(value.startsWith(PREFIX)) { "Invalid TopicId prefix" }

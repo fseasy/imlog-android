@@ -17,7 +17,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.repository.StringResId
 import top.fseasy.imlog.ui.model.TaskExecuteState
 import top.fseasy.imlog.features.appinit.WelcomeUiState
 import top.fseasy.imlog.features.appinit.WelcomeViewModel
@@ -31,20 +30,20 @@ import top.fseasy.imlog.ui.components.InternalErrorInfoText
 @Composable
 fun WelcomeScreen(
     userId: UserId,
-    shouldCreatingFirstTopic: Boolean,
+    needCreateFirstTopic: Boolean,
     viewModel: WelcomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
-        if (shouldCreatingFirstTopic) viewModel.createFirstTopic(userId)
+        if (needCreateFirstTopic) viewModel.createFirstTopic(userId)
     }
 
     WelcomeContent(
         userId = userId,
-        isCreatingFirstTopic = shouldCreatingFirstTopic,
+        isCreatingFirstTopic = needCreateFirstTopic,
         uiState = uiState,
-        onEnterClick = { viewModel.markWelcomeDone(userId) })
+        onEnterClick = { viewModel.markWelcomeShown(userId) })
 }
 
 @Composable

@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.signinup
+package top.fseasy.imlog.features.auth
 
 import android.content.Context
 import androidx.compose.runtime.Immutable
@@ -18,15 +18,6 @@ import top.fseasy.imlog.ui.model.UserAvatarUiModel
 import top.fseasy.imlog.ui.model.toUserAvatarUIModel
 import javax.inject.Inject
 
-data class LocalUser(val id: UserId, val name: String, val avatar: UserAvatarUiModel)
-
-
-@Immutable
-data class SignInUpHostUiState(
-    val isLoading: Boolean = true,
-    val users: List<LocalUser> = emptyList(),
-    val loadingErrorMessage: String? = null,
-)
 
 @HiltViewModel
 class SignInUpSharedViewModel @Inject constructor(

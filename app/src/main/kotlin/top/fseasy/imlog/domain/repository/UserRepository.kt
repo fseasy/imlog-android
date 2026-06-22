@@ -21,6 +21,15 @@ interface UserRepository {
 
     //---- AppInitData Group
     fun observeUserAppInitDataOrNull(userId: UserId): Flow<AppInitData?>
-    fun syncUpdateAppInitFirstTopicCreated(userId: UserId): Boolean
+
+    /**
+     * Needs to run in withContext(IO)
+     * */
+    fun syncMarkAppInitFirstTopicCreated(userId: UserId): Boolean
+
+    /**
+     * Needs to run in withContext(IO)
+     * */
+    fun syncMarkAppInitWelcomeShown(userId: UserId): Boolean
     //---- ENd of AppInitData Group
 }

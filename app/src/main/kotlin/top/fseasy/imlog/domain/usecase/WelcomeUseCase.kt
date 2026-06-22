@@ -1,5 +1,6 @@
 package top.fseasy.imlog.domain.usecase
 
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.ResourceProvider
@@ -8,7 +9,7 @@ import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.RetryModel
 import top.fseasy.imlog.domain.model.TopicPresetAvatar
-import top.fseasy.imlog.domain.repository.DbTransactionRunner
+import top.fseasy.imlog.domain.repository.DbRunner
 import top.fseasy.imlog.domain.repository.UserRepository
 import javax.inject.Inject
 
@@ -22,8 +23,11 @@ class WelcomeUseCase @Inject constructor(
     private val resourceProvider: ResourceProvider,
     private val topicRepository: TopicRepository,
     private val userRepository: UserRepository,
-    private val transactionRunner: DbTransactionRunner,
+    private val dbRunner: DbRunner,
 ) {
+    /**
+     * No exception will be thrown, all will be covered by the CreateFirstTopicResult
+     */
     suspend fun createFirstTopicWithDefaultValueAndMarkInit(
         userId: UserId,
     ): CreateFirstTopicResult {
@@ -35,11 +39,14 @@ class WelcomeUseCase @Inject constructor(
         val avatar = AvatarModel.TopicPreset(TopicPresetAvatar.random())
         return runCatching {
             // 1. create new topic 2. mark first topic created
-            transactionRunner.runInTransaction(retry = RetryModel.OnAnyException) {
+            dbRunner.runInTransaction(retry = RetryModel.OnAnyException) {
                 topicRepository.syncCreateNewTopic(
                     creatorId = userId, name = name, avatarModel = avatar, description = description
                 )
-                userRepository.syncUpdateAppInitFirstTopicCreated(userId)
+                val markSuccess = userRepository.syncMarkAppInitFirstTopicCreated(userId)
+                if (!markSuccess) {
+                    throw IllegalStateException("mark first-topic-created didn't find any records")
+                }
             }
         }.fold(onSuccess = { CreateFirstTopicResult.Success }, onFailure = { e ->
             Timber.e(e, "CreateDefaultTopic failed due to db error")
@@ -47,8 +54,18 @@ class WelcomeUseCase @Inject constructor(
         })
     }
 
-    suspend fun markWelcomeDone(userId: UserId) {
-
+    /**
+     * No exception will be thrown. Use the Result to know if it's success, as well as the exception.
+     */
+    suspend fun markWelcomeShown(userId: UserId): Result<Unit> = runCatching {
+        dbRunner.runInIoThread(retry = RetryModel.OnAnyException) {
+            val markSuccess = userRepository.syncMarkAppInitWelcomeShown(userId)
+            if (!markSuccess) {
+                throw IllegalStateException("mark welcome-shown didn't find any records")
+            }
+        }
+    }.onFailure { e ->
+        Timber.e(e, "MarkWelcomeShown failed due to db error")
     }
 
     private suspend fun shouldReallyCreateDefaultTopic(userId: UserId): Boolean {

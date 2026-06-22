@@ -1,8 +1,7 @@
-package top.fseasy.imlog.features.signinup
+package top.fseasy.imlog.features.auth
 
 import android.content.Context
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel

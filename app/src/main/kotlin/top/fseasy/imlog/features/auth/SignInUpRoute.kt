@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.signinup
+package top.fseasy.imlog.features.auth
 
 import kotlinx.serialization.Serializable
 

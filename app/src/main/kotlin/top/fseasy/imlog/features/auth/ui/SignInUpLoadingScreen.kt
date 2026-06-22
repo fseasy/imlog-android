@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.signinup.ui
+package top.fseasy.imlog.features.auth.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,8 +14,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import top.fseasy.imlog.features.signinup.SignInUpRoute
-import top.fseasy.imlog.features.signinup.SignInUpHostUiState
+import top.fseasy.imlog.features.auth.SignInUpRoute
+import top.fseasy.imlog.features.auth.SignInUpHostUiState
 
 @Composable
 fun SignInUpLoadingScreen(
