@@ -1,5 +1,8 @@
 package top.fseasy.imlog.ui.model
 
+import android.content.Context
+import top.fseasy.imlog.R
+
 /**
  * A common ui state for task execution
  * @see top.fseasy.imlog.ui.components.TaskStateLoadingWrapper to know the loading component helper

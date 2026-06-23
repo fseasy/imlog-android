@@ -18,7 +18,7 @@ import javax.inject.Inject
 
 @Immutable
 data class SignInUpCreateUserUiState(
-    val createUserState: TaskExecuteState = TaskExecuteState.Idle,
+    val createUserState: TaskExecuteState<Unit> = TaskExecuteState.Idle,
 )
 
 @HiltViewModel
@@ -51,8 +51,13 @@ class SignInUpCreateUserViewModel @Inject constructor(
                 }
             }
                 .onSuccess {
-                    _uiState.update { it.copy(createUserState = TaskExecuteState.Success) }
+                    _uiState.update { it.copy(createUserState = TaskExecuteState.Success(Unit)) }
                 }
         }
+    }
+
+    fun onCreateUserFail() {
+        hasInitializedUserCreation = false
+        createUser()
     }
 }

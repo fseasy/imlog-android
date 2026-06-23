@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.log.ui
+package top.fseasy.imlog.features.home.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -29,13 +29,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import top.fseasy.imlog.features.log.TopicSettingsViewModel
+import top.fseasy.imlog.features.home.TopicSettingsViewModel
 import top.fseasy.imlog.R
+import top.fseasy.imlog.domain.model.TopicId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopicSettingsSheet(
-    topicId: String,
+    topicId: TopicId,
     onBack: () -> Unit,
     onDelete: () -> Unit,
     viewModel: TopicSettingsViewModel = hiltViewModel(),

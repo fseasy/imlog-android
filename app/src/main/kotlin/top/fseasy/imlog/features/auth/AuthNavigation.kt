@@ -6,7 +6,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navigation
 import kotlinx.serialization.Serializable
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.features.auth.ui.SignInUpCreateUserScreen
+import top.fseasy.imlog.features.auth.ui.SignInUpCreateLocalUserScreen
 import top.fseasy.imlog.features.auth.ui.AuthSelectLocalUserScreen
 
 
@@ -23,23 +23,22 @@ private sealed interface AuthScreen {
 
 fun NavGraphBuilder.authGraph(
     navController: NavController,
-    onAuthSuccess: (userId: UserId) -> Unit,
+    onAuthSuccessNavigate: () -> Unit,
 ) {
     navigation<AuthGraph>(
         startDestination = AuthScreen.SelectUser,
     ) {
         composable<AuthScreen.CreateUser> {
-            SignInUpCreateUserScreen()
+            SignInUpCreateLocalUserScreen(onAuthSuccessNavigate = onAuthSuccessNavigate)
         }
         composable<AuthScreen.SelectUser> {
             AuthSelectLocalUserScreen(
-                uiState.users,
-                onSelectUserClick = { u -> viewModel.selectUser(u) },
                 onNavigateToCreateUser = {
-                    navController.navigate(SignInUpRoute.CreateUser) {
-                        popUpTo(SignInUpRoute.SelectUser) { inclusive = true }
+                    navController.navigate(AuthScreen.CreateUser) {
+                        popUpTo(AuthScreen.SelectUser) { inclusive = true }
                     }
-                })
+                }, onAuthSuccessNavigate = onAuthSuccessNavigate
+            )
         }
     }
 }

@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.log.ui
+package top.fseasy.imlog.features.home.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,7 +42,7 @@ import coil3.compose.AsyncImage
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.ResourceModel
-import top.fseasy.imlog.features.log.MessageUiState
+import top.fseasy.imlog.features.home.MessageUiState
 import top.fseasy.imlog.domain.util.secondsToMinutesSeconds
 import java.text.SimpleDateFormat
 import java.util.Date

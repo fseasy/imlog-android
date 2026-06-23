@@ -1,5 +1,6 @@
 package top.fseasy.imlog.domain.model
 
+import kotlinx.serialization.Serializable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -13,6 +14,7 @@ data class User(
 )
 
 @JvmInline
+@Serializable
 value class UserId(val value: String) {
     init {
         require(value.startsWith(PREFIX)) { "Invalid UserId prefix" }

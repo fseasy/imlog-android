@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,17 +32,18 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.ui.components.AppOutlinedButton
 import top.fseasy.imlog.ui.components.HighlightConfig
 import top.fseasy.imlog.ui.components.HighlightedText
-import top.fseasy.imlog.ui.components.InternalErrorInfoText
+import top.fseasy.imlog.ui.components.InternalErrorContent
 
 @Composable
 fun SharedStorageSelectScreen(
     currentUserId: UserId,
+    onSuccessNavigate: () -> Unit,
     viewModel: SelectSharedStorageViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    SharedStorageSelectContent(uiState) { uri ->
+    SharedStorageSelectContent(uiState, onSuccessNavigate = onSuccessNavigate) { uri ->
         try {
             // persist permission.
             // This logic should STAY in ui as it need the context while
@@ -60,9 +62,14 @@ fun SharedStorageSelectScreen(
 @Composable
 fun SharedStorageSelectContent(
     uiState: SelectSharedStorageUiState,
+    onSuccessNavigate: () -> Unit,
     onSelect: (uri: Uri) -> Unit,
 ) {
-    // 1. register folder picker to launch system picker
+    LaunchedEffect(uiState.selectState) {
+        if (uiState.selectState is UriSelectState.Success) onSuccessNavigate()
+    }
+
+    // register folder picker to launch system picker
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -121,7 +128,7 @@ fun SharedStorageSelectContent(
             }
 
             is UriSelectState.Failure -> {
-                InternalErrorInfoText(state.cause.message ?: stringResource(R.string.error_unknown))
+                InternalErrorContent(state.cause.message ?: stringResource(R.string.error_unknown))
                 AppOutlinedButton(
                     onClick = { folderPickerLauncher.launch(null) },
                     text = stringResource(R.string.btn_retry),

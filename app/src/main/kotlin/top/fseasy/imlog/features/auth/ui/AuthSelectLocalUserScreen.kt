@@ -56,6 +56,7 @@ private const val CARD_MAX_WIDTH = 150;
 @Composable
 fun AuthSelectLocalUserScreen(
     onNavigateToCreateUser: () -> Unit,
+    onAuthSuccessNavigate: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: AuthSelectLocalUserViewModel = hiltViewModel(),
 ) {
@@ -65,6 +66,7 @@ fun AuthSelectLocalUserScreen(
         uiState = uiState,
         onSelectUserClick = { uid -> viewModel.selectUser(uid) },
         onNavigateToCreateUser = onNavigateToCreateUser,
+        onAuthSuccessNavigate = onAuthSuccessNavigate,
         onErrorDismiss = { viewModel.onErrorDismiss() },
         modifier = modifier
     )
@@ -75,6 +77,7 @@ private fun SelectUserFramework(
     uiState: AuthSelectLocalUserUiState,
     onSelectUserClick: (UserId) -> Unit,
     onNavigateToCreateUser: () -> Unit,
+    onAuthSuccessNavigate: () -> Unit,
     onErrorDismiss: () -> Unit,
     modifier: Modifier,
 ) {
@@ -100,6 +103,7 @@ private fun SelectUserFramework(
                         selectedUserId = uiState.selectedUserId,
                         onSelectUserClick = onSelectUserClick,
                         onNavigateToCreateUser = onNavigateToCreateUser,
+                        onAuthSuccessNavigate = onAuthSuccessNavigate,
                         onErrorDismiss = onErrorDismiss,
                         snackbarHostState = snackbarHostState,
                     )
@@ -115,6 +119,7 @@ private fun SelectUserContent(
     selectedUserId: UserId?,
     onSelectUserClick: (UserId) -> Unit,
     onNavigateToCreateUser: () -> Unit,
+    onAuthSuccessNavigate: () -> Unit,
     onErrorDismiss: () -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
@@ -125,6 +130,8 @@ private fun SelectUserContent(
         if (selectUserState is TaskExecuteState.Failure) {
             snackbarHostState.showSnackbar(message = selectUserState.reason)
             onErrorDismiss()
+        } else if (selectUserState is TaskExecuteState.Success) {
+            onAuthSuccessNavigate()
         }
     }
 

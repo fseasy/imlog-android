@@ -6,7 +6,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,22 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
-import top.fseasy.imlog.R
-import top.fseasy.imlog.ui.theme.errorSmall
-
-
-@Composable
-fun InternalErrorInfoText(
-    errorMessage: String,
-) {
-    Text(
-        "${stringResource(R.string.internal_error_head)}: $errorMessage",
-        style = MaterialTheme.typography.errorSmall
-    )
-}
 
 
 data class HighlightConfig(

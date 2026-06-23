@@ -1,5 +1,7 @@
 package top.fseasy.imlog.domain.model
 
+import java.io.File
+
 /**
  * To flag it is in internal-persistent or internal-cache location
  */
@@ -13,32 +15,37 @@ sealed interface SharedStorageRootSource {
 }
 
 /**
- * Used to fit the clean architecture requirements
+ * Used to fit the clean architecture requirements, mainly used as output stream.
  * @see top.fseasy.imlog.domain.usecase.StoragePathUseCase to know the storage choose reason
+ * @see top.fseasy.imlog.data.mapper.getMimeType*
  */
-sealed interface FilePathModel {
+sealed interface StoragePathModel {
     val fullRelativePath: List<String>
 
-    /**
-     * @param userId needs this to
-     */
     data class SharedStorageOnly(
         override val fullRelativePath: List<String>,
         val root: SharedStorageRootSource,
-    ) : FilePathModel
+    ) : StoragePathModel
 
     data class InternalOnly(
         override val fullRelativePath: List<String>,
         val internalLocation: InternalLocation,
-    ) : FilePathModel
+    ) : StoragePathModel
 
     data class DualWrite(
         override val fullRelativePath: List<String>,
         val root: SharedStorageRootSource,
         val internalLocation: InternalLocation,
-    ) : FilePathModel {
+    ) : StoragePathModel {
         fun toSharedStorageOnly() = SharedStorageOnly(fullRelativePath, root)
         fun toInternalOnly() = InternalOnly(fullRelativePath, internalLocation)
     }
 }
 
+/**
+ * Mainly Used in file handling result, or input file.
+ */
+sealed interface AbsolutePathModel {
+    data class UriStrModel(val value: UriStr) : AbsolutePathModel
+    data class FileModel(val value: File) : AbsolutePathModel
+}

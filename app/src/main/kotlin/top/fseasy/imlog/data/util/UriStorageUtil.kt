@@ -15,6 +15,9 @@ import java.io.FileNotFoundException
 import java.io.IOException
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
+import top.fseasy.imlog.data.mapper.toUriStr
+import top.fseasy.imlog.domain.model.AbsolutePathModel
+import top.fseasy.imlog.domain.model.FileCopyResult
 
 /**
  * Metadata from contentResolver.Query results.
@@ -136,46 +139,11 @@ sealed interface WriteDataResult {
     }
 }
 
-sealed interface FileCopyResult {
-    data class Success(val bytesCopied: Long) : FileCopyResult
-
-    sealed interface Error : FileCopyResult {
-        val cause: Throwable
-
-        // Source related errors
-        data class SrcPermissionDenied(override val cause: SecurityException) : Error
-        data class SrcNotFound(override val cause: FileNotFoundException) : Error
-        data class SrcOpenUnexpected(override val cause: Exception) : Error
-
-        // Target related errors
-        data class TgtPermissionDenied(override val cause: SecurityException) : Error
-        data class TgtNotFound(override val cause: FileNotFoundException) : Error
-        data class TgtOpenUnexpected(override val cause: Exception) : Error
-
-        // Copy process errors
-        data class CopyIOError(override val cause: IOException, val bytesTransferred: Long = 0) :
-            Error
-
-        data class CopyUnexpected(override val cause: Throwable) : Error
-
-        // Helper
-        fun isRecoverable(): Boolean = when (this) {
-            is SrcPermissionDenied -> true
-            is SrcNotFound -> false
-            is SrcOpenUnexpected -> true
-            is TgtPermissionDenied -> true
-            is TgtNotFound -> false
-            is TgtOpenUnexpected -> true
-            is CopyIOError -> true
-            is CopyUnexpected -> true
-        }
-    }
-}
-
 object UriStorageUtil {
 
     /**
      * A combined contextResolver Query to get multiple metadata in one query.
+     *
      * STABLE result expectation Fields: DISPLAY_NAME, SIZE
      *
      * RUN IN **IO thread**.
@@ -204,21 +172,11 @@ object UriStorageUtil {
     }
 
     /**
-     * More robust way compared to metadata.mimeType
+     * More robust way compared to metadata.mimeType (a proxy method to the MimeTypeUtils)
      * Will always try to get a mime type on the uri (SAF or MediaStore)
-     * SYNC.
      */
-    fun getMimeTypeFallback(context: Context, uri: Uri): String {
-        var mimeType = context.contentResolver.getType(uri)
-        if (mimeType == null) {
-            val extension = MimeTypeMap.getFileExtensionFromUrl(uri.toString())
-            if (!extension.isNullOrEmpty()) {
-                mimeType = MimeTypeMap.getSingleton()
-                    .getMimeTypeFromExtension(extension.lowercase())
-            }
-        }
-        return mimeType ?: "application/octet-stream"
-    }
+    suspend fun robustGetMimeType(context: Context, uri: Uri): String =
+        MimeTypeUtils.getMimeType(context, uri)
 
     /** A quick util to get path's last part name (filepath -> filename, dirpath -> dirname)
      * 1. get from content resolver metadata 2. fallback
@@ -387,7 +345,10 @@ object UriStorageUtil {
             try {
                 outputStream.use { outs ->
                     val bytesCopied = ins.copyTo(outs, bufferSize)
-                    FileCopyResult.Success(bytesCopied)
+                    FileCopyResult.Success(
+                        bytesCopied,
+                        resultAbsolutePath = AbsolutePathModel.UriStrModel(tgtFileUri.toUriStr())
+                    )
                 }
             } catch (e: IOException) {
                 FileCopyResult.Error.CopyIOError(e)

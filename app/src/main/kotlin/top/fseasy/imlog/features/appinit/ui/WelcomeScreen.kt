@@ -24,35 +24,44 @@ import top.fseasy.imlog.ui.components.AppPrimaryButton
 import top.fseasy.imlog.ui.components.AppTextButton
 import top.fseasy.imlog.ui.components.HighlightConfig
 import top.fseasy.imlog.ui.components.HighlightedText
-import top.fseasy.imlog.ui.components.InternalErrorInfoText
+import top.fseasy.imlog.ui.components.InternalErrorContent
 
 
 @Composable
 fun WelcomeScreen(
     userId: UserId,
     needCreateFirstTopic: Boolean,
+    onSuccessNavigate: () -> Unit,
     viewModel: WelcomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
-        if (needCreateFirstTopic) viewModel.createFirstTopic(userId)
+        if (needCreateFirstTopic) viewModel.autoCreateFirstTopic(userId)
     }
 
-    WelcomeContent(
-        userId = userId,
-        isCreatingFirstTopic = needCreateFirstTopic,
+    WelcomeEntry(
+        needCreateFirstTopic = needCreateFirstTopic,
         uiState = uiState,
-        onEnterClick = { viewModel.markWelcomeShown(userId) })
+        onSuccessNavigate = onSuccessNavigate,
+        onCreateTopicRetryClick = { viewModel.triggerCreateFirstTopic(userId) },
+        onStartClick = { viewModel.markWelcomeShown(userId) })
 }
 
 @Composable
-fun WelcomeContent(
-    userId: UserId,
-    isCreatingFirstTopic: Boolean,
+fun WelcomeEntry(
+    needCreateFirstTopic: Boolean,
     uiState: WelcomeUiState,
-    onEnterClick: () -> Unit,
+    onSuccessNavigate: () -> Unit,
+    onCreateTopicRetryClick: () -> Unit,
+    onStartClick: () -> Unit,
 ) {
+    LaunchedEffect(uiState.markWelcomeState) {
+        if (uiState.markWelcomeState is TaskExecuteState.Success) {
+            onSuccessNavigate()
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         HighlightedText(
             stringResource(R.string.welcome_headline),
@@ -63,35 +72,44 @@ fun WelcomeContent(
 
         Spacer(Modifier.height(30.dp))
 
-        if (isCreatingFirstTopic) {
+        if (needCreateFirstTopic) {
             when (val state = uiState.topicCreateState) {
                 is TaskExecuteState.Idle -> Text("Preparing to Create the first topic for you")
                 is TaskExecuteState.Executing -> Text("Creating the first topic")
-                is TaskExecuteState.Success -> Text("Creating success")
-                is TaskExecuteState.Failure -> InternalErrorInfoText(state.reason)
+                is TaskExecuteState.Success -> WelcomeContent(uiState, onStartClick)
+                is TaskExecuteState.Failure -> InternalErrorContent(
+                    state.reason, onRetry = onCreateTopicRetryClick
+                )
             }
         } else {
-            Text(
-                stringResource(R.string.welcome_body), style = MaterialTheme.typography.bodyMedium
-            )
+            WelcomeContent(uiState, onStartClick)
+        }
+    }
+}
 
-            Spacer(Modifier.height(30.dp))
+@Composable
+fun WelcomeContent(
+    uiState: WelcomeUiState,
+    onStartClick: () -> Unit,
+) {
+    Text(
+        stringResource(R.string.welcome_body), style = MaterialTheme.typography.bodyMedium
+    )
 
-            when (val state = uiState.markWelcomeState) {
-                is TaskExecuteState.Idle,
-                is TaskExecuteState.Executing,
-                is TaskExecuteState.Success,
-                    -> AppPrimaryButton(
-                    onClick = onEnterClick,
-                    loading = state != TaskExecuteState.Idle,
-                    text = stringResource(R.string.btn_start)
-                )
+    Spacer(Modifier.height(30.dp))
 
-                is TaskExecuteState.Failure -> {
-                    InternalErrorInfoText(state.reason)
-                    AppTextButton(onClick = onEnterClick, text = stringResource(R.string.btn_retry))
-                }
-            }
+    when (val state = uiState.markWelcomeState) {
+        is TaskExecuteState.Idle,
+        is TaskExecuteState.Executing,
+        is TaskExecuteState.Success,
+            -> AppPrimaryButton(
+            onClick = onStartClick,
+            loading = state != TaskExecuteState.Idle,
+            text = stringResource(R.string.btn_start)
+        )
+
+        is TaskExecuteState.Failure -> {
+            InternalErrorContent(state.reason, onRetry = onStartClick)
         }
     }
 }

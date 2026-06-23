@@ -2,7 +2,7 @@ package top.fseasy.imlog.domain.usecase
 
 import top.fseasy.imlog.domain.model.InternalLocation
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.domain.model.FilePathModel
+import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.ResourceProvider
@@ -56,8 +56,8 @@ class StoragePathUseCase @Inject constructor(
         return userSelectedRootDirName.contains(appStaticName, ignoreCase = true)
     }
 
-    fun buildSharedStorageRootMarkerFilePath(userId: UserId): FilePathModel.SharedStorageOnly =
-        FilePathModel.SharedStorageOnly(
+    fun buildSharedStorageRootMarkerFilePath(userId: UserId): StoragePathModel.SharedStorageOnly =
+        StoragePathModel.SharedStorageOnly(
             listOf(getUserRootDirName(userId), sharedStorageRootMarkerFilename),
             root = SharedStorageRootSource.LookupByUser(userId)
         )
@@ -70,8 +70,8 @@ class StoragePathUseCase @Inject constructor(
     fun buildUserAvatarAbsolutePath(
         signInUserId: UserId,
         filename: String,
-    ): FilePathModel.DualWrite {
-        return FilePathModel.DualWrite(
+    ): StoragePathModel.DualWrite {
+        return StoragePathModel.DualWrite(
             fullRelativePath = buildAvatarRelativePath(
                 signInUserId, AvatarTargetName.USER, filename
             ),
@@ -83,8 +83,8 @@ class StoragePathUseCase @Inject constructor(
     fun buildTopicAvatarAbsolutePath(
         signInUserId: UserId,
         filename: String,
-    ): FilePathModel.DualWrite {
-        return FilePathModel.DualWrite(
+    ): StoragePathModel.DualWrite {
+        return StoragePathModel.DualWrite(
             fullRelativePath = buildAvatarRelativePath(
                 signInUserId, AvatarTargetName.TOPIC, filename
             ),
@@ -110,12 +110,12 @@ class StoragePathUseCase @Inject constructor(
     /**
      * rule: $user_root_name / message / $topic_id / $date-hierarchy / $filename
      */
-    fun buildMessageRawAbsolutePath(
+    fun buildMessageRawFileAbsolutePath(
         userId: UserId,
         topicId: TopicId,
         timestampMs: Long,
         filename: String,
-    ): FilePathModel.SharedStorageOnly = FilePathModel.SharedStorageOnly(
+    ): StoragePathModel.SharedStorageOnly = StoragePathModel.SharedStorageOnly(
         buildMessageFileFullRelativePath(
             userId = userId,
             resourceName = ResourceName.MessageFileRaw,
@@ -134,7 +134,7 @@ class StoragePathUseCase @Inject constructor(
         topicId: TopicId,
         timestampMs: Long,
         filename: String,
-    ): FilePathModel.InternalOnly = FilePathModel.InternalOnly(
+    ): StoragePathModel.InternalOnly = StoragePathModel.InternalOnly(
         buildMessageFileFullRelativePath(
             userId = userId,
             resourceName = ResourceName.MessageThumbnail,

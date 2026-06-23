@@ -1,9 +1,8 @@
-package top.fseasy.imlog.features.log.domain
+package top.fseasy.imlog.features.home.domain
 
 import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
-import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

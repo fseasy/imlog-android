@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.log
+package top.fseasy.imlog.features.home
 
 import android.content.Context
 import android.net.Uri
@@ -28,7 +28,7 @@ import top.fseasy.imlog.domain.model.VoiceRecordingState
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
-import top.fseasy.imlog.features.log.domain.VoiceRecorder
+import top.fseasy.imlog.features.home.domain.VoiceRecorder
 import java.io.File
 import javax.inject.Inject
 

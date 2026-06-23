@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.log.ui
+package top.fseasy.imlog.features.home.ui
 
 import android.Manifest
 import android.net.Uri
@@ -45,7 +45,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import top.fseasy.imlog.domain.model.VoiceRecordingState
-import top.fseasy.imlog.features.log.TimelineUiState
+import top.fseasy.imlog.features.home.TimelineUiState
 import top.fseasy.imlog.R
 import java.io.File
 

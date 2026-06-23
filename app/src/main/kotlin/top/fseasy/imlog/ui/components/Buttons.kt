@@ -57,8 +57,9 @@ fun AppPrimaryButton(
     ) {
         when {
             loading -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
+                AppCircularProgress(
+                    modifier = modifier,
+                    size = 20.dp,
                     color = MaterialTheme.colorScheme.onPrimary,
                     strokeWidth = 2.5.dp
                 )
@@ -104,8 +105,9 @@ fun AppOutlinedButton(
     ) {
         when {
             loading -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
+                AppCircularProgress(
+                    modifier = modifier,
+                    size = 20.dp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     strokeWidth = 2.5.dp
                 )
@@ -131,22 +133,31 @@ fun AppTextButton(
     text: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    isLoading: Boolean = false,
 ) {
     TextButton(
         onClick = onClick,
-        enabled = enabled,
+        enabled = enabled && !isLoading,
         modifier = modifier.height(48.dp),
         colors = ButtonDefaults.textButtonColors(
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
         shape = MaterialTheme.shapes.medium
     ) {
-        Text(
-            text = text, fontSize = 15.sp, fontWeight = FontWeight.Medium
-        )
+        if (isLoading) {
+            AppCircularProgress(
+                modifier = modifier,
+                size = 18.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                strokeWidth = 2.dp
+            )
+        } else {
+            Text(
+                text = text, fontSize = 15.sp, fontWeight = FontWeight.Medium
+            )
+        }
     }
 }
-
 
 @Composable
 fun AppIconButton(

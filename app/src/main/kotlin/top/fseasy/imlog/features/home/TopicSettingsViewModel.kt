@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.log
+package top.fseasy.imlog.features.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

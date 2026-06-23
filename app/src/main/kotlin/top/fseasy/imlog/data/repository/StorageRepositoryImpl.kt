@@ -9,9 +9,11 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.data.constants.THUMBNAIL_MAX_HEIGHT
 import top.fseasy.imlog.data.constants.THUMBNAIL_MAX_WIDTH
+import top.fseasy.imlog.data.mapper.getMimeType
+import top.fseasy.imlog.data.mapper.toUri
 import top.fseasy.imlog.data.mapper.toUriOrThrow
 import top.fseasy.imlog.data.mapper.toUriStr
-import top.fseasy.imlog.domain.model.FilePathModel
+import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
@@ -21,15 +23,17 @@ import top.fseasy.imlog.domain.repository.SavedMedia
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.data.util.ContentResolverQueriedResult
-import top.fseasy.imlog.data.util.FileCopyResult
+import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.data.util.FileWriteMode
 import top.fseasy.imlog.data.util.FindOrCreateFileUriResult
 import top.fseasy.imlog.data.util.GenerateThumbnailResult
 import top.fseasy.imlog.data.util.MediaFields
 import top.fseasy.imlog.data.util.UriStorageUtil
 import top.fseasy.imlog.data.util.WriteDataResult
+import top.fseasy.imlog.data.util.copyUriToFile
 import top.fseasy.imlog.data.util.generateAndSaveThumbnail
 import top.fseasy.imlog.data.util.isDimensionValid
+import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.InternalLocation
 import top.fseasy.imlog.domain.util.resolveSubPaths
 import java.io.File
@@ -93,18 +97,18 @@ class StorageRepositoryImpl @Inject constructor(
      * @throws Exception
      * @return created dir UriStr if filePath contains Uri, else null.
      */
-    override suspend fun mkdirs(filePath: FilePathModel): UriStr? {
+    override suspend fun mkdirs(filePath: StoragePathModel): UriStr? {
         val uri = when (filePath) {
-            is FilePathModel.DualWrite -> {
+            is StoragePathModel.DualWrite -> {
                 filePath.toInternalOnly()
-                    .createDirectory(context)
+                    .createDirectory(this)
                 filePath.toSharedStorageOnly()
                     .ensureDirectorUri(this)
             }
 
-            is FilePathModel.SharedStorageOnly -> filePath.ensureDirectorUri(this)
-            is FilePathModel.InternalOnly -> {
-                filePath.createDirectory(context)
+            is StoragePathModel.SharedStorageOnly -> filePath.ensureDirectorUri(this)
+            is StoragePathModel.InternalOnly -> {
+                filePath.createDirectory(this)
                 null
             }
         }
@@ -117,11 +121,11 @@ class StorageRepositoryImpl @Inject constructor(
      * @return sharedStorageUri if filePathModel includes Uri, else null.
      */
     override suspend fun writeFile(
-        filePath: FilePathModel,
+        filePath: StoragePathModel,
         content: ByteArray,
         mimeType: String?,
     ): UriStr? = when (filePath) {
-        is FilePathModel.DualWrite -> {
+        is StoragePathModel.DualWrite -> {
             val effectiveMimeType =
                 requireNotNull(mimeType) { "Must Set mimeType for DualWrite path" }
             writeFileForInternalOnly(filePath.toInternalOnly(), content)
@@ -130,13 +134,13 @@ class StorageRepositoryImpl @Inject constructor(
             )
         }
 
-        is FilePathModel.SharedStorageOnly -> {
+        is StoragePathModel.SharedStorageOnly -> {
             val effectiveMimeType =
                 requireNotNull(mimeType) { "Must Set mimeType for SharedStorageOnly path" }
             writeFileForSharedStorageOnly(filePath, content, effectiveMimeType)
         }
 
-        is FilePathModel.InternalOnly -> {
+        is StoragePathModel.InternalOnly -> {
             writeFileForInternalOnly(filePath, content)
             null
         }
@@ -146,18 +150,20 @@ class StorageRepositoryImpl @Inject constructor(
      * @throws Exception
      */
     private suspend fun writeFileForInternalOnly(
-        filePath: FilePathModel.InternalOnly,
+        filePath: StoragePathModel.InternalOnly,
         content: ByteArray,
-    ) = withContext(dispatcher) {
-        filePath.toFileWithCreatingDirectories(context)
-            .writeBytes(content)
+    ) {
+        val file = filePath.toFileWithCreatingDirectories(this)
+        withContext(dispatcher) {
+            file.writeBytes(content)
+        }
     }
 
     /** Run in IO in necessary parts.
      * @throws Exception
      */
     private suspend fun writeFileForSharedStorageOnly(
-        filePath: FilePathModel.SharedStorageOnly,
+        filePath: StoragePathModel.SharedStorageOnly,
         content: ByteArray,
         mimeType: String,
     ): UriStr {
@@ -167,6 +173,96 @@ class StorageRepositoryImpl @Inject constructor(
             is WriteDataResult.Success -> Unit
         }
         return fileUri.toUriStr()
+    }
+
+    /**
+     * Run in IO.
+     *
+     * No exception thrown.
+     *
+     * TODO: optimize for condition input is a File. currently just transform it to Uri.
+     *       it's suboptimal in efficiency and tolerance(permission is restricted in FileProvider)
+     *
+     * @param srcMimeType - it null, will resolve it internal for Uri type target.
+     */
+    override suspend fun copyFile(
+        srcAbsolutePath: AbsolutePathModel,
+        targetPath: StoragePathModel,
+        srcMimeType: String?,
+    ): FileCopyResult {
+        suspend fun getEffectiveMimeType(): String = when (srcMimeType) {
+            null -> srcAbsolutePath.getMimeType(context)
+            else -> srcMimeType
+        }
+
+        val unifiedSrcUri = runCatching {
+            srcAbsolutePath.toUri(context)
+        }.getOrElse {
+            return FileCopyResult.Error.SrcOpenUnexpected(
+                IllegalArgumentException("Can't Transform $srcAbsolutePath to Uri")
+            )
+        }
+        return when (targetPath) {
+            is StoragePathModel.SharedStorageOnly -> copyUriFile2SharedStorage(
+                unifiedSrcUri, targetPath, getEffectiveMimeType()
+            )
+
+            is StoragePathModel.InternalOnly -> copyUriFile2InternalFile(unifiedSrcUri, targetPath)
+
+            is StoragePathModel.DualWrite -> {
+                copyUriFile2SharedStorage(
+                    unifiedSrcUri, targetPath.toSharedStorageOnly(), getEffectiveMimeType()
+                )
+                copyUriFile2InternalFile(unifiedSrcUri, targetPath.toInternalOnly())
+            }
+        }
+    }
+
+    /**
+     * Run in IO thread in io parts. No exception will be thrown
+     */
+    private suspend fun copyUriFile2SharedStorage(
+        srcUri: Uri,
+        pathModel: StoragePathModel.SharedStorageOnly,
+        srcMimeType: String,
+    ): FileCopyResult {
+        val tgtUri = pathModel.ensureFileUri(this, mimeType = srcMimeType)
+        return UriStorageUtil.copyBetweenUri(
+            context,
+            srcUri,
+            tgtUri,
+            writeMode = FileWriteMode.WRITE_TRUNCATE,
+        )
+    }
+
+    /**
+     * Run in IO thread in io parts. No exception will be thrown
+     */
+    private suspend fun copyUriFile2InternalFile(
+        srcUri: Uri,
+        pathModel: StoragePathModel.InternalOnly,
+    ): FileCopyResult {
+        val tgtFile = pathModel.toFileWithCreatingDirectories(context)
+        return copyUriToFile(context, srcUri, tgtFile)
+    }
+
+    /***
+     * Run in IO.
+     * @throws Throwable
+     */
+    suspend fun resolveAudioUriMeta(srcUriStr: UriStr) {
+        val srcUri = srcUriStr.toUriOrThrow()
+        val queryMetaFields = with(MediaFields) {
+            listOf(
+                DISPLAY_NAME, FILE_SIZE, MIME_TYPE, DURATION
+            )
+        }
+        val metaData = UriStorageUtil.resolveMetadata(context, srcUri, queryMetaFields)
+        val displayName =
+            metaData.displayName ?: UriStorageUtil.getDisplayNameFallback(srcUri) // more robust
+            ?: "_" // have to assign a value. It should be ok.
+        val mimeType = metaData.mimeType ?: UriStorageUtil.robustGetMimeType(context, srcUri)
+        val duration = metaData.duration ?: UriStorageUtil.getAudioDurationFallback(context, srcUri)
     }
 
     override suspend fun saveMessageMedia(
@@ -195,7 +291,7 @@ class StorageRepositoryImpl @Inject constructor(
 
         val storeRawFilename =
             messageFilePathUseCase.generateFilenameByPrependTime(messageTimestampMs, displayName)
-        val mimeType = metaData.mimeType ?: UriStorageUtil.getMimeTypeFallback(context, srcUri)
+        val mimeType = metaData.mimeType ?: UriStorageUtil.robustGetMimeType(context, srcUri)
         val (calcTgtUrl, failure) = calcRawSharedStorageUri(
             userId = userId,
             topicId = topicId,
@@ -439,7 +535,7 @@ class StorageRepositoryImpl @Inject constructor(
          * Run in IO for io parts.
          * @throws Exception
          */
-        private suspend fun FilePathModel.SharedStorageOnly.ensureFileUri(
+        private suspend fun StoragePathModel.SharedStorageOnly.ensureFileUri(
             instance: StorageRepositoryImpl,
             mimeType: String,
         ): Uri {
@@ -460,7 +556,7 @@ class StorageRepositoryImpl @Inject constructor(
          * Run in IO for io parts.
          * @throws Exception
          */
-        private suspend fun FilePathModel.SharedStorageOnly.ensureDirectorUri(
+        private suspend fun StoragePathModel.SharedStorageOnly.ensureDirectorUri(
             instance: StorageRepositoryImpl,
         ): Uri {
             val rootUri = this.root.toUri(instance)
@@ -476,7 +572,30 @@ class StorageRepositoryImpl @Inject constructor(
             }
         }
 
+        /**
+         * run in IO
+         */
+        private suspend fun StoragePathModel.InternalOnly.toFileWithCreatingDirectories(instance: StorageRepositoryImpl): File =
+            withContext(instance.dispatcher) {
+                val rootFile =
+                    this@toFileWithCreatingDirectories.internalLocation.toFile(instance.context)
+                rootFile.resolveSubPaths(
+                    this@toFileWithCreatingDirectories.fullRelativePath,
+                    createDir = true,
+                    lastPathIsFile = true
+                )
+            }
 
+        /**
+         * run in IO
+         */
+        private suspend fun StoragePathModel.InternalOnly.createDirectory(instance: StorageRepositoryImpl): File =
+            withContext(instance.dispatcher) {
+                val rootFile = this@createDirectory.internalLocation.toFile(instance.context)
+                rootFile.resolveSubPaths(
+                    this@createDirectory.fullRelativePath, createDir = true, lastPathIsFile = false
+                )
+            }
     }
 }
 
@@ -485,24 +604,4 @@ private fun InternalLocation.toFile(context: Context): File {
         InternalLocation.Persistent -> context.filesDir
         InternalLocation.Cache -> context.cacheDir
     }
-}
-
-/**
- * NOTE: run in current thread! call this **before switch to IO thread.**
- */
-private fun FilePathModel.InternalOnly.toFileWithCreatingDirectories(context: Context): File {
-    val rootFile = this.internalLocation.toFile(context)
-    return rootFile.resolveSubPaths(
-        this.fullRelativePath, createDir = true, lastPathIsFile = true
-    )
-}
-
-/**
- * NOTE: run in current thread! call this **before switch to IO thread.**
- */
-private fun FilePathModel.InternalOnly.createDirectory(context: Context): File {
-    val rootFile = this.internalLocation.toFile(context)
-    return rootFile.resolveSubPaths(
-        this.fullRelativePath, createDir = true, lastPathIsFile = false
-    )
 }

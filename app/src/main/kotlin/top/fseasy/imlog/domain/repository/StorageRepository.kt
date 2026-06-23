@@ -1,10 +1,11 @@
 package top.fseasy.imlog.domain.repository
 
-import top.fseasy.imlog.domain.model.FilePathModel
+import top.fseasy.imlog.domain.model.AbsolutePathModel
+import top.fseasy.imlog.domain.model.FileCopyResult
+import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
-import java.io.File
 
 
 data class SavedMedia(
@@ -62,6 +63,11 @@ interface StorageRepository {
 
     suspend fun getDisplayNameOrThrow(uriStr: UriStr): String
 
-    suspend fun writeFile(filePath: FilePathModel, content: ByteArray, mimeType: String?): UriStr?
-    suspend fun mkdirs(filePath: FilePathModel): UriStr?
+    suspend fun writeFile(filePath: StoragePathModel, content: ByteArray, mimeType: String?): UriStr?
+    suspend fun mkdirs(filePath: StoragePathModel): UriStr?
+    suspend fun copyFile(
+        srcAbsolutePath: AbsolutePathModel,
+        targetPath: StoragePathModel,
+        srcMimeType: String? = null
+    ): FileCopyResult
 }

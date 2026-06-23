@@ -1,12 +1,11 @@
 package top.fseasy.imlog.domain.usecase
 
-import top.fseasy.imlog.domain.model.FilePathModel
+import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.ResourceProvider
 import top.fseasy.imlog.domain.repository.StorageRepository
-import top.fseasy.imlog.domain.repository.StringConstantId
 import top.fseasy.imlog.domain.repository.StringResId
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -53,7 +52,7 @@ class InitializeUserStorageUseCase @Inject constructor(
         if (storagePathUseCase.needsSubDirForActualSharedStorageRoot(dirName)) {
             val rootDirName = storagePathUseCase.defaultSharedStorageRootDirName
             val createdUri = storageRepository.mkdirs(
-                FilePathModel.SharedStorageOnly(
+                StoragePathModel.SharedStorageOnly(
                     listOf(rootDirName),
                     root = SharedStorageRootSource.Direct(userSelectedUriStr)
                 )
@@ -80,7 +79,7 @@ class InitializeUserStorageUseCase @Inject constructor(
         """.trimIndent()
         val markerPath = storagePathUseCase.buildSharedStorageRootMarkerFilePath(userId)
         storageRepository.writeFile(
-            FilePathModel.SharedStorageOnly(
+            StoragePathModel.SharedStorageOnly(
                 markerPath.fullRelativePath, root = SharedStorageRootSource.LookupByUser(userId)
             ),
             content = content.toByteArray(),

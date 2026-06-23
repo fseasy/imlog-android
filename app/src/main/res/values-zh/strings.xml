@@ -44,4 +44,5 @@
     <string name="welcome_headline">让 @string/app_name 伴你左右</string>
     <string name="welcome_body">记录此刻，串联过往，指引未来</string>
     <string name="btn_start">开始</string>
+    <string name="common_ui_unknown_error_and_auto_retry">不好，出了不知道什么问题。正在重试中</string>
 </resources>

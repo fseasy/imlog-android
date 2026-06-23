@@ -45,4 +45,5 @@
     <string name="welcome_headline">Living with @string/app_name</string>
     <string name="welcome_body">Record the moment, Connect the dots, Shape the future</string>
     <string name="btn_start">Start</string>
+    <string name="common_ui_unknown_error_and_auto_retry">Oops! Something broke. Retrying</string>
 </resources>

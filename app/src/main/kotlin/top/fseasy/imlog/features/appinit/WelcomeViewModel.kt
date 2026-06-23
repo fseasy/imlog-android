@@ -19,8 +19,8 @@ import javax.inject.Inject
 
 @Immutable
 data class WelcomeUiState(
-    val topicCreateState: TaskExecuteState = TaskExecuteState.Idle,
-    val markWelcomeState: TaskExecuteState = TaskExecuteState.Idle,
+    val topicCreateState: TaskExecuteState<Unit> = TaskExecuteState.Idle,
+    val markWelcomeState: TaskExecuteState<Unit> = TaskExecuteState.Idle,
 )
 
 @HiltViewModel
@@ -35,17 +35,27 @@ class WelcomeViewModel @Inject constructor(
      * The decision of whether to create topic is passed from the screen.
      * To guard the creation action, use this var.
      * */
-    private var hasInitializedFirstTopicCreation = false
+    private var hasInitializedAutoFirstTopicCreation = false
 
-    fun createFirstTopic(userId: UserId) {
-        if (hasInitializedFirstTopicCreation) return
-        hasInitializedFirstTopicCreation = true
+    /**
+     * Use this with creating guarding.
+     */
+    fun autoCreateFirstTopic(userId: UserId) {
+        if (hasInitializedAutoFirstTopicCreation) return
+        hasInitializedAutoFirstTopicCreation = true
+        triggerCreateFirstTopic(userId)
+    }
+
+    /**
+     * Use this with explicit indent.
+     */
+    fun triggerCreateFirstTopic(userId: UserId) {
         viewModelScope.launch {
             _uiState.update { it.copy(topicCreateState = TaskExecuteState.Executing) }
             when (val r = welcomeUseCase.createFirstTopicWithDefaultValueAndMarkInit(userId)) {
                 is CreateFirstTopicResult.SkipCreate,
                 is CreateFirstTopicResult.Success,
-                    -> _uiState.update { it.copy(topicCreateState = TaskExecuteState.Success) }
+                    -> _uiState.update { it.copy(topicCreateState = TaskExecuteState.Success(Unit)) }
 
                 is CreateFirstTopicResult.Failure -> _uiState.update {
                     it.copy(
@@ -62,17 +72,23 @@ class WelcomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(markWelcomeState = TaskExecuteState.Executing) }
             welcomeUseCase.markWelcomeShown(userId)
-                .fold(
-                    onSuccess = { _uiState.update { it.copy(markWelcomeState = TaskExecuteState.Success) } },
-                    onFailure = { e ->
-                        _uiState.update {
-                            it.copy(
-                                markWelcomeState = TaskExecuteState.Failure(
-                                    e.message ?: context.getString(R.string.error_unknown)
-                                )
+                .fold(onSuccess = {
+                    _uiState.update {
+                        it.copy(
+                            markWelcomeState = TaskExecuteState.Success(
+                                Unit
                             )
-                        }
-                    })
+                        )
+                    }
+                }, onFailure = { e ->
+                    _uiState.update {
+                        it.copy(
+                            markWelcomeState = TaskExecuteState.Failure(
+                                e.message ?: context.getString(R.string.error_unknown)
+                            )
+                        )
+                    }
+                })
         }
     }
 }

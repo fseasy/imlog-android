@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.log.ui
+package top.fseasy.imlog.features.home.ui
 
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
@@ -52,8 +52,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.features.log.TopicsUiState
-import top.fseasy.imlog.features.log.TopicsViewModel
+import top.fseasy.imlog.features.home.TopicsUiState
+import top.fseasy.imlog.features.home.TopicsViewModel
 import top.fseasy.imlog.R
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -73,7 +73,7 @@ sealed interface CreateTopicDialogAction {
 }
 
 @Composable
-fun TopicsRoute(
+fun HomeScreen(
     onTopicClick: (TopicId) -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
