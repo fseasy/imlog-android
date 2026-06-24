@@ -48,7 +48,7 @@ class InitializeUserStorageUseCase @Inject constructor(
     private suspend fun determineSharedStorageRootUri(
         userSelectedUriStr: UriStr,
     ) = runCatching {
-        val dirName = storageRepository.getDisplayNameOrThrow(userSelectedUriStr)
+        val dirName = storageRepository.getDisplayNameOrDefault(userSelectedUriStr,)
         if (storagePathUseCase.needsSubDirForActualSharedStorageRoot(dirName)) {
             val rootDirName = storagePathUseCase.defaultSharedStorageRootDirName
             val createdUri = storageRepository.mkdirs(

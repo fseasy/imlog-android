@@ -79,8 +79,7 @@ class TimelineViewModel @Inject constructor(
                 topic = topic,
                 messages = messages.map { m ->
                     MessageUiState(
-                        message = m,
-                        thumbnailModel = buildThumbnailModel(m, uid)
+                        message = m, thumbnailModel = buildThumbnailModel(m, uid)
                     )
                 },
                 currentUserId = uid,

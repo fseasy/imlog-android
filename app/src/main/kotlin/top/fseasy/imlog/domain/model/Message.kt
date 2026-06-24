@@ -1,18 +1,12 @@
 package top.fseasy.imlog.domain.model
 
 import android.net.Uri
-import java.io.File
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 
 enum class MessageType(val value: String) {
-    TEXT("text"),
-    IMAGE("image"),
-    VIDEO("video"),
-    AUDIO("audio"),
-    FILE("file"),
-    VOICE("voice");
+    TEXT("text"), IMAGE("image"), VIDEO("video"), AUDIO("audio"), FILE("file"), VOICE("voice");
 
     companion object {
         private val valueMap = entries.associateBy(MessageType::value)
@@ -38,19 +32,56 @@ value class MessageId(val value: String) {
     }
 }
 
-enum class MessageMediaProcessingStatus(val value: String) {
-    PROCESSING("processing"), FAILED("failed");
+enum class MessageFileProcessingStatus(val value: String) {
+    Pending("pending"), Processing("processing"), Failed("failed");
 
     companion object {
         private val valueMap =
-            MessageMediaProcessingStatus.entries.associateBy(MessageMediaProcessingStatus::value)
+            MessageFileProcessingStatus.entries.associateBy(MessageFileProcessingStatus::value)
 
         fun fromValue(value: String) = valueMap[value]
     }
 }
 
-fun String?.toMessageMediaProcessStatus(): MessageMediaProcessingStatus? =
-    this?.let { MessageMediaProcessingStatus.fromValue(it) }
+fun String.toMessageFileProcessingStatus(): MessageFileProcessingStatus? =
+    MessageFileProcessingStatus.fromValue(this)
+
+enum class MessageFileProcessingStage(val value: String) {
+    InsertPendingMessage("insert_pending_message"), CopySrcToInternalCache(value = "copy_src2internal_cache"), GenerateThumbnail(
+        "generate_thumbnail"
+    ),
+    CopyToSharedStorage("copy2shared_storage"), CleanWhenSuccess("clean_when_success");
+
+    companion object {
+        private val valueMap =
+            MessageFileProcessingStage.entries.associateBy(MessageFileProcessingStage::value)
+
+        fun fromValue(value: String) = valueMap[value]
+    }
+}
+
+fun String?.toMessageFileProcessingStage(): MessageFileProcessingStage? =
+    this?.let { MessageFileProcessingStage.fromValue(it) }
+
+
+enum class MessageFileProcessingErrorType(val value: String) {
+    Copy2InternalFailure("copy2internal_failure"),
+    SetInternalCacheToDbException(value = "set_internal_cache2db_exception"),
+    UpdateProcessingStateDbNoEffect(
+        value = "update_processing_db_no_effect"
+    );
+
+    companion object {
+        private val valueMap =
+            MessageFileProcessingErrorType.entries.associateBy(MessageFileProcessingErrorType::value)
+
+        fun fromValue(value: String) = valueMap[value]
+    }
+}
+
+fun String?.MessageFileProcessingErrorType(): MessageFileProcessingErrorType? =
+    this?.let { MessageFileProcessingErrorType.fromValue(it) }
+
 
 /**
  * Time/Duration all are in MS.
@@ -64,7 +95,7 @@ data class Message(
     val content: String? = null,
     // == media file fields
     val originalFileUri: Uri? = null,
-    val fileProcessStatus: MessageMediaProcessingStatus? = null,
+    val fileProcessStatus: MessageFileProcessingStatus? = null,
     val originalFilename: String? = null,
     val filename: String? = null,
     val fileSize: Long? = null,
@@ -115,7 +146,13 @@ object MessageFactory {
     }
 }
 
-sealed interface MessageMediaCopySource {
-    class FromUri(val uri: Uri) : MessageMediaCopySource
-    class FromFile(val file: File, val deleteOnCopySuccess: Boolean) : MessageMediaCopySource
-}
+data class MessageFileProcessState(
+    val messageId: MessageId,
+    val status: MessageFileProcessingStatus,
+    val processingStage: MessageFileProcessingStage,
+    val errorType: MessageFileProcessingErrorType,
+    val errorUserRetriable: Boolean,
+    val srcUri: UriStr,
+    val internalCachedFilename: String,
+)
+

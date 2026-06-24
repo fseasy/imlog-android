@@ -12,6 +12,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+import kotlin.random.Random
 
 /**
  * define path rules for the top-level storage buckets:
@@ -93,19 +94,45 @@ class StoragePathUseCase @Inject constructor(
         )
     }
 
-    /** Add a time prefix on the given original filename.
+    /** Add a time prefix on the given original filename. Used for semantic meaningful condition
      * Rule: $time_prefix + $truncated_original_name + .suffix
      */
-    fun prependDayAndTimeToFilename(timestampMs: Long, originalFilename: String): String {
+    fun buildUserFriendlyTimestampedFilename(timestampMs: Long, originalFilename: String): String =
+        addPrefixToFilename(formatToUtcDayAndTime(timestampMs), originalFilename)
+
+    /** Add a timestamp + random-int on the given original filename.
+     *  Used for cache name that don't need the semantic meaning but still keep a time info.
+     *
+     * Rule: $time_prefix + $truncated_original_name + .suffix
+     */
+    fun buildTimestampedFilename(timestampMs: Long, originalFilename: String) =
+        addPrefixToFilename("$timestampMs-${Random.nextInt(1000)}", originalFilename)
+
+    private fun addPrefixToFilename(prefix: String, originalFilename: String): String {
         val (rawName, extension) = originalFilename.splitNameAndExtension()
         val rawTruncatedName = rawName.take(KEEP_ORIGINAL_FILENAME_MAX_CHARS)
-        val timePrefix = formatToUtcDayAndTime(timestampMs)
         return if (extension.isNotEmpty()) {
-            "${timePrefix}.{$rawTruncatedName}.${extension}"
+            "${prefix}.{$rawTruncatedName}.${extension}"
         } else {
-            "${timePrefix}.{$rawTruncatedName}"
+            "${prefix}.{$rawTruncatedName}"
         }
     }
+
+    /**
+     * Build message file path for message cache file.
+     * rule: $user_root_name / message_cache / $filename (no more hierarchy)
+     * Location: internal cache
+     */
+    fun buildMessageCacheFileAbsolutePath(
+        userId: UserId,
+        timestampMs: Long,
+        filename: String,
+    ) = buildInternalCacheAbsolutePath(
+        userId,
+        resourceName = ResourceName.MessageCache,
+        timestampMs = timestampMs,
+        filename = filename
+    )
 
     /**
      * rule: $user_root_name / message / $topic_id / $date-hierarchy / $filename
@@ -122,8 +149,7 @@ class StoragePathUseCase @Inject constructor(
             topicId = topicId,
             timestampMs = timestampMs,
             filename = filename
-        ),
-        root = SharedStorageRootSource.LookupByUser(userId)
+        ), root = SharedStorageRootSource.LookupByUser(userId)
     )
 
     /**
@@ -141,7 +167,19 @@ class StoragePathUseCase @Inject constructor(
             topicId = topicId,
             timestampMs = timestampMs,
             filename = filename
-        ), internalLocation = InternalLocation.Cache
+        ), internalLocation = InternalLocation.Persistent
+    )
+
+    private fun buildInternalCacheAbsolutePath(
+        userId: UserId,
+        resourceName: ResourceName,
+        timestampMs: Long,
+        filename: String,
+    ): StoragePathModel.InternalOnly = StoragePathModel.InternalOnly(
+        buildList {
+            addAll(buildResourceRootRelativePath(userId, resourceName = resourceName))
+            add(filename)
+        }, internalLocation = InternalLocation.Cache
     )
 
     /**
@@ -166,7 +204,7 @@ class StoragePathUseCase @Inject constructor(
      * format = ${dd-HHmmss-SSS}-utc (on UTC)
      */
     private fun formatToUtcDayAndTime(timestampMs: Long): String {
-        return UTC_DAY_AND_TIME_FORMATTER.format(Instant.ofEpochMilli(timestampMs))
+        return USER_FRIENDLY_UTC_TIME_FORMATTER.format(Instant.ofEpochMilli(timestampMs))
     }
 
     /**
@@ -210,13 +248,14 @@ class StoragePathUseCase @Inject constructor(
     ): List<String> = listOf(getUserRootDirName(userId), resourceName.value)
 
     companion object {
-        private val UTC_DAY_AND_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd-HHmmss-SSS-'utc'")
-            .withZone(ZoneOffset.UTC)
+        private val USER_FRIENDLY_UTC_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS-'utc'")
+                .withZone(ZoneOffset.UTC)
     }
 }
 
 private enum class ResourceName(val value: String) {
-    AVATAR("avatar"), MessageFileRaw("message"), MessageThumbnail("thumbnail")
+    AVATAR("avatar"), MessageFileRaw("message"), MessageThumbnail("thumbnail"), MessageCache("message_cache")
 }
 
 private enum class AvatarTargetName(val value: String) {

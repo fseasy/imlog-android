@@ -11,6 +11,7 @@ import top.fseasy.imlog.data.constants.THUMBNAIL_MAX_HEIGHT
 import top.fseasy.imlog.data.constants.THUMBNAIL_MAX_WIDTH
 import top.fseasy.imlog.data.mapper.getMimeType
 import top.fseasy.imlog.data.mapper.toUri
+import top.fseasy.imlog.data.mapper.toUriOrNull
 import top.fseasy.imlog.data.mapper.toUriOrThrow
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.domain.model.StoragePathModel
@@ -28,11 +29,15 @@ import top.fseasy.imlog.data.util.FileWriteMode
 import top.fseasy.imlog.data.util.FindOrCreateFileUriResult
 import top.fseasy.imlog.data.util.GenerateThumbnailResult
 import top.fseasy.imlog.data.util.MediaFields
-import top.fseasy.imlog.data.util.UriStorageUtil
+import top.fseasy.imlog.data.util.MetadataResolveUtils
+import top.fseasy.imlog.data.util.UriPathUtil
 import top.fseasy.imlog.data.util.WriteDataResult
+import top.fseasy.imlog.data.util.copyBetweenUri
 import top.fseasy.imlog.data.util.copyUriToFile
 import top.fseasy.imlog.data.util.generateAndSaveThumbnail
 import top.fseasy.imlog.data.util.isDimensionValid
+import top.fseasy.imlog.data.util.resolveMetadata
+import top.fseasy.imlog.data.util.writeData2Uri
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.InternalLocation
 import top.fseasy.imlog.domain.util.resolveSubPaths
@@ -84,13 +89,11 @@ class StorageRepositoryImpl @Inject constructor(
         storageUriCache[userId] = uri
     }
 
-    override suspend fun getDisplayNameOrThrow(uriStr: UriStr): String {
-        val uri = uriStr.toUriOrThrow()
-        return UriStorageUtil.getDisplayNameWithFallback(context, uri = uri)
-            ?: throw IllegalArgumentException(
-                "Given Uri $uriStr can't be parsed to get dir name"
-            )
-    }
+    override suspend fun getDisplayNameOrDefault(uriStr: UriStr, defaultName: String): String =
+        uriStr.toUriOrNull()
+            ?.let {
+                MetadataResolveUtils.getDisplayNameOrDefault(context, it, defaultName)
+            } ?: defaultName
 
     /**
      * Run in IO threads for io parts.
@@ -168,7 +171,7 @@ class StorageRepositoryImpl @Inject constructor(
         mimeType: String,
     ): UriStr {
         val fileUri = filePath.ensureFileUri(this, mimeType)
-        when (val r = UriStorageUtil.writeData(context, tgtFileUri = fileUri, content = content)) {
+        when (val r = writeData2Uri(context, tgtFileUri = fileUri, content = content)) {
             is WriteDataResult.Error -> throw r.cause
             is WriteDataResult.Success -> Unit
         }
@@ -227,7 +230,7 @@ class StorageRepositoryImpl @Inject constructor(
         srcMimeType: String,
     ): FileCopyResult {
         val tgtUri = pathModel.ensureFileUri(this, mimeType = srcMimeType)
-        return UriStorageUtil.copyBetweenUri(
+        return copyBetweenUri(
             context,
             srcUri,
             tgtUri,
@@ -257,12 +260,12 @@ class StorageRepositoryImpl @Inject constructor(
                 DISPLAY_NAME, FILE_SIZE, MIME_TYPE, DURATION
             )
         }
-        val metaData = UriStorageUtil.resolveMetadata(context, srcUri, queryMetaFields)
+        val metaData = resolveMetadata(context, srcUri, queryMetaFields)
         val displayName =
-            metaData.displayName ?: UriStorageUtil.getDisplayNameFallback(srcUri) // more robust
+            metaData.displayName ?: UriPathUtil.getDisplayNameFallback(srcUri) // more robust
             ?: "_" // have to assign a value. It should be ok.
-        val mimeType = metaData.mimeType ?: UriStorageUtil.robustGetMimeType(context, srcUri)
-        val duration = metaData.duration ?: UriStorageUtil.getAudioDurationFallback(context, srcUri)
+        val mimeType = metaData.mimeType ?: UriPathUtil.robustGetMimeType(context, srcUri)
+        val duration = metaData.duration ?: UriPathUtil.getAudioDurationFallback(context, srcUri)
     }
 
     override suspend fun saveMessageMedia(
@@ -283,15 +286,15 @@ class StorageRepositoryImpl @Inject constructor(
             return MediaSaveResult.Failure.SrcInvalid(e)
         }
 
-        val metaData = UriStorageUtil.resolveMetadata(context, srcUri, queryMetaFields)
+        val metaData = resolveMetadata(context, srcUri, queryMetaFields)
 
         val displayName =
-            metaData.displayName ?: UriStorageUtil.getDisplayNameFallback(srcUri) // more robust
+            metaData.displayName ?: UriPathUtil.getDisplayNameFallback(srcUri) // more robust
             ?: "_" // have to assign a value. It should be ok.
 
         val storeRawFilename =
             messageFilePathUseCase.generateFilenameByPrependTime(messageTimestampMs, displayName)
-        val mimeType = metaData.mimeType ?: UriStorageUtil.robustGetMimeType(context, srcUri)
+        val mimeType = metaData.mimeType ?: UriPathUtil.robustGetMimeType(context, srcUri)
         val (calcTgtUrl, failure) = calcRawSharedStorageUri(
             userId = userId,
             topicId = topicId,
@@ -305,7 +308,7 @@ class StorageRepositoryImpl @Inject constructor(
         val rawFileTgtUri =
             requireNotNull(calcTgtUrl) { "save Target Uri is null on failure not null" }
 
-        val bytesCopied = when (val copyResult = UriStorageUtil.copyBetweenUri(
+        val bytesCopied = when (val copyResult = copyBetweenUri(
             context,
             srcUri,
             rawFileTgtUri,
@@ -448,7 +451,7 @@ class StorageRepositoryImpl @Inject constructor(
         val relativePathSegments = messageFilePathUseCase.generateFullRelativePath(
             userId, topicId, messageTimestampMs, rawFilename
         )
-        when (val result = UriStorageUtil.ensureSAFFileUri(
+        when (val result = UriPathUtil.ensureSAFFileUri(
             context, tgtRootTreeUri, relativePathSegments, mimeType
         )) {
             is FindOrCreateFileUriResult.Success -> return result.uri to null
@@ -486,7 +489,7 @@ class StorageRepositoryImpl @Inject constructor(
         // 使用 when(true) 进行多条件分支判断
         return when {
             isImage && !isDimensionValid(initialMeta.width, initialMeta.height) -> {
-                UriStorageUtil.getImageDimensionsFallback(context, mediaUri)
+                UriPathUtil.getImageDimensionsFallback(context, mediaUri)
                     ?.let {
                         DimensionAndDuration(it.width, it.height, 0L)
                     } ?: DimensionAndDuration(
@@ -497,7 +500,7 @@ class StorageRepositoryImpl @Inject constructor(
             isVideo && !(isDimensionValid(
                 initialMeta.width, initialMeta.height
             ) && isDurationValid) -> {
-                UriStorageUtil.getVideo3DimensionsFallback(context, mediaUri)
+                UriPathUtil.getVideo3DimensionsFallback(context, mediaUri)
                     ?.let {
                         DimensionAndDuration(it.width, it.height, it.duration)
                     } ?: DimensionAndDuration(
@@ -506,8 +509,8 @@ class StorageRepositoryImpl @Inject constructor(
             }
 
             isAudio && !isDurationValid -> {
-                val d = UriStorageUtil.getAudioDurationFallback(context, mediaUri)
-                    ?: initialMeta.duration
+                val d =
+                    UriPathUtil.getAudioDurationFallback(context, mediaUri) ?: initialMeta.duration
                 DimensionAndDuration(null, null, d)
             }
 
@@ -540,7 +543,7 @@ class StorageRepositoryImpl @Inject constructor(
             mimeType: String,
         ): Uri {
             val rootUri = this.root.toUri(instance)
-            return when (val result = UriStorageUtil.ensureSAFFileUri(
+            return when (val result = UriPathUtil.ensureSAFFileUri(
                 context = instance.context,
                 rootTreeUri = rootUri,
                 relativePathSegments = this.fullRelativePath,
@@ -560,7 +563,7 @@ class StorageRepositoryImpl @Inject constructor(
             instance: StorageRepositoryImpl,
         ): Uri {
             val rootUri = this.root.toUri(instance)
-            val result = UriStorageUtil.ensureSAFDirectoryUri(
+            val result = UriPathUtil.ensureSAFDirectoryUri(
                 context = instance.context,
                 rootTreeUri = rootUri,
                 relativePathSegments = this.fullRelativePath

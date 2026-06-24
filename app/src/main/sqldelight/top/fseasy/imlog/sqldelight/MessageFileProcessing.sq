@@ -1,0 +1,22 @@
+
+insertMessageFileProcessingState:
+INSERT INTO message_file_processing_states
+VALUES ?;
+
+setMessageFileInternalCacheFilename:
+UPDATE message_file_processing_states
+SET internal_cached_filename = :internalCachedFilename
+WHERE message_id = :messageId;
+
+setMessageFileProcessingStatus:
+UPDATE message_file_processing_states
+SET
+    status = :status,
+    current_stage = :currentStage,
+    error_type = :errorType,
+    error_user_retriable = :errorUserRetriable
+WHERE message_id = :messageId;
+
+deleteMessageMediaProcessingTempState:
+DELETE FROM message_file_processing_states
+WHERE message_id = :message_id;

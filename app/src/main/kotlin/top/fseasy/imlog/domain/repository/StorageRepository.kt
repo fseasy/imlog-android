@@ -61,13 +61,34 @@ interface StorageRepository {
         messageTimestampMs: Long,
     ): MediaSaveResult
 
-    suspend fun getDisplayNameOrThrow(uriStr: UriStr): String
+    /**
+     * Run in IO. No exception will be thrown. (all will be swallowed and return default)
+     */
+    suspend fun getDisplayNameOrDefault(uriStr: UriStr, defaultName: String): String
 
-    suspend fun writeFile(filePath: StoragePathModel, content: ByteArray, mimeType: String?): UriStr?
+    suspend fun writeFile(
+        filePath: StoragePathModel,
+        content: ByteArray,
+        mimeType: String?,
+    ): UriStr?
+
     suspend fun mkdirs(filePath: StoragePathModel): UriStr?
+
+    /**
+     * Run in IO.
+     *
+     * No exception thrown.
+     *
+     * TODO: optimize for condition input is a File. currently just transform it to Uri.
+     *       it's suboptimal in efficiency and tolerance(permission is restricted in FileProvider)
+     *
+     * @param srcMimeType - it null, will resolve it internal for Uri type target.
+     *                      For condition where targetPath is InternalOnly, leave it to null
+     *                      as it's not needed
+     */
     suspend fun copyFile(
         srcAbsolutePath: AbsolutePathModel,
         targetPath: StoragePathModel,
-        srcMimeType: String? = null
+        srcMimeType: String? = null,
     ): FileCopyResult
 }
