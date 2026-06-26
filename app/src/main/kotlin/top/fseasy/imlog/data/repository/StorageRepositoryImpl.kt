@@ -39,6 +39,7 @@ import top.fseasy.imlog.data.util.isDimensionValid
 import top.fseasy.imlog.data.util.resolveMetadata
 import top.fseasy.imlog.data.util.writeData2Uri
 import top.fseasy.imlog.domain.model.AbsolutePathModel
+import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.InternalLocation
 import top.fseasy.imlog.domain.util.resolveSubPaths
 import java.io.File
@@ -94,6 +95,12 @@ class StorageRepositoryImpl @Inject constructor(
             ?.let {
                 MetadataResolveUtils.getDisplayNameOrDefault(context, it, defaultName)
             } ?: defaultName
+
+
+    override suspend fun getAudioMetadataOrNull(uriStr: UriStr): AudioMetadata? = uriStr.toUriOrNull()
+        ?.let {
+            MetadataResolveUtils.forAudioUri(context, uri = it)
+        }
 
     /**
      * Run in IO threads for io parts.

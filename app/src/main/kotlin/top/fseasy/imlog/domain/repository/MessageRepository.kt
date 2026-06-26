@@ -1,7 +1,7 @@
 package top.fseasy.imlog.domain.repository
 
-import app.cash.sqldelight.db.QueryResult
 import kotlinx.coroutines.flow.Flow
+import top.fseasy.imlog.domain.model.MediaMetadataUnion
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageFileProcessingErrorType
 import top.fseasy.imlog.domain.model.MessageFileProcessingStage
@@ -37,6 +37,7 @@ interface MessageRepository {
         senderId: UserId,
         messageType: MessageType,
         srcUriStr: UriStr,
+        srcMetadata: MediaMetadataUnion,
         messageTimestampMs: Long = System.currentTimeMillis(),
     ): MessageId
 
@@ -55,11 +56,21 @@ interface MessageRepository {
      * @throws Throwable
      * @return if set success (based on affected rows)
      */
+    suspend fun fileSendingOnSettingRawFilename(
+        messageId: MessageId,
+        filename: String?,
+    ): Boolean
+
+    /**
+     * run IN IO.
+     * @throws Throwable
+     * @return if set success (based on affected rows)
+     */
     suspend fun fileSendingOnSettingProcessingStatus(
         messageId: MessageId,
         status: MessageFileProcessingStatus,
         stage: MessageFileProcessingStage,
         errorType: MessageFileProcessingErrorType,
-        errorUserRetriable: Boolean
+        errorUserRetriable: Boolean,
     ): Boolean
 }

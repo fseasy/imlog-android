@@ -25,6 +25,7 @@ import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.sqldelight.Message_file_processing_states as MessageFileProcessingStatesEntity
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
+import top.fseasy.imlog.domain.model.MediaMetadataUnion
 import top.fseasy.imlog.domain.model.MessageFileProcessingErrorType
 import top.fseasy.imlog.domain.model.MessageFileProcessingStage
 import top.fseasy.imlog.domain.model.UriStr
@@ -77,25 +78,28 @@ class MessageRepositoryImpl @Inject constructor(
         senderId: UserId,
         messageType: MessageType,
         srcUriStr: UriStr,
+        srcMetadata: MediaMetadataUnion,
         messageTimestampMs: Long,
     ) = withContext(dispatcher) {
         retryOnAnyException {
-            val pendingMessage = MessageFactory.createPendingMedia(
+            val pendingMessage = fileSendingCreatePendingStatusMessageEntity(
                 topicId = topicId,
                 senderId = senderId,
                 type = messageType,
                 timestampMs = messageTimestampMs,
+                srcMetadata = srcMetadata
             )
-            val pendingStateEntity = createMessageFileProcessingPendingStateValue(
-                messageId = pendingMessage.id, srcUriStr = srcUriStr
+            val messageId = MessageId(pendingMessage.id)
+            val pendingStateEntity = fileSendingCreatePendingStatusMessageFileProcessingEntity(
+                messageId = messageId, srcUriStr = srcUriStr
             )
             database.transaction {
-                database.messageQueries.insertMessage(pendingMessage.toEntity())
+                database.messageQueries.insertMessage(pendingMessage)
                 database.messageFileProcessingQueries.insertMessageFileProcessingState(
                     pendingStateEntity
                 )
             }
-            pendingMessage.id
+            messageId
         }
     }
 
@@ -109,6 +113,18 @@ class MessageRepositoryImpl @Inject constructor(
             ).value > 0L
         }
     }
+
+    override suspend fun fileSendingOnSettingRawFilename(
+        messageId: MessageId,
+        filename: String?,
+    ): Boolean = withContext(dispatcher) {
+        retryOnAnyException {
+            database.messageQueries.updateMessageRawFilename(
+                filename = filename, messageId = messageId.value
+            ).value > 0L
+        }
+    }
+
 
     override suspend fun fileSendingOnSettingProcessingStatus(
         messageId: MessageId,
@@ -185,7 +201,7 @@ class MessageRepositoryImpl @Inject constructor(
     ) {
         database.transaction {
             database.messageQueries.updateMessageMediaFields(
-                filename = savedMedia.filename,
+                raw_filename = savedMedia.filename,
                 original_filename = savedMedia.originalFilename,
                 file_size = savedMedia.fileSize,
                 thumbnail_name = savedMedia.thumbnailFilename,
@@ -199,7 +215,7 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun createMessageFileProcessingPendingStateValue(
+    private fun fileSendingCreatePendingStatusMessageFileProcessingEntity(
         messageId: MessageId,
         srcUriStr: UriStr,
     ) = MessageFileProcessingStatesEntity(
@@ -210,6 +226,31 @@ class MessageRepositoryImpl @Inject constructor(
         error_user_retriable = null,
         src_uri = srcUriStr.value,
         internal_cached_filename = null
+    )
+
+    private fun fileSendingCreatePendingStatusMessageEntity(
+        topicId: TopicId,
+        senderId: UserId,
+        type: MessageType,
+        timestampMs: Long,
+        srcMetadata: MediaMetadataUnion,
+    ) = MessageEntity(
+        id = MessageId.random().value,
+        topic_id = topicId.value,
+        sender_id = senderId.value,
+        type = type.value,
+        content = null,
+        created_at = timestampMs,
+        mime_type = srcMetadata.mimeType,
+        width = srcMetadata.width?.toLong(),
+        height = srcMetadata.height?.toLong(),
+        duration = srcMetadata.duration,
+        file_size = srcMetadata.fileSize,
+        original_filename = srcMetadata.displayName,
+        raw_filename = null,
+        thumbnail_filename = null,
+        attributes_updated_at = timestampMs,
+        is_deleted = 0
     )
 
     private fun GetMessagesByTopicRowEntity.toDomain(currentUserId: UserId): Message {
@@ -223,13 +264,13 @@ class MessageRepositoryImpl @Inject constructor(
             originalFileUri = src_uri?.toUri(),
             fileProcessStatus = status?.toMessageMediaProcessStatus(),
             originalFilename = original_filename,
-            filename = filename,
+            filename = raw_filename,
             fileSize = file_size,
             mimeType = mime_type,
             duration = duration,
             width = width?.toInt(),
             height = height?.toInt(),
-            thumbnailName = thumbnail_name,
+            thumbnailName = thumbnail_filename,
             // - end of media file fields
             createdAt = created_at,
             attributesUpdatedAt = attributes_updated_at,
@@ -248,10 +289,10 @@ class MessageRepositoryImpl @Inject constructor(
          */
         type = type?.value ?: "__unknown__",
         content = content,
-        filename = filename,
+        raw_filename = filename,
         file_size = fileSize,
         duration = duration,
-        thumbnail_name = thumbnailName,
+        thumbnail_filename = thumbnailName,
         created_at = createdAt,
         attributes_updated_at = attributesUpdatedAt,
         is_deleted = 0,

@@ -9,31 +9,10 @@ import android.provider.OpenableColumns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import top.fseasy.imlog.domain.model.AudioMetadata
+import top.fseasy.imlog.domain.model.ImageMetadata
+import top.fseasy.imlog.domain.model.VideoMetadata
 import java.util.EnumMap
-
-data class AudioMetaData(
-    val displayName: String,
-    val fileSize: Long,
-    val mimeType: String,
-    val duration: Long,
-)
-
-data class VideoMetaData(
-    val displayName: String,
-    val fileSize: Long,
-    val mimeType: String,
-    val duration: Long,
-    val width: Int,
-    val height: Int,
-)
-
-data class ImageMetaData(
-    val displayName: String,
-    val fileSize: Long,
-    val mimeType: String,
-    val width: Int,
-    val height: Int,
-)
 
 /**
  * A higher wrapper for file metadata resolving.
@@ -63,7 +42,7 @@ object MetadataResolveUtils {
     suspend fun forAudioUri(
         context: Context,
         uri: Uri,
-    ): AudioMetaData = withContext(Dispatchers.IO) {
+    ): AudioMetadata = withContext(Dispatchers.IO) {
         val fields = setOf(
             MetaDataField.DISPLAY_NAME,
             MetaDataField.FILE_SIZE,
@@ -78,7 +57,7 @@ object MetadataResolveUtils {
         val mimeType = result.mimeType ?: MimeTypeUtils.getMimeTypeOrNull(context, uri) ?: "audio/*"
         val duration = result.duration ?: MediaDurationUtils.getDuration(context, uri)
 
-        AudioMetaData(
+        AudioMetadata(
             displayName = displayName, fileSize = fileSize, mimeType = mimeType, duration = duration
         )
     }
@@ -90,7 +69,7 @@ object MetadataResolveUtils {
     suspend fun forVideoUri(
         context: Context,
         uri: Uri,
-    ): VideoMetaData = withContext(Dispatchers.IO) {
+    ): VideoMetadata = withContext(Dispatchers.IO) {
         val fields = setOf(
             MetaDataField.DISPLAY_NAME,
             MetaDataField.FILE_SIZE,
@@ -117,7 +96,7 @@ object MetadataResolveUtils {
             if (height == null) height = fallback.height
         }
 
-        VideoMetaData(
+        VideoMetadata(
             displayName = displayName,
             fileSize = fileSize,
             mimeType = mimeType,
@@ -134,7 +113,7 @@ object MetadataResolveUtils {
     suspend fun forImageUri(
         context: Context,
         uri: Uri,
-    ): ImageMetaData = withContext(Dispatchers.IO) {
+    ): ImageMetadata = withContext(Dispatchers.IO) {
         val fields = setOf(
             MetaDataField.DISPLAY_NAME,
             MetaDataField.FILE_SIZE,
@@ -158,7 +137,7 @@ object MetadataResolveUtils {
             if (height == null) height = fallback.height
         }
 
-        ImageMetaData(
+        ImageMetadata(
             displayName = displayName,
             fileSize = fileSize,
             mimeType = mimeType,

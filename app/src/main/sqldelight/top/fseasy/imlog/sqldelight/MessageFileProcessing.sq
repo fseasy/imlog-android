@@ -8,13 +8,11 @@ UPDATE message_file_processing_states
 SET internal_cached_filename = :internalCachedFilename
 WHERE message_id = :messageId;
 
-setMessageFileProcessingStatus:
+UpdateMessageFileProcessingError:
 UPDATE message_file_processing_states
 SET
-    status = :status,
-    current_stage = :currentStage,
-    error_type = :errorType,
-    error_user_retriable = :errorUserRetriable
+    error_stage = :errorStage,
+    error_user_retryable = :errorUserRetryable
 WHERE message_id = :messageId;
 
 deleteMessageMediaProcessingTempState:

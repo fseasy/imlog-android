@@ -1,6 +1,7 @@
 
 CREATE TABLE messages (
     id TEXT NOT NULL PRIMARY KEY,
+    -- || Message main/basic fields ||
     -- 如果删除了 Topic，所有的内部 messages 全部要删掉！
     topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
     -- 这里不关联 UserId, 也不是 reference + set null;
@@ -8,21 +9,26 @@ CREATE TABLE messages (
     --     在此基础设定上，不设置 reference + set null 的原因：
     --     1. 减少 reference 开销 2. 保留 id 值，还能显示出 id，有一定区分性
     sender_id TEXT NOT NULL,
-    type TEXT NOT NULL,
+    type TEXT NOT NULL, -- message type, audio/video/text, and so on
     content TEXT,
-    -- Message file Key fields
-    -- | only store the file name. Absolute path is dynamically calculated and deterministic.
-    filename TEXT,
-    original_filename TEXT,
-    file_size INTEGER,
-    -- Media file fields
-    thumbnail_name TEXT,
-    mime_type TEXT,
-    duration INTEGER,
-    width INTEGER,
-    height INTEGER,
-    -- states
     created_at INTEGER NOT NULL,
+    -- || Message file fields ||
+    --    DESIGN-Concept: We put them to the main table to decrease the code complexity.
+    --                    at the cost of increased db size.
+    --   -> class 1: ui card rendering(before/when showing content)
+    mime_type TEXT,
+    width INTEGER, -- used to decide the card ratio (before showing content)
+    height INTEGER, -- card ratio
+    duration INTEGER, -- ui element (when showing)
+    file_size INTEGER, -- ui element
+    original_filename TEXT, -- ui element / for download/share
+    --   -> class 2: loading source candidates
+    raw_filename TEXT, -- only store the file name. Absolute path is dynamically calculated and deterministic.
+    thumbnail_filename TEXT,
+    --   -> class 3: if raw_filename and thumbnail_name all are null, go to the table
+    --               `message_file_processing_states` to get the processing file info.
+    --               intended for 2-phase query.
+    -- || record states ||
     attributes_updated_at INTEGER NOT NULL,
     is_deleted INTEGER NOT NULL DEFAULT 0
 );
@@ -31,16 +37,13 @@ CREATE TABLE messages (
 -- the row will be deleted once media was processed done.
 CREATE TABLE message_file_processing_states (
    message_id TEXT NOT NULL PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
-   -- || stage processing job details (mainly used for failed job retry)
-   -- 'processing', 'faild', ['uploading']
-   status TEXT NOT NULL,
-   current_stage TEXT,
-   error_type TEXT,
-   error_user_retriable INTEGER,
-   -- || processing intermediate results (used for failed job retry, ui render)
+   -- || processing intermediate results ||  used for ui rendering, failed job retry
    -- used to show before thumnail and internal-raw data are prepared.
    src_uri TEXT NOT NULL,
-   internal_cached_filename TEXT
+   internal_cached_filename TEXT,
+   -- || stage processing job details || used for ui rendering, failed job retry
+   error_stage TEXT DEFAULT NULL,      -- effective when has_failed = 1
+   error_user_retryable INTEGER DEFAULT NULL
 );
 
 CREATE INDEX idx_messages_topic_created ON messages(topic_id, created_at);
@@ -49,7 +52,7 @@ CREATE INDEX idx_topics_creator ON topics(creator_id);
 
 getMessagesByTopic:
 -- need join the media-processing table
-SELECT m.*, p.status, p.src_uri
+SELECT m.*, p.src_uri, p.error_stage, p.error_user_retryable
 FROM messages m
 LEFT JOIN message_file_processing_states p ON m.id = p.message_id
 WHERE m.topic_id = :topic_id
@@ -63,18 +66,17 @@ insertMessage:
 INSERT INTO messages
 VALUES ?;
 
-updateMessageMediaFields:
+updateMessageRawFilename:
 UPDATE messages
 SET
-    filename = :filename,
-    original_filename = :original_filename,
-    file_size = :file_size,
-    thumbnail_name = :thumbnail_name,
-    mime_type = :mime_type,
-    duration = :duration,
-    width = :width,
-    height = :height
-WHERE id = :message_id;
+    raw_filename = :filename
+WHERE id = :messageId;
+
+updateMessageThumbnailFilename:
+UPDATE messages
+SET
+    thumbnail_filename = :filename
+WHERE id = :messageId;
 
 deleteMessageLogical:
 UPDATE messages SET is_deleted = 1 WHERE id = ?;

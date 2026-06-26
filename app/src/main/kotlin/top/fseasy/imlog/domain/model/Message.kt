@@ -1,6 +1,7 @@
 package top.fseasy.imlog.domain.model
 
 import android.net.Uri
+import kotlin.String
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -32,56 +33,16 @@ value class MessageId(val value: String) {
     }
 }
 
-enum class MessageFileProcessingStatus(val value: String) {
-    Pending("pending"), Processing("processing"), Failed("failed");
 
-    companion object {
-        private val valueMap =
-            MessageFileProcessingStatus.entries.associateBy(MessageFileProcessingStatus::value)
-
-        fun fromValue(value: String) = valueMap[value]
-    }
-}
-
-fun String.toMessageFileProcessingStatus(): MessageFileProcessingStatus? =
-    MessageFileProcessingStatus.fromValue(this)
-
-enum class MessageFileProcessingStage(val value: String) {
-    InsertPendingMessage("insert_pending_message"), CopySrcToInternalCache(value = "copy_src2internal_cache"), GenerateThumbnail(
-        "generate_thumbnail"
-    ),
-    CopyToSharedStorage("copy2shared_storage"), CleanWhenSuccess("clean_when_success");
-
-    companion object {
-        private val valueMap =
-            MessageFileProcessingStage.entries.associateBy(MessageFileProcessingStage::value)
-
-        fun fromValue(value: String) = valueMap[value]
-    }
-}
-
-fun String?.toMessageFileProcessingStage(): MessageFileProcessingStage? =
-    this?.let { MessageFileProcessingStage.fromValue(it) }
-
-
-enum class MessageFileProcessingErrorType(val value: String) {
-    Copy2InternalFailure("copy2internal_failure"),
-    SetInternalCacheToDbException(value = "set_internal_cache2db_exception"),
-    UpdateProcessingStateDbNoEffect(
-        value = "update_processing_db_no_effect"
-    );
-
-    companion object {
-        private val valueMap =
-            MessageFileProcessingErrorType.entries.associateBy(MessageFileProcessingErrorType::value)
-
-        fun fromValue(value: String) = valueMap[value]
-    }
-}
-
-fun String?.MessageFileProcessingErrorType(): MessageFileProcessingErrorType? =
-    this?.let { MessageFileProcessingErrorType.fromValue(it) }
-
+data class MessageFileProcessState(
+    val messageId: MessageId,
+    val status: MessageFileProcessingStatus,
+    val processingStage: MessageFileProcessingStage,
+    val errorType: MessageFileProcessingErrorType,
+    val errorUserRetriable: Boolean,
+    val srcUri: UriStr,
+    val internalCachedFilename: String,
+)
 
 /**
  * Time/Duration all are in MS.
@@ -127,32 +88,5 @@ object MessageFactory {
             attributesUpdatedAt = timestampMs
         )
     }
-
-    fun createPendingMedia(
-        topicId: TopicId,
-        senderId: UserId,
-        type: MessageType,
-        timestampMs: Long,
-    ): Message {
-        return Message(
-            id = MessageId.random(),
-            topicId = topicId,
-            senderId = senderId,
-            type = type,
-            content = null,
-            createdAt = timestampMs,
-            attributesUpdatedAt = timestampMs,
-        )
-    }
 }
-
-data class MessageFileProcessState(
-    val messageId: MessageId,
-    val status: MessageFileProcessingStatus,
-    val processingStage: MessageFileProcessingStage,
-    val errorType: MessageFileProcessingErrorType,
-    val errorUserRetriable: Boolean,
-    val srcUri: UriStr,
-    val internalCachedFilename: String,
-)
 

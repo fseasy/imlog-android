@@ -1,6 +1,7 @@
 package top.fseasy.imlog.domain.repository
 
 import top.fseasy.imlog.domain.model.AbsolutePathModel
+import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
@@ -91,4 +92,10 @@ interface StorageRepository {
         targetPath: StoragePathModel,
         srcMimeType: String? = null,
     ): FileCopyResult
+
+    /**
+     * No exception will be thrown. If uri invalid, return null. else return metadata
+     * that might be inaccurate in edge condition where data is corrupted.
+     */
+    suspend fun getAudioMetadataOrNull(uriStr: UriStr): AudioMetadata?
 }
