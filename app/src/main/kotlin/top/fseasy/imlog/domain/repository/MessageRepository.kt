@@ -3,11 +3,9 @@ package top.fseasy.imlog.domain.repository
 import kotlinx.coroutines.flow.Flow
 import top.fseasy.imlog.domain.model.MediaMetadataUnion
 import top.fseasy.imlog.domain.model.Message
-import top.fseasy.imlog.domain.model.MessageFileProcessingErrorType
-import top.fseasy.imlog.domain.model.MessageFileProcessingStage
-import top.fseasy.imlog.domain.model.MessageFileProcessingStatus
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageMediaCopySource
+import top.fseasy.imlog.domain.model.MessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Statistics
 import top.fseasy.imlog.domain.model.TopicId
@@ -32,7 +30,7 @@ interface MessageRepository {
      * run IN IO.
      * @throws Throwable
      */
-    suspend fun fileSendingOnInsertingPendingMessage(
+    suspend fun initializeFileMessage(
         topicId: TopicId,
         senderId: UserId,
         messageType: MessageType,
@@ -46,7 +44,7 @@ interface MessageRepository {
      * @throws Throwable
      * @return if set success (based on affected rows)
      */
-    suspend fun fileSendingOnSettingInternalCacheFilename(
+    suspend fun setFileProcessingInternalCacheFilename(
         messageId: MessageId,
         filename: String?,
     ): Boolean
@@ -56,21 +54,19 @@ interface MessageRepository {
      * @throws Throwable
      * @return if set success (based on affected rows)
      */
-    suspend fun fileSendingOnSettingRawFilename(
+    suspend fun setFileMessageRawFilename(
         messageId: MessageId,
         filename: String?,
     ): Boolean
 
     /**
-     * run IN IO.
+     * run IN IO. update message_file_processing_task_states db.
      * @throws Throwable
      * @return if set success (based on affected rows)
      */
-    suspend fun fileSendingOnSettingProcessingStatus(
+    suspend fun setFileProcessingTaskFail(
         messageId: MessageId,
-        status: MessageFileProcessingStatus,
-        stage: MessageFileProcessingStage,
-        errorType: MessageFileProcessingErrorType,
-        errorUserRetriable: Boolean,
+        stage: MessageProcessingErrorStage,
+        errorUserRetryable: Boolean,
     ): Boolean
 }

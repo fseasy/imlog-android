@@ -64,19 +64,26 @@ fun ImageMetadata.toMetadataUnion() = MediaMetadataUnion(
     duration = null,
 )
 
-enum class MessageAudioErrorStage(val value: String) {
+sealed interface MessageProcessingErrorStage {
+    val value: String
+}
+
+enum class MessageAudioProcessingErrorStage(override val value: String) :
+    MessageProcessingErrorStage {
     CopySrcToInternalCache(value = "copy_src2internal_cache"),
     SetInternalFilenameToDb(value = "set_internal_filename2db"),
     CopyToSharedStorage("copy2shared_storage"),
     SetRawFilenameToDb("set_raw_filename2db"),
-    Clean("clean");
+    Clean("clean"),
+    IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
+    ;
 
     companion object {
-        private val valueMap = entries.associateBy(MessageAudioErrorStage::value)
+        private val valueMap = entries.associateBy(MessageAudioProcessingErrorStage::value)
 
         fun fromValue(value: String) = valueMap[value]
     }
 }
 
-fun String?.toMessageAudioErrorStage(): MessageAudioErrorStage? =
-    this?.let { MessageAudioErrorStage.fromValue(it) }
+fun String?.toMessageAudioErrorStage(): MessageAudioProcessingErrorStage? =
+    this?.let { MessageAudioProcessingErrorStage.fromValue(it) }

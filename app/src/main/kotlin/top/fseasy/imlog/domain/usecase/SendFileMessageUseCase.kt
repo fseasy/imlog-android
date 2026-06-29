@@ -4,9 +4,9 @@ import timber.log.Timber
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.domain.model.MediaMetadataUnion
-import top.fseasy.imlog.domain.model.MessageFileProcessingErrorType as ErrorType
-import top.fseasy.imlog.domain.model.MessageFileProcessingStage as ProcessingStage
+import top.fseasy.imlog.domain.model.MessageAudioProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageId
+import top.fseasy.imlog.domain.model.MessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
@@ -19,6 +19,11 @@ import javax.inject.Inject
 /**
  * Shared on copying stages (copy to internal, copy to shared storage)
  */
+
+private enum class CopyStageFailureType {
+    CopyFile, SaveFilenameToDb, UpdateDbIllegalState;
+}
+
 private sealed interface CopyStageResult {
     data class Success(
         val resultFilename: String,
@@ -26,7 +31,7 @@ private sealed interface CopyStageResult {
         val resultAbsolutePath: AbsolutePathModel,
     ) : CopyStageResult
 
-    data class Failure(val errorType: ErrorType, val retriable: Boolean) : CopyStageResult
+    data class Failure(val type: CopyStageFailureType, val retryable: Boolean) : CopyStageResult
 }
 
 class SendMessageFileUseCase @Inject constructor(
@@ -49,7 +54,7 @@ class SendMessageFileUseCase @Inject constructor(
             return
         }
         val messageId = try {
-            insertPendingMessage(
+            initializeFileMessage(
                 srcUriStr = srcUriStr,
                 senderId = userId,
                 topicId = topicId,
@@ -64,24 +69,23 @@ class SendMessageFileUseCase @Inject constructor(
         }
 
         // 2. copy src file to internal cache, then update status
-        val copyInternalSuccessResult =
-            when (val result = copySrcToInternalCacheAndUpdateState(
+        val copyInternalSuccessResult = when (val result = copySrcToInternalCacheAndUpdateState(
+            messageId = messageId,
+            userId = userId,
+            srcUriStr = srcUriStr,
+            messageTimestampMs = messageTimestampMs,
+            originalDisplayName = srcMetadata.displayName,
+        )) {
+            is CopyStageResult.Failure -> return setProcessingTaskFailed(
                 messageId = messageId,
-                userId = userId,
-                srcUriStr = srcUriStr,
-                messageTimestampMs = messageTimestampMs,
-                originalDisplayName = srcMetadata.displayName,
-            )) {
-                is CopyStageResult.Failure -> return setProcessingFailed(
-                    messageId = messageId,
-                    stage = ProcessingStage.CopySrcToInternalCache,
-                    errorType = result.errorType,
-                    errorUserRetriable = result.retriable
-                )
+                stage = result.type.toAudioProcessingErrorStageOnCopyingInternal(),
+                errorUserRetryable = result.retryable
+            )
 
-                is CopyStageResult.Success -> result
-            }
+            is CopyStageResult.Success -> result
+        }
         // 3. copy internal cache to shared storage
+        // TODO: move all the following to the worker compose
         val copySharedStorageSuccessResult =
             when (val result = copyInternalCacheToSharedStorageAndUpdateState(
                 messageId = messageId,
@@ -92,16 +96,16 @@ class SendMessageFileUseCase @Inject constructor(
                 internalCacheFileAbsolutePath = copyInternalSuccessResult.resultAbsolutePath,
                 mimeType = srcMetadata.mimeType
             )) {
-                is CopyStageResult.Failure -> return setProcessingFailed(
+                is CopyStageResult.Failure -> return setProcessingTaskFailed(
                     messageId = messageId,
-                    stage = ProcessingStage.CopyToSharedStorage,
-                    errorType = result.errorType,
-                    errorUserRetriable = result.retriable
+                    stage = result.type.toAudioProcessingErrorStageOnCopyingShared(),
+                    errorUserRetryable = result.retryable
                 )
 
                 is CopyStageResult.Success -> result
             }
         // 4. clean cache and processing status record
+        //    1. remove db row 2. remove cache (if failed, just leave it to be, no need to rollback)
 
     }
 
@@ -131,26 +135,26 @@ class SendMessageFileUseCase @Inject constructor(
         )
         val copyResult = when (result) {
             is FileCopyResult.Error -> return CopyStageResult.Failure(
-                errorType = ErrorType.CopyToSharedStorageFailure,
-                retriable = isInternalToSharedStorageCopyErrorRetriable(result)
+                type = CopyStageFailureType.CopyFile,
+                retryable = isInternalToSharedStorageCopyErrorRetriable(result)
             )
 
             is FileCopyResult.Success -> result
         }
         val isSetSuccess = try {
-            messageRepository.fileSendingOnSettingRawFilename(
+            messageRepository.setFileMessageRawFilename(
                 filename = rawFilename, messageId = messageId
             )
         } catch (e: Exception) {
             Timber.i(e, "Set raw filename failed")
             return CopyStageResult.Failure(
-                errorType = ErrorType.SetRawFilenameToDbException, retriable = true
+                type = CopyStageFailureType.SaveFilenameToDb, retryable = true
             )
         }
         if (!isSetSuccess) {
             return CopyStageResult.Failure(
-                errorType = ErrorType.UpdateProcessingStateDbNoEffect,
-                retriable = false // illegal state, should be impossible in general
+                type = CopyStageFailureType.UpdateDbIllegalState,
+                retryable = false // illegal state, should be impossible in general
             )
         }
         return CopyStageResult.Success(
@@ -180,26 +184,26 @@ class SendMessageFileUseCase @Inject constructor(
 
         val copyResult = when (result) {
             is FileCopyResult.Error -> return CopyStageResult.Failure(
-                errorType = ErrorType.CopyToInternalFailure,
-                retriable = isSrcToInternalCopyErrorRetriable(result)
+                type = CopyStageFailureType.CopyFile,
+                retryable = isSrcToInternalCopyErrorRetriable(result)
             )
 
             is FileCopyResult.Success -> result
         }
         val isSetSuccess = try {
-            messageRepository.fileSendingOnSettingInternalCacheFilename(
+            messageRepository.setFileProcessingInternalCacheFilename(
                 filename = cacheFilename, messageId = messageId
             )
         } catch (e: Exception) {
             Timber.i(e, "Set internal cache filename failed")
             return CopyStageResult.Failure(
-                errorType = ErrorType.SetInternalCacheToDbException, retriable = true
+                type = CopyStageFailureType.SaveFilenameToDb, retryable = true
             )
         }
         if (!isSetSuccess) {
             return CopyStageResult.Failure(
-                errorType = ErrorType.UpdateProcessingStateDbNoEffect,
-                retriable = false // illegal state, should be impossible in general
+                type = CopyStageFailureType.UpdateDbIllegalState,
+                retryable = false // illegal state, should be impossible in general
             )
         }
         return CopyStageResult.Success(
@@ -213,19 +217,16 @@ class SendMessageFileUseCase @Inject constructor(
      * No exception will be thrown.
      * Because no place to handle the error as it's the one to record the error
      */
-    private suspend fun setProcessingFailed(
+    private suspend fun setProcessingTaskFailed(
         messageId: MessageId,
-        stage: ProcessingStage,
-        errorType: ErrorType,
-        errorUserRetriable: Boolean,
+        stage: MessageProcessingErrorStage,
+        errorUserRetryable: Boolean,
     ) {
         try {
-            messageRepository.fileSendingOnSettingProcessingStatus(
+            messageRepository.setFileProcessingTaskFail(
                 messageId = messageId,
-                status = ProcessingStatus.Failed,
                 stage = stage,
-                errorType = errorType,
-                errorUserRetriable = errorUserRetriable,
+                errorUserRetryable = errorUserRetryable,
             )
         } catch (e: Exception) {
             Timber.e(
@@ -239,14 +240,14 @@ class SendMessageFileUseCase @Inject constructor(
     /**
      * @throws Throwable
      */
-    private suspend fun insertPendingMessage(
+    private suspend fun initializeFileMessage(
         srcUriStr: UriStr,
         senderId: UserId,
         topicId: TopicId,
         messageTimestampMs: Long,
         messageType: MessageType,
         srcMetadata: MediaMetadataUnion,
-    ) = messageRepository.fileSendingOnInsertingPendingMessage(
+    ) = messageRepository.initializeFileMessage(
         topicId = topicId,
         senderId = senderId,
         messageType = messageType,
@@ -290,3 +291,16 @@ private fun isInternalToSharedStorageCopyErrorRetriable(error: FileCopyResult.Er
         is FileCopyResult.Error.SrcPermissionDenied,
             -> false
     }
+
+
+private fun CopyStageFailureType.toAudioProcessingErrorStageOnCopyingInternal() = when (this) {
+    CopyStageFailureType.CopyFile -> MessageAudioProcessingErrorStage.CopySrcToInternalCache
+    CopyStageFailureType.SaveFilenameToDb -> MessageAudioProcessingErrorStage.SetInternalFilenameToDb
+    CopyStageFailureType.UpdateDbIllegalState -> MessageAudioProcessingErrorStage.IllegalState
+}
+
+private fun CopyStageFailureType.toAudioProcessingErrorStageOnCopyingShared() = when (this) {
+    CopyStageFailureType.CopyFile -> MessageAudioProcessingErrorStage.CopyToSharedStorage
+    CopyStageFailureType.SaveFilenameToDb -> MessageAudioProcessingErrorStage.SetRawFilenameToDb
+    CopyStageFailureType.UpdateDbIllegalState -> MessageAudioProcessingErrorStage.IllegalState
+}

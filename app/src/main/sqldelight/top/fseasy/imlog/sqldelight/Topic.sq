@@ -20,6 +20,9 @@ CREATE TABLE topics (
     created_at INTEGER NOT NULL,
     attributes_updated_at INTEGER NOT NULL
 );
+
+CREATE INDEX idx_topics_creator ON topics(creator_id);
+
 -- share across all members
 CREATE TABLE topic_members (
     -- 删除了 topic, 关联的记录全部删掉！

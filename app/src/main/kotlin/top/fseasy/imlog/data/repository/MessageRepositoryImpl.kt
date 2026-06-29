@@ -12,28 +12,27 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import top.fseasy.imlog.data.util.retryOnAnyException
+import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
+import top.fseasy.imlog.domain.model.MediaMetadataUnion
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageFactory
-import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageFileProcessingStatus
+import top.fseasy.imlog.domain.model.MessageId
+import top.fseasy.imlog.domain.model.MessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Statistics
 import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.toMessageMediaProcessStatus
 import top.fseasy.imlog.domain.repository.MessageRepository
-import top.fseasy.imlog.sqldelight.Message_file_processing_states as MessageFileProcessingStatesEntity
 import top.fseasy.imlog.sqldelight.SqlDelightDb
-import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
-import top.fseasy.imlog.domain.model.MediaMetadataUnion
-import top.fseasy.imlog.domain.model.MessageFileProcessingErrorType
-import top.fseasy.imlog.domain.model.MessageFileProcessingStage
-import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.worker.DeleteFileWorker
 import top.fseasy.imlog.worker.MediaFileProcessWorker
 import javax.inject.Inject
 import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.GetMessagesByTopic as GetMessagesByTopicRowEntity
+import top.fseasy.imlog.sqldelight.Message_file_processing_task_states as FileProcessingTaskStateEntity
 import top.fseasy.imlog.sqldelight.Messages as MessageEntity
 
 @Singleton
@@ -73,7 +72,7 @@ class MessageRepositoryImpl @Inject constructor(
         database.messageQueries.deleteMessageLogical(id = messageId.value).value > 0L
     }
 
-    override suspend fun fileSendingOnInsertingPendingMessage(
+    override suspend fun initializeFileMessage(
         topicId: TopicId,
         senderId: UserId,
         messageType: MessageType,
@@ -82,19 +81,19 @@ class MessageRepositoryImpl @Inject constructor(
         messageTimestampMs: Long,
     ) = withContext(dispatcher) {
         retryOnAnyException {
-            val pendingMessage = fileSendingCreatePendingStatusMessageEntity(
+            val initialMessage = createInitialFileMessageEntity(
                 topicId = topicId,
                 senderId = senderId,
                 type = messageType,
                 timestampMs = messageTimestampMs,
                 srcMetadata = srcMetadata
             )
-            val messageId = MessageId(pendingMessage.id)
-            val pendingStateEntity = fileSendingCreatePendingStatusMessageFileProcessingEntity(
-                messageId = messageId, srcUriStr = srcUriStr
+            val messageId = MessageId(initialMessage.id)
+            val pendingStateEntity = createFileProcessingTaskStateEntity(
+                messageId = messageId, srcUriStr = srcUriStr, taskStartTime = messageTimestampMs
             )
             database.transaction {
-                database.messageQueries.insertMessage(pendingMessage)
+                database.messageQueries.insertMessage(initialMessage)
                 database.messageFileProcessingQueries.insertMessageFileProcessingState(
                     pendingStateEntity
                 )
@@ -103,7 +102,7 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun fileSendingOnSettingInternalCacheFilename(
+    override suspend fun setFileProcessingInternalCacheFilename(
         messageId: MessageId,
         filename: String?,
     ): Boolean = withContext(dispatcher) {
@@ -114,7 +113,7 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun fileSendingOnSettingRawFilename(
+    override suspend fun setFileMessageRawFilename(
         messageId: MessageId,
         filename: String?,
     ): Boolean = withContext(dispatcher) {
@@ -126,19 +125,15 @@ class MessageRepositoryImpl @Inject constructor(
     }
 
 
-    override suspend fun fileSendingOnSettingProcessingStatus(
+    override suspend fun setFileProcessingTaskFail(
         messageId: MessageId,
-        status: MessageFileProcessingStatus,
-        stage: MessageFileProcessingStage,
-        errorType: MessageFileProcessingErrorType,
-        errorUserRetriable: Boolean,
+        stage: MessageProcessingErrorStage,
+        errorUserRetryable: Boolean,
     ) = withContext(dispatcher) {
         retryOnAnyException {
-            database.messageFileProcessingQueries.setMessageFileProcessingStatus(
-                status = status.value,
-                currentStage = stage.value,
-                errorType = errorType.value,
-                errorUserRetriable = if (errorUserRetriable) 1L else 0L,
+            database.messageFileProcessingQueries.updateMessageFileProcessingError(
+                errorStage = stage.value,
+                errorUserRetryable = if (errorUserRetryable) 1L else 0L,
                 messageId = messageId.value
             ).value > 0L
         }
@@ -215,20 +210,20 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun fileSendingCreatePendingStatusMessageFileProcessingEntity(
+    private fun createFileProcessingTaskStateEntity(
         messageId: MessageId,
         srcUriStr: UriStr,
-    ) = MessageFileProcessingStatesEntity(
+        taskStartTime: Long,
+    ) = FileProcessingTaskStateEntity(
         message_id = messageId.value,
-        status = MessageFileProcessingStatus.Pending.value,
-        current_stage = null,
-        error_type = null,
-        error_user_retriable = null,
         src_uri = srcUriStr.value,
-        internal_cached_filename = null
+        internal_cached_filename = null,
+        task_tart_time = taskStartTime,
+        error_stage = null,
+        error_user_retryable = null,
     )
 
-    private fun fileSendingCreatePendingStatusMessageEntity(
+    private fun createInitialFileMessageEntity(
         topicId: TopicId,
         senderId: UserId,
         type: MessageType,
