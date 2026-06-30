@@ -1,5 +1,7 @@
 package top.fseasy.imlog.domain.util
 
+import timber.log.Timber
+import top.fseasy.imlog.domain.model.FileDeleteResult
 import java.io.File
 
 /**
@@ -33,6 +35,7 @@ fun File.resolveSubPaths(
 
 /**
  * Append multiple sub path segments to base File (List version)
+ * @throws SecurityException if createDir is true
  */
 fun File.resolveSubPaths(
     paths: List<String>,
@@ -43,6 +46,9 @@ fun File.resolveSubPaths(
         createDirsHelper(it, createDir, lastPathIsFile)
     }
 
+/**
+ * @throws SecurityException if createDir is true
+ */
 private fun createDirsHelper(
     file: File,
     createDir: Boolean = false,
@@ -56,6 +62,21 @@ private fun createDirsHelper(
         true -> file.parentFile
     }
     dirFile?.mkdirs()
+}
+
+fun deleteFile(file: File): FileDeleteResult = try {
+    if (file.exists()) {
+        if (file.delete()) {
+            FileDeleteResult.Success
+        } else {
+            FileDeleteResult.Error(IllegalStateException("File delete return false without exception"))
+        }
+    } else {
+        FileDeleteResult.FileNotExist
+    }
+} catch (e: Exception) {
+    Timber.d(e, "Delete file $file failed")
+    FileDeleteResult.Error(e)
 }
 
 fun String?.toFile(): File? = this?.let { File(it) }

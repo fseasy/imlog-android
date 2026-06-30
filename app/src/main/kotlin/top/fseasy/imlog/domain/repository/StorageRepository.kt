@@ -3,6 +3,7 @@ package top.fseasy.imlog.domain.repository
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FileCopyResult
+import top.fseasy.imlog.domain.model.FileDeleteResult
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
@@ -67,12 +68,22 @@ interface StorageRepository {
      */
     suspend fun getDisplayNameOrDefault(uriStr: UriStr, defaultName: String): String
 
+    /** Run in IO thread in io parts.
+     * @param mimeType: set it properly when filePathModel includes Uri.
+     * @throws Exception
+     * @return sharedStorageUri if filePathModel includes Uri, else null.
+     */
     suspend fun writeFile(
         filePath: StoragePathModel,
         content: ByteArray,
         mimeType: String?,
     ): UriStr?
 
+    /**
+     * Run in IO threads for io parts.
+     * @throws Exception
+     * @return created dir UriStr if filePath contains Uri, else null.
+     */
     suspend fun mkdirs(filePath: StoragePathModel): UriStr?
 
     /**
@@ -92,6 +103,20 @@ interface StorageRepository {
         targetPath: StoragePathModel,
         srcMimeType: String? = null,
     ): FileCopyResult
+
+    /** Run in IO thread in io parts.
+     * Swallow all the exceptions.
+     */
+    suspend fun deleteFile(
+        filePath: AbsolutePathModel,
+    ): FileDeleteResult
+
+    /** Run in IO thread in io parts.
+     * Swallow all the exceptions.
+     */
+    suspend fun deleteFile(
+        filePath: StoragePathModel,
+    ): FileDeleteResult
 
     /**
      * No exception will be thrown. If uri invalid, return null. else return metadata

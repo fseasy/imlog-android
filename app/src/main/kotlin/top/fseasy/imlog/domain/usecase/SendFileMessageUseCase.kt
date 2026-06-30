@@ -3,11 +3,13 @@ package top.fseasy.imlog.domain.usecase
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.FileCopyResult
+import top.fseasy.imlog.domain.model.FileDeleteResult
 import top.fseasy.imlog.domain.model.MediaMetadataUnion
 import top.fseasy.imlog.domain.model.MessageAudioProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
+import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
@@ -32,6 +34,15 @@ private sealed interface CopyStageResult {
     ) : CopyStageResult
 
     data class Failure(val type: CopyStageFailureType, val retryable: Boolean) : CopyStageResult
+}
+
+private enum class FinishTaskFailureType {
+    DeleteCacheFile, DeleteTaskStateFromDb
+}
+
+private sealed interface FinishTaskStageResult {
+    data object Success : FinishTaskStageResult
+    data class Failure(val type: FinishTaskFailureType) : FinishTaskStageResult
 }
 
 class SendMessageFileUseCase @Inject constructor(
@@ -105,8 +116,22 @@ class SendMessageFileUseCase @Inject constructor(
                 is CopyStageResult.Success -> result
             }
         // 4. clean cache and processing status record
-        //    1. remove db row 2. remove cache (if failed, just leave it to be, no need to rollback)
+        when (val result = finishProcessingTask(
+            messageId,
+            internalCachePathModel = storagePathUseCase.buildMessageCacheFileAbsolutePath(
+                userId = userId,
+                timestampMs = messageTimestampMs,
+                filename = copyInternalSuccessResult.resultFilename
+            )
+        )) {
+            is FinishTaskStageResult.Failure -> return setProcessingTaskFailed(
+                messageId = messageId,
+                stage = result.type.toAudioProcessingErrorStage(),
+                errorUserRetryable = false // system will retry it, user don't need to retry.
+            )
 
+            is FinishTaskStageResult.Success -> Timber.d("AudioFile [$srcUriStr] process success")
+        }
     }
 
     private suspend fun copyInternalCacheToSharedStorageAndUpdateState(
@@ -255,6 +280,31 @@ class SendMessageFileUseCase @Inject constructor(
         messageTimestampMs = messageTimestampMs,
         srcMetadata = srcMetadata
     )
+
+    /**
+     * Run in IO in each io parts.
+     * No exception will be thrown.
+     */
+    private suspend fun finishProcessingTask(
+        messageId: MessageId,
+        internalCachePathModel: StoragePathModel.InternalOnly,
+    ): FinishTaskStageResult {
+        when (storageRepository.deleteFile(internalCachePathModel)) {
+            is FileDeleteResult.FileNotExist,
+            is FileDeleteResult.Success,
+                -> Unit
+
+            is FileDeleteResult.Error -> return FinishTaskStageResult.Failure(FinishTaskFailureType.DeleteCacheFile)
+        }
+
+        try {
+            messageRepository.deleteFileProcessingTaskState(messageId)
+        } catch (e: Exception) {
+            Timber.i(e, "delete file processing task state failed")
+            return FinishTaskStageResult.Failure(FinishTaskFailureType.DeleteTaskStateFromDb)
+        }
+        return FinishTaskStageResult.Success
+    }
 }
 
 
@@ -303,4 +353,9 @@ private fun CopyStageFailureType.toAudioProcessingErrorStageOnCopyingShared() = 
     CopyStageFailureType.CopyFile -> MessageAudioProcessingErrorStage.CopyToSharedStorage
     CopyStageFailureType.SaveFilenameToDb -> MessageAudioProcessingErrorStage.SetRawFilenameToDb
     CopyStageFailureType.UpdateDbIllegalState -> MessageAudioProcessingErrorStage.IllegalState
+}
+
+private fun FinishTaskFailureType.toAudioProcessingErrorStage() = when (this) {
+    FinishTaskFailureType.DeleteCacheFile -> MessageAudioProcessingErrorStage.DeleteInternalFileCache
+    FinishTaskFailureType.DeleteTaskStateFromDb -> MessageAudioProcessingErrorStage.DeleteTaskStateFromDb
 }

@@ -15,6 +15,6 @@ SET
     error_user_retryable = :errorUserRetryable
 WHERE message_id = :messageId;
 
-deleteMessageMediaProcessingTempState:
+deleteMessageFileProcessingState:
 DELETE FROM message_file_processing_task_states
 WHERE message_id = :message_id;

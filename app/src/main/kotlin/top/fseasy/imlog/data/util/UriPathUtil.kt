@@ -1,5 +1,6 @@
 package top.fseasy.imlog.data.util
 
+import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -7,6 +8,9 @@ import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import top.fseasy.imlog.domain.model.FileDeleteResult
+import top.fseasy.imlog.domain.util.deleteFile
+import java.io.File
 
 sealed interface FindOrCreateFileUriResult {
     data class Success(val uri: Uri) : FindOrCreateFileUriResult
@@ -24,6 +28,49 @@ sealed interface FindOrCreateFileUriResult {
 }
 
 object UriPathUtil {
+    /**
+     * Run in IO thread. Swallow all exceptions.
+     */
+    suspend fun deleteUri(context: Context, uri: Uri): FileDeleteResult =
+        withContext(Dispatchers.IO) {
+            when (uri.scheme) {
+                ContentResolver.SCHEME_CONTENT -> {
+                    try {
+                        // Use ContentResolver to delete type of `content://`
+                        val rowsDeleted = context.contentResolver.delete(uri, null, null)
+                        if (rowsDeleted > 0) FileDeleteResult.Success else FileDeleteResult.FileNotExist
+                    } catch (securityException: SecurityException) {
+                        // In Android 10 and plus，to delete file that not created by the current user
+                        // may lead to RecoverableSecurityException.
+                        // Request permission if we need. Current we just return ignore this condition.
+                        Timber.d(securityException, "Delete uri $uri failed on securityException")
+                        FileDeleteResult.Error(securityException)
+                    } catch (e: Exception) {
+                        Timber.d(e, "Delete uri $uri failed")
+                        FileDeleteResult.Error(e)
+                    }
+                }
+
+                ContentResolver.SCHEME_FILE -> {
+                    try {
+                        // process `file://` schema
+                        val path = uri.path
+                        if (path != null) {
+                            val file = File(path)
+                            deleteFile(file)
+                        } else {
+                            FileDeleteResult.Error(IllegalStateException("Uri [$uri] is invalid, no path found"))
+                        }
+                    } catch (e: Exception) {
+                        Timber.d(e, "Delete `file://` schema uri [$uri] failed")
+                        FileDeleteResult.Error(e)
+                    }
+                }
+
+                else -> FileDeleteResult.Error(IllegalStateException("Uri [$uri] is invalid, neither `content://` nor `file://`"))
+
+            }
+        }
 
     /**
      * find for given subDirs / file paths. It **can't** distinguish if it's a file/dir.

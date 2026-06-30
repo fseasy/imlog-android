@@ -69,4 +69,8 @@ interface MessageRepository {
         stage: MessageProcessingErrorStage,
         errorUserRetryable: Boolean,
     ): Boolean
+
+    suspend fun deleteFileProcessingTaskState(
+        messageId: MessageId,
+    ): Boolean
 }

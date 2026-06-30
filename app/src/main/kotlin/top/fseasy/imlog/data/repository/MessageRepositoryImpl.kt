@@ -139,6 +139,14 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun deleteFileProcessingTaskState(
+        messageId: MessageId,
+    ) = withContext(dispatcher) {
+        retryOnAnyException {
+            database.messageFileProcessingQueries.deleteMessageFileProcessingState(messageId.value).value > 0L
+        }
+    }
+
     override suspend fun sendMediaMessage(
         topicId: TopicId,
         senderId: UserId,

@@ -27,3 +27,9 @@ sealed interface FileCopyResult {
         data class CopyUnexpected(override val cause: Throwable) : Error
     }
 }
+
+sealed interface FileDeleteResult {
+    data object Success : FileDeleteResult
+    data object FileNotExist : FileDeleteResult
+    data class Error(val cause: Throwable) : FileDeleteResult
+}

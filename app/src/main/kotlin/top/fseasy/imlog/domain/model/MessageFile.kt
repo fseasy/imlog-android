@@ -74,7 +74,8 @@ enum class MessageAudioProcessingErrorStage(override val value: String) :
     SetInternalFilenameToDb(value = "set_internal_filename2db"),
     CopyToSharedStorage("copy2shared_storage"),
     SetRawFilenameToDb("set_raw_filename2db"),
-    Clean("clean"),
+    DeleteInternalFileCache("delete_internal_file_cache"),
+    DeleteTaskStateFromDb("delete_task_state_from_db"),
     IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
     ;
 

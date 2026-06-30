@@ -14,17 +14,6 @@ import top.fseasy.imlog.data.mapper.toUri
 import top.fseasy.imlog.data.mapper.toUriOrNull
 import top.fseasy.imlog.data.mapper.toUriOrThrow
 import top.fseasy.imlog.data.mapper.toUriStr
-import top.fseasy.imlog.domain.model.StoragePathModel
-import top.fseasy.imlog.domain.model.SharedStorageRootSource
-import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.domain.model.UriStr
-import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.repository.MediaSaveResult
-import top.fseasy.imlog.domain.repository.SavedMedia
-import top.fseasy.imlog.domain.repository.StorageRepository
-import top.fseasy.imlog.sqldelight.SqlDelightDb
-import top.fseasy.imlog.data.util.ContentResolverQueriedResult
-import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.data.util.FileWriteMode
 import top.fseasy.imlog.data.util.FindOrCreateFileUriResult
 import top.fseasy.imlog.data.util.GenerateThumbnailResult
@@ -35,17 +24,28 @@ import top.fseasy.imlog.data.util.WriteDataResult
 import top.fseasy.imlog.data.util.copyBetweenUri
 import top.fseasy.imlog.data.util.copyUriToFile
 import top.fseasy.imlog.data.util.generateAndSaveThumbnail
-import top.fseasy.imlog.data.util.isDimensionValid
 import top.fseasy.imlog.data.util.resolveMetadata
 import top.fseasy.imlog.data.util.writeData2Uri
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
+import top.fseasy.imlog.domain.model.FileCopyResult
+import top.fseasy.imlog.domain.model.FileDeleteResult
 import top.fseasy.imlog.domain.model.InternalLocation
+import top.fseasy.imlog.domain.model.SharedStorageRootSource
+import top.fseasy.imlog.domain.model.StoragePathModel
+import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.domain.model.UriStr
+import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.repository.MediaSaveResult
+import top.fseasy.imlog.domain.repository.SavedMedia
+import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.util.resolveSubPaths
+import top.fseasy.imlog.sqldelight.SqlDelightDb
 import java.io.File
+import java.io.FileNotFoundException
 import javax.inject.Inject
 import javax.inject.Singleton
-
+import top.fseasy.imlog.domain.util.deleteFile as deleteFileObject
 
 @Singleton
 class StorageRepositoryImpl @Inject constructor(
@@ -97,10 +97,11 @@ class StorageRepositoryImpl @Inject constructor(
             } ?: defaultName
 
 
-    override suspend fun getAudioMetadataOrNull(uriStr: UriStr): AudioMetadata? = uriStr.toUriOrNull()
-        ?.let {
-            MetadataResolveUtils.forAudioUri(context, uri = it)
-        }
+    override suspend fun getAudioMetadataOrNull(uriStr: UriStr): AudioMetadata? =
+        uriStr.toUriOrNull()
+            ?.let {
+                MetadataResolveUtils.forAudioUri(context, uri = it)
+            }
 
     /**
      * Run in IO threads for io parts.
@@ -252,27 +253,66 @@ class StorageRepositoryImpl @Inject constructor(
         srcUri: Uri,
         pathModel: StoragePathModel.InternalOnly,
     ): FileCopyResult {
-        val tgtFile = pathModel.toFileWithCreatingDirectories(context)
+        val tgtFile = pathModel.toFileWithCreatingDirectories(this)
         return copyUriToFile(context, srcUri, tgtFile)
     }
 
-    /***
-     * Run in IO.
-     * @throws Throwable
+    /** Run in IO thread in io parts.
+     * Swallow all the exceptions.
      */
-    suspend fun resolveAudioUriMeta(srcUriStr: UriStr) {
-        val srcUri = srcUriStr.toUriOrThrow()
-        val queryMetaFields = with(MediaFields) {
-            listOf(
-                DISPLAY_NAME, FILE_SIZE, MIME_TYPE, DURATION
-            )
+    override suspend fun deleteFile(
+        filePath: AbsolutePathModel,
+    ): FileDeleteResult {
+        when (filePath) {
+            is AbsolutePathModel.UriStrModel -> {
+                val uri = filePath.value.toUriOrNull() ?: return FileDeleteResult.Error(
+                    IllegalStateException("Invalid uri str: ${filePath.value}")
+                )
+                return UriPathUtil.deleteUri(context, uri)
+            }
+
+            is AbsolutePathModel.FileModel -> {
+                return withContext(dispatcher) {
+                    deleteFileObject(filePath.value)
+                }
+            }
         }
-        val metaData = resolveMetadata(context, srcUri, queryMetaFields)
-        val displayName =
-            metaData.displayName ?: UriPathUtil.getDisplayNameFallback(srcUri) // more robust
-            ?: "_" // have to assign a value. It should be ok.
-        val mimeType = metaData.mimeType ?: UriPathUtil.robustGetMimeType(context, srcUri)
-        val duration = metaData.duration ?: UriPathUtil.getAudioDurationFallback(context, srcUri)
+    }
+
+    /** Run in IO thread in io parts.
+     * Swallow all the exceptions.
+     */
+    override suspend fun deleteFile(
+        filePath: StoragePathModel,
+    ): FileDeleteResult {
+        suspend fun deleteInternalFile(file: StoragePathModel.InternalOnly): FileDeleteResult {
+            val ioFile = file.toFileWithoutCreatingDirectories(this)
+            return withContext(dispatcher) {
+                deleteFileObject(ioFile)
+            }
+        }
+
+        suspend fun deleteSharedStorageFile(file: StoragePathModel.SharedStorageOnly): FileDeleteResult {
+            val uri = try {
+                file.findUriOrThrow(this)
+            } catch (e: FileNotFoundException) {
+                Timber.d(e, "deleteFile: Failed to locate file on shared-storage: $file")
+                return FileDeleteResult.FileNotExist
+            } catch (e: Exception) {
+                Timber.d(e, "deleteFile: error on locating file on shared-storage: $file")
+                return FileDeleteResult.Error(e)
+            }
+            return UriPathUtil.deleteUri(context, uri = uri)
+        }
+
+        return when (filePath) {
+            is StoragePathModel.InternalOnly -> deleteInternalFile(filePath)
+            is StoragePathModel.SharedStorageOnly -> deleteSharedStorageFile(filePath)
+            is StoragePathModel.DualWrite -> {
+                deleteInternalFile(filePath.toInternalOnly())
+                deleteSharedStorageFile(filePath.toSharedStorageOnly())
+            }
+        }
     }
 
     override suspend fun saveMessageMedia(
@@ -477,56 +517,6 @@ class StorageRepositoryImpl @Inject constructor(
         }
     }
 
-
-    private data class DimensionAndDuration(
-        val width: Int?,
-        val height: Int?,
-        val duration: Long?,
-    )
-
-    private fun ensureValidDimensionAndDuration(
-        isImage: Boolean,
-        isVideo: Boolean,
-        isAudio: Boolean,
-        mediaUri: Uri,
-        initialMeta: ContentResolverQueriedResult,
-    ): DimensionAndDuration {
-        val isDurationValid = (initialMeta.duration ?: 0L) > 0L
-
-        // 使用 when(true) 进行多条件分支判断
-        return when {
-            isImage && !isDimensionValid(initialMeta.width, initialMeta.height) -> {
-                UriPathUtil.getImageDimensionsFallback(context, mediaUri)
-                    ?.let {
-                        DimensionAndDuration(it.width, it.height, 0L)
-                    } ?: DimensionAndDuration(
-                    initialMeta.width, initialMeta.height, initialMeta.duration
-                )
-            }
-
-            isVideo && !(isDimensionValid(
-                initialMeta.width, initialMeta.height
-            ) && isDurationValid) -> {
-                UriPathUtil.getVideo3DimensionsFallback(context, mediaUri)
-                    ?.let {
-                        DimensionAndDuration(it.width, it.height, it.duration)
-                    } ?: DimensionAndDuration(
-                    initialMeta.width, initialMeta.height, initialMeta.duration
-                )
-            }
-
-            isAudio && !isDurationValid -> {
-                val d =
-                    UriPathUtil.getAudioDurationFallback(context, mediaUri) ?: initialMeta.duration
-                DimensionAndDuration(null, null, d)
-            }
-
-            else -> DimensionAndDuration(
-                initialMeta.width, initialMeta.height, initialMeta.duration
-            )
-        }
-    }
-
     companion object {
         /**
          * Run in IO thread for io parts.
@@ -582,8 +572,29 @@ class StorageRepositoryImpl @Inject constructor(
             }
         }
 
+        /** Find uri: find (only) file (+ mimeType) uri for the given path and root uri.
+         * Run in IO for io parts.
+         * @throws Exception
+         * @throws FileNotFoundException
+         */
+        private suspend fun StoragePathModel.SharedStorageOnly.findUriOrThrow(
+            instance: StorageRepositoryImpl,
+        ): Uri {
+            val rootUri = this.root.toUri(instance)
+            return when (val result = UriPathUtil.findSAFUri(
+                context = instance.context,
+                rootTreeUri = rootUri,
+                relativePathSegments = this.fullRelativePath,
+            )) {
+                is FindOrCreateFileUriResult.Success -> result.uri
+                is FindOrCreateFileUriResult.NotFound -> throw FileNotFoundException("Can not locate uri file")
+                is FindOrCreateFileUriResult.Error -> throw result.cause
+            }
+        }
+
         /**
          * run in IO
+         * @throws SecurityException if permission issue
          */
         private suspend fun StoragePathModel.InternalOnly.toFileWithCreatingDirectories(instance: StorageRepositoryImpl): File =
             withContext(instance.dispatcher) {
@@ -597,7 +608,22 @@ class StorageRepositoryImpl @Inject constructor(
             }
 
         /**
-         * run in IO
+         * run in IO. No exception will be thrown.
+         */
+        private suspend fun StoragePathModel.InternalOnly.toFileWithoutCreatingDirectories(instance: StorageRepositoryImpl): File =
+            withContext(instance.dispatcher) {
+                val rootFile =
+                    this@toFileWithoutCreatingDirectories.internalLocation.toFile(instance.context)
+                rootFile.resolveSubPaths(
+                    this@toFileWithoutCreatingDirectories.fullRelativePath,
+                    createDir = false,
+                    lastPathIsFile = true
+                )
+            }
+
+        /**
+         * run in IO.
+         * @throws SecurityException if permission issue
          */
         private suspend fun StoragePathModel.InternalOnly.createDirectory(instance: StorageRepositoryImpl): File =
             withContext(instance.dispatcher) {
