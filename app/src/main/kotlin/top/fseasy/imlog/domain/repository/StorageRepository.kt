@@ -99,6 +99,24 @@ interface StorageRepository {
      *                      as it's not needed
      */
     suspend fun copyFile(
+        srcPath: StoragePathModel,
+        targetPath: StoragePathModel,
+        srcMimeType: String? = null,
+    ): FileCopyResult
+
+    /**
+     * Run in IO.
+     *
+     * No exception thrown.
+     *
+     * TODO: optimize for condition input is a File. currently just transform it to Uri.
+     *       it's suboptimal in efficiency and tolerance(permission is restricted in FileProvider)
+     *
+     * @param srcMimeType - it null, will resolve it internal for Uri type target.
+     *                      For condition where targetPath is InternalOnly, leave it to null
+     *                      as it's not needed
+     */
+    suspend fun copyFile(
         srcAbsolutePath: AbsolutePathModel,
         targetPath: StoragePathModel,
         srcMimeType: String? = null,

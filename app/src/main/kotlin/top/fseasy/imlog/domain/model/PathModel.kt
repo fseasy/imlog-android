@@ -44,6 +44,8 @@ sealed interface StoragePathModel {
 
 /**
  * Mainly Used in file handling result, or input file.
+ * @StoragePathModel can be transformed to this type, with platform specific context.
+ * @see top.fseasy.imlog.data.repository.StorageRepositoryImpl
  */
 sealed interface AbsolutePathModel {
     data class UriStrModel(val value: UriStr) : AbsolutePathModel

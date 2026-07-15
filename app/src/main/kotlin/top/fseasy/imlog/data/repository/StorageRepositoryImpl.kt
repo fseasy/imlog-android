@@ -186,6 +186,16 @@ class StorageRepositoryImpl @Inject constructor(
         return fileUri.toUriStr()
     }
 
+    override suspend fun copyFile(
+        srcPath: StoragePathModel,
+        targetPath: StoragePathModel,
+        srcMimeType: String?,
+    ): FileCopyResult = copyFile(
+        srcAbsolutePath = srcPath.toAbsolutePathModelsWithoutCreating(this)
+            .last(), // Use last to prefer getting local file
+        targetPath = targetPath, srcMimeType = srcMimeType
+    )
+
     /**
      * Run in IO.
      *
@@ -285,147 +295,26 @@ class StorageRepositoryImpl @Inject constructor(
     override suspend fun deleteFile(
         filePath: StoragePathModel,
     ): FileDeleteResult {
-        suspend fun deleteInternalFile(file: StoragePathModel.InternalOnly): FileDeleteResult {
-            val ioFile = file.toFileWithoutCreatingDirectories(this)
-            return withContext(dispatcher) {
-                deleteFileObject(ioFile)
-            }
-        }
 
-        suspend fun deleteSharedStorageFile(file: StoragePathModel.SharedStorageOnly): FileDeleteResult {
-            val uri = try {
-                file.findUriOrThrow(this)
-            } catch (e: FileNotFoundException) {
-                Timber.d(e, "deleteFile: Failed to locate file on shared-storage: $file")
-                return FileDeleteResult.FileNotExist
-            } catch (e: Exception) {
-                Timber.d(e, "deleteFile: error on locating file on shared-storage: $file")
-                return FileDeleteResult.Error(e)
-            }
-            return UriPathUtil.deleteUri(context, uri = uri)
-        }
-
-        return when (filePath) {
-            is StoragePathModel.InternalOnly -> deleteInternalFile(filePath)
-            is StoragePathModel.SharedStorageOnly -> deleteSharedStorageFile(filePath)
-            is StoragePathModel.DualWrite -> {
-                deleteInternalFile(filePath.toInternalOnly())
-                deleteSharedStorageFile(filePath.toSharedStorageOnly())
-            }
-        }
-    }
-
-    override suspend fun saveMessageMedia(
-        userId: UserId,
-        topicId: TopicId,
-        srcUriStr: UriStr,
-        messageTimestampMs: Long,
-    ): MediaSaveResult {
-        val queryMetaFields = with(MediaFields) {
-            listOf(
-                DISPLAY_NAME, FILE_SIZE, MIME_TYPE, DURATION, HEIGHT, WIDTH
-            )
-        }
-        val srcUri = try {
-            srcUriStr.toUriOrThrow()
+        val absolutePaths = try {
+            filePath.toAbsolutePathModelsWithoutCreating(this)
+        } catch (e: FileNotFoundException) {
+            Timber.d(e, "deleteFile: Failed to locate file on shared-storage: $filePath")
+            return FileDeleteResult.FileNotExist
         } catch (e: Exception) {
-            Timber.i(e, "Can't parse srcUriStr to a valid Uri")
-            return MediaSaveResult.Failure.SrcInvalid(e)
+            Timber.d(e, "deleteFile: error on locating file on shared-storage: $filePath")
+            return FileDeleteResult.Error(e)
         }
+        for (path in absolutePaths) {
+            when (val deleteResult = deleteFile(path)) {
+                is FileDeleteResult.FileNotExist,
+                is FileDeleteResult.Error,
+                    -> return deleteResult
 
-        val metaData = resolveMetadata(context, srcUri, queryMetaFields)
-
-        val displayName =
-            metaData.displayName ?: UriPathUtil.getDisplayNameFallback(srcUri) // more robust
-            ?: "_" // have to assign a value. It should be ok.
-
-        val storeRawFilename =
-            messageFilePathUseCase.generateFilenameByPrependTime(messageTimestampMs, displayName)
-        val mimeType = metaData.mimeType ?: UriPathUtil.robustGetMimeType(context, srcUri)
-        val (calcTgtUrl, failure) = calcRawSharedStorageUri(
-            userId = userId,
-            topicId = topicId,
-            messageTimestampMs = messageTimestampMs,
-            rawFilename = storeRawFilename,
-            mimeType = mimeType
-        )
-        if (failure != null) {
-            return failure
-        }
-        val rawFileTgtUri =
-            requireNotNull(calcTgtUrl) { "save Target Uri is null on failure not null" }
-
-        val bytesCopied = when (val copyResult = copyBetweenUri(
-            context,
-            srcUri,
-            rawFileTgtUri,
-            writeMode = FileWriteMode.WRITE_TRUNCATE,
-        )) {
-            is FileCopyResult.Success -> {
-                copyResult.bytesCopied
+                else -> Unit
             }
-            // Else return error
-            is FileCopyResult.Error.SrcPermissionDenied,
-            is FileCopyResult.Error.SrcNotFound,
-            is FileCopyResult.Error.SrcOpenUnexpected,
-                -> return MediaSaveResult.Failure.SrcInvalid(copyResult.cause)
-
-            is FileCopyResult.Error.TgtNotFound,
-            is FileCopyResult.Error.TgtPermissionDenied,
-                -> return MediaSaveResult.Failure.TgtInvalid(copyResult.cause)
-
-            is FileCopyResult.Error.TgtOpenUnexpected,
-            is FileCopyResult.Error.CopyIOError,
-            is FileCopyResult.Error.CopyUnexpected,
-                -> return MediaSaveResult.Failure.Unexpected(
-                IllegalStateException(copyResult.cause)
-            )
         }
-        // Following logics will be different on different mime
-        val isImage = mimeType.startsWith("image")
-        val isVideo = mimeType.startsWith("video")
-        val isAudio = mimeType.startsWith("audio")
-
-        // generate thumbnail
-        val thumbnailFilename = if (isImage || isVideo) {
-            val name = messageFilePathUseCase.generateFilenameByPrependTime(
-                messageTimestampMs, "thumb.webp"
-            )
-            val uriCandidates = listOf("src" to srcUri, "tgt" to rawFileTgtUri)
-            val (isOK, lastError) = generateImageOrVideoThumbnailFromSrcCandidates(
-                userId = userId,
-                topicId = topicId,
-                messageTimestampMs = messageTimestampMs,
-                thumbnailFilename = name,
-                srcUriCandidates = uriCandidates
-            )
-            if (!isOK) {
-                return MediaSaveResult.Failure.Unexpected(lastError!!) // Exit quickly when failed
-            }
-            name
-        } else null
-        // First try to use the srcUri to share the cache (gen in the UI show up)
-        val finalDimensionAndDuration = ensureValidDimensionAndDuration(
-            isImage = isImage,
-            isVideo = isVideo,
-            isAudio = isAudio,
-            mediaUri = rawFileTgtUri,
-            initialMeta = metaData
-        )
-
-        val fileSize = metaData.fileSize ?: bytesCopied
-        return MediaSaveResult.Success(
-            SavedMedia(
-                filename = storeRawFilename,
-                originalFilename = displayName,
-                fileSize = fileSize,
-                thumbnailFilename = thumbnailFilename,
-                mimeType = mimeType,
-                duration = finalDimensionAndDuration.duration,
-                width = finalDimensionAndDuration.width,
-                height = finalDimensionAndDuration.height
-            )
-        )
+        return FileDeleteResult.Success
     }
 
     private suspend fun generateImageOrVideoThumbnailFromSrcCandidates(
@@ -482,39 +371,6 @@ class StorageRepositoryImpl @Inject constructor(
         return thumbnailRootDir.resolveSubPaths(
             thumbnailFullRelativePath, true, lastPathIsFile = true
         )
-    }
-
-    private suspend fun calcRawSharedStorageUri(
-        userId: UserId,
-        topicId: TopicId,
-        messageTimestampMs: Long,
-        rawFilename: String,
-        mimeType: String,
-    ): Pair<Uri?, MediaSaveResult.Failure?> {
-        val tgtRootTreeUri = getSharedStorageRootUriWithCache(userId)
-            ?: return null to MediaSaveResult.Failure.TgtInvalid(
-                IllegalStateException("messageFileRootUri is Null")
-            )
-        val relativePathSegments = messageFilePathUseCase.generateFullRelativePath(
-            userId, topicId, messageTimestampMs, rawFilename
-        )
-        when (val result = UriPathUtil.ensureSAFFileUri(
-            context, tgtRootTreeUri, relativePathSegments, mimeType
-        )) {
-            is FindOrCreateFileUriResult.Success -> return result.uri to null
-            // Will return on errors
-            is FindOrCreateFileUriResult.Error.PermissionDenied -> return null to MediaSaveResult.Failure.TgtInvalid(
-                result.cause
-            )
-
-            is FindOrCreateFileUriResult.Error.Unexpected -> return null to MediaSaveResult.Failure.Unexpected(
-                result.cause
-            )
-
-            is FindOrCreateFileUriResult.NotFound -> return null to MediaSaveResult.Failure.Unexpected(
-                IllegalStateException("EnsureSAFFile got Not Found")
-            )
-        }
     }
 
     companion object {
@@ -632,6 +488,47 @@ class StorageRepositoryImpl @Inject constructor(
                     this@createDirectory.fullRelativePath, createDir = true, lastPathIsFile = false
                 )
             }
+
+        /**
+         * Transform shared path model to absolute path models (DuralWrite will get 2 models!)
+         * without creating non-existed uri or files.
+         * if this is a StoragePathModel.DuralWrite, will return a list ordering in `[UriStrModel, FileModel]`
+         *
+         * io parts run in IO.
+         *
+         * @throws Exception all exceptions came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
+         */
+        private suspend fun StoragePathModel.toAbsolutePathModelsWithoutCreating(instance: StorageRepositoryImpl): List<AbsolutePathModel> {
+            return when (this) {
+                is StoragePathModel.SharedStorageOnly -> listOf(
+                    AbsolutePathModel.UriStrModel(
+                        this.findUriOrThrow(instance)
+                            .toUriStr()
+                    )
+                )
+
+                is StoragePathModel.InternalOnly -> listOf(
+                    AbsolutePathModel.FileModel(
+                        this.toFileWithoutCreatingDirectories(
+                            instance
+                        )
+                    )
+                )
+
+                is StoragePathModel.DualWrite -> listOf(
+                    AbsolutePathModel.UriStrModel(
+                        this.toSharedStorageOnly()
+                            .findUriOrThrow(instance)
+                            .toUriStr()
+                    ), AbsolutePathModel.FileModel(
+                        this.toInternalOnly()
+                            .toFileWithoutCreatingDirectories(
+                                instance
+                            )
+                    )
+                )
+            }
+        }
     }
 }
 

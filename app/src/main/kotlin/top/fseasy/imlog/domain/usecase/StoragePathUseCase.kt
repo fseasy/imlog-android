@@ -68,7 +68,7 @@ class StoragePathUseCase @Inject constructor(
      */
     fun getUserRootDirName(userId: UserId): String = userId.value
 
-    fun buildUserAvatarAbsolutePath(
+    fun buildUserAvatarStoragePath(
         signInUserId: UserId,
         filename: String,
     ): StoragePathModel.DualWrite {
@@ -81,7 +81,7 @@ class StoragePathUseCase @Inject constructor(
         )
     }
 
-    fun buildTopicAvatarAbsolutePath(
+    fun buildTopicAvatarStoragePath(
         signInUserId: UserId,
         filename: String,
     ): StoragePathModel.DualWrite {
@@ -123,11 +123,11 @@ class StoragePathUseCase @Inject constructor(
      * rule: $user_root_name / message_cache / $filename (no more hierarchy)
      * Location: internal cache
      */
-    fun buildMessageCacheFileAbsolutePath(
+    fun buildMessageCacheFileStoragePath(
         userId: UserId,
         timestampMs: Long,
         filename: String,
-    ) = buildInternalCacheAbsolutePath(
+    ) = buildInternalCacheStoragePath(
         userId,
         resourceName = ResourceName.MessageCache,
         timestampMs = timestampMs,
@@ -137,7 +137,7 @@ class StoragePathUseCase @Inject constructor(
     /**
      * rule: $user_root_name / message / $topic_id / $date-hierarchy / $filename
      */
-    fun buildMessageRawFileAbsolutePath(
+    fun buildMessageRawFileStoragePath(
         userId: UserId,
         topicId: TopicId,
         timestampMs: Long,
@@ -155,7 +155,7 @@ class StoragePathUseCase @Inject constructor(
     /**
      * rule: $user_root_name / thumbnail / $topic_id / $date-hierarchy / $filename
      */
-    fun buildMessageThumbnailAbsolutePath(
+    fun buildMessageThumbnailStoragePath(
         userId: UserId,
         topicId: TopicId,
         timestampMs: Long,
@@ -170,7 +170,7 @@ class StoragePathUseCase @Inject constructor(
         ), internalLocation = InternalLocation.Persistent
     )
 
-    private fun buildInternalCacheAbsolutePath(
+    private fun buildInternalCacheStoragePath(
         userId: UserId,
         resourceName: ResourceName,
         timestampMs: Long,

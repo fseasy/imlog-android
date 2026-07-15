@@ -11,7 +11,7 @@ import top.fseasy.imlog.domain.model.AbsolutePathModel
 /**
  * NOTE: we can't define SharedStorageOnly mapper here, as it needs the uri root of user,
  * which can't be accessed in public.
- * And I think it's unnecessary to put it here by some hack ways like create a public api.
+ * And I think it's unnecessary to put it here by some hack ways like creating a public api.
  * The uri file should be mainly used in that class internal.
  * So we put all the StoragePathModel mapper to the StorageRepositoryImpl
  * @see top.fseasy.imlog.data.repository.StorageRepositoryImpl

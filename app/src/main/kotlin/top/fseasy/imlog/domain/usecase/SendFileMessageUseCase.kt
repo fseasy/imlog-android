@@ -2,6 +2,7 @@ package top.fseasy.imlog.domain.usecase
 
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.AbsolutePathModel
+import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.domain.model.FileDeleteResult
 import top.fseasy.imlog.domain.model.MediaMetadataUnion
@@ -16,6 +17,7 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.toMetadataUnion
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.StorageRepository
+import top.fseasy.imlog.domain.repository.WorkerRunner
 import javax.inject.Inject
 
 /**
@@ -49,10 +51,11 @@ class SendMessageFileUseCase @Inject constructor(
     private val storagePathUseCase: StoragePathUseCase,
     private val storageRepository: StorageRepository,
     private val messageRepository: MessageRepository,
+    private val workerRunner: WorkerRunner,
 ) {
     // If success, will run as normal. else, will set a failure in the db.
     // UI get the failure by the db in async way. So there is no need to return anything.
-    suspend fun sendAudio(
+    suspend fun sendAudioInstantLogic(
         srcUriStr: UriStr,
         userId: UserId,
         topicId: TopicId,
@@ -95,34 +98,45 @@ class SendMessageFileUseCase @Inject constructor(
 
             is CopyStageResult.Success -> result
         }
-        // 3. copy internal cache to shared storage
-        // TODO: move all the following to the worker compose
-        val copySharedStorageSuccessResult =
-            when (val result = copyInternalCacheToSharedStorageAndUpdateState(
-                messageId = messageId,
-                userId = userId,
-                topicId = topicId,
-                messageTimestampMs = messageTimestampMs,
-                originalDisplayName = srcMetadata.displayName,
-                internalCacheFileAbsolutePath = copyInternalSuccessResult.resultAbsolutePath,
-                mimeType = srcMetadata.mimeType
-            )) {
-                is CopyStageResult.Failure -> return setProcessingTaskFailed(
-                    messageId = messageId,
-                    stage = result.type.toAudioProcessingErrorStageOnCopyingShared(),
-                    errorUserRetryable = result.retryable
-                )
 
-                is CopyStageResult.Success -> result
-            }
-        // 4. clean cache and processing status record
+        workerRunner.finishSendingAudio()
+    }
+
+    private suspend fun sendAudioWorkerLogic(
+        messageId: MessageId,
+        userId: UserId,
+        topicId: TopicId,
+        messageTimestampMs: Long,
+        srcMetadata: AudioMetadata,
+        cacheFilename: String,
+    ) {
+        val internalCacheFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(
+            userId = userId,
+            timestampMs = messageTimestampMs,
+            filename = cacheFilename
+        )
+        // 1. copy internal cache to shared storage
+        when (val result = copyInternalCacheToSharedStorageAndUpdateState(
+            messageId = messageId,
+            userId = userId,
+            topicId = topicId,
+            messageTimestampMs = messageTimestampMs,
+            originalDisplayName = srcMetadata.displayName,
+            internalCacheFilePath = internalCacheFilePath,
+            mimeType = srcMetadata.mimeType
+        )) {
+            is CopyStageResult.Failure -> return setProcessingTaskFailed(
+                messageId = messageId,
+                stage = result.type.toAudioProcessingErrorStageOnCopyingShared(),
+                errorUserRetryable = result.retryable
+            )
+
+            is CopyStageResult.Success -> Unit
+        }
+        // 2. clean cache and processing status record
         when (val result = finishProcessingTask(
             messageId,
-            internalCachePathModel = storagePathUseCase.buildMessageCacheFileAbsolutePath(
-                userId = userId,
-                timestampMs = messageTimestampMs,
-                filename = copyInternalSuccessResult.resultFilename
-            )
+            internalCachePathModel = internalCacheFilePath
         )) {
             is FinishTaskStageResult.Failure -> return setProcessingTaskFailed(
                 messageId = messageId,
@@ -130,7 +144,7 @@ class SendMessageFileUseCase @Inject constructor(
                 errorUserRetryable = false // system will retry it, user don't need to retry.
             )
 
-            is FinishTaskStageResult.Success -> Timber.d("AudioFile [$srcUriStr] process success")
+            is FinishTaskStageResult.Success -> Timber.d("AudioFile from $messageId success")
         }
     }
 
@@ -140,13 +154,13 @@ class SendMessageFileUseCase @Inject constructor(
         topicId: TopicId,
         messageTimestampMs: Long,
         originalDisplayName: String,
-        internalCacheFileAbsolutePath: AbsolutePathModel,
+        internalCacheFilePath: StoragePathModel,
         mimeType: String,
     ): CopyStageResult {
         val rawFilename = storagePathUseCase.buildUserFriendlyTimestampedFilename(
             messageTimestampMs, originalFilename = originalDisplayName
         )
-        val targetStoragePath = storagePathUseCase.buildMessageRawFileAbsolutePath(
+        val targetStoragePath = storagePathUseCase.buildMessageRawFileStoragePath(
             userId = userId,
             topicId = topicId,
             timestampMs = messageTimestampMs,
@@ -154,7 +168,7 @@ class SendMessageFileUseCase @Inject constructor(
         )
 
         val result = storageRepository.copyFile(
-            srcAbsolutePath = internalCacheFileAbsolutePath,
+            srcPath = internalCacheFilePath,
             targetPath = targetStoragePath,
             srcMimeType = mimeType
         )
@@ -200,7 +214,7 @@ class SendMessageFileUseCase @Inject constructor(
         val cacheFilename = storagePathUseCase.buildTimestampedFilename(
             timestampMs = messageTimestampMs, originalFilename = originalDisplayName
         )
-        val cachePath = storagePathUseCase.buildMessageCacheFileAbsolutePath(
+        val cachePath = storagePathUseCase.buildMessageCacheFileStoragePath(
             userId, timestampMs = messageTimestampMs, filename = cacheFilename
         )
         val result = storageRepository.copyFile(
