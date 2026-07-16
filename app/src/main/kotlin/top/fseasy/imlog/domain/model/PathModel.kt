@@ -17,7 +17,7 @@ sealed interface SharedStorageRootSource {
 /**
  * Used to fit the clean architecture requirements, mainly used as output stream.
  * @see top.fseasy.imlog.domain.usecase.StoragePathUseCase to know the storage choose reason
- * @see top.fseasy.imlog.data.mapper.getMimeType*
+ * @see top.fseasy.imlog.data.mapper StoragePathModelMapper.kt
  */
 sealed interface StoragePathModel {
     val fullRelativePath: List<String>
@@ -45,7 +45,7 @@ sealed interface StoragePathModel {
 /**
  * Mainly Used in file handling result, or input file.
  * @StoragePathModel can be transformed to this type, with platform specific context.
- * @see top.fseasy.imlog.data.repository.StorageRepositoryImpl
+ * @see top.fseasy.imlog.data.mapper AbsolutePathModelMapper.kt
  */
 sealed interface AbsolutePathModel {
     data class UriStrModel(val value: UriStr) : AbsolutePathModel

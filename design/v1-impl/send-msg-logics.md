@@ -232,3 +232,13 @@ ViewModel 的生命周期是与当前页面（Activity/Fragment）绑定的。
    ViewModel：只负责将用户的“发送点击”翻译成对数据层的调用。
    Repository：负责本地数据库的快速写入（确保 UI 立刻有反应），并派发后台任务。
    WorkManager：负责具体的、耗时的、不可靠的 I/O 和网络任务（拷贝、缩略图、上传）。这是 IM 应用保证消息“绝对能发送成功”的黄金标准。
+
+## Worker 
+
+**Expedited Work**
+
+https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work#expedited
+
+WorkManager 2.7.0 introduced the concept of expedited work. This allows WorkManager to execute important work while giving the system better control over access to resources.
+
+A potential use case for expedited work might be within a chat app when the user wants to send a message or an attached image. Similarly, an app that handles a payment or subscription flow might also want to use expedited work. This is because those tasks are important to the user, execute quickly in the background, need to begin immediately, and should continue to execute even if the user closes the app

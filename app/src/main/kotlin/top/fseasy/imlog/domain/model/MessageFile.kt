@@ -1,5 +1,8 @@
 package top.fseasy.imlog.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class AudioMetadata(
     val displayName: String,
     val fileSize: Long,

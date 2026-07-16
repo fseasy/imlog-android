@@ -45,7 +45,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import top.fseasy.imlog.domain.model.VoiceRecordingState
-import top.fseasy.imlog.features.home.TimelineUiState
+import top.fseasy.imlog.features.home.ContentUiState
 import top.fseasy.imlog.R
 import java.io.File
 
@@ -61,7 +61,7 @@ sealed interface ComposerAction {
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MessageComposer(
-    uiState: TimelineUiState,
+    uiState: ContentUiState,
     onAction: (ComposerAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -89,13 +89,13 @@ fun MessageComposer(
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
             when (uiState.voiceRecordingState) {
-                VoiceRecordingState.IDLE -> {
+                VoiceRecordingState.Idle -> {
                     if (isVoiceMode) {
                         VoiceInputOverlay(onStartRecording = {
                             if (audioPermissionState.status.isGranted) {
                                 onAction(
                                     ComposerAction.SetVoiceRecordingState(
-                                        VoiceRecordingState.RECORDING
+                                        VoiceRecordingState.Recording
                                     )
                                 )
                             } else {
@@ -163,7 +163,7 @@ fun MessageComposer(
                                     isVoiceMode = true
                                     onAction(
                                         ComposerAction.SetVoiceRecordingState(
-                                            VoiceRecordingState.IDLE
+                                            VoiceRecordingState.Idle
                                         )
                                     )
                                 }) {
@@ -174,28 +174,28 @@ fun MessageComposer(
                     }
                 }
 
-                VoiceRecordingState.RECORDING -> {
+                VoiceRecordingState.Recording -> {
                     VoiceRecordingOverlay(
                         onCancel = {
                             onAction(
                                 ComposerAction.SetVoiceRecordingState(
-                                    VoiceRecordingState.IDLE
+                                    VoiceRecordingState.Idle
                                 )
                             )
                         }, onStop = {
                             onAction(
                                 ComposerAction.SetVoiceRecordingState(
-                                    VoiceRecordingState.STOPPED
+                                    VoiceRecordingState.Stopped
                                 )
                             )
                         }, elapsedTime = uiState.voiceRecordingElapsed
                     )
                 }
 
-                VoiceRecordingState.STOPPED -> {
+                VoiceRecordingState.Stopped -> {
                     onAction(
                         ComposerAction.SetVoiceRecordingState(
-                            VoiceRecordingState.STOPPED
+                            VoiceRecordingState.Stopped
                         )
                     )
                 }

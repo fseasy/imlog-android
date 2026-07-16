@@ -5,6 +5,9 @@ import android.net.Uri
 import android.webkit.MimeTypeMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import top.fseasy.imlog.data.mapper.toUriOrNull
+import top.fseasy.imlog.data.mapper.toUriOrThrow
+import top.fseasy.imlog.domain.model.AbsolutePathModel
 import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
@@ -37,10 +40,9 @@ object MimeTypeUtils {
 
         // 1. Resolve via file extension
         getMimeTypeFromExtension(file.extension)?.let { return@withContext it }
-
         // 2. Resolve via file header bytes
         getMimeTypeFromStream { FileInputStream(file) }?.let { return@withContext it }
-
+        // 3. have to return null
         null
     }
 
@@ -90,6 +92,31 @@ object MimeTypeUtils {
             // Return null instead of the generic type to allow clean fallback evaluation
             if (mimeType == DEFAULT_MIME_TYPE) null else mimeType
         }
+
+    // ==========================================
+    // AbsolutePathModel APIs
+    // ==========================================
+
+    /**
+     * Retrieves the MIME type of absolutePathModel, falling back to a default value if unresolved.
+     * No exception will be thrown. Run in IO thread.
+     */
+    suspend fun getMimeType(absolutePathModel: AbsolutePathModel, context: Context): String {
+        return getMimeTypeOrNull(absolutePathModel, context) ?: DEFAULT_MIME_TYPE
+    }
+
+    suspend fun getMimeTypeOrNull(absolutePathModel: AbsolutePathModel, context: Context): String? {
+        when (absolutePathModel) {
+            is AbsolutePathModel.FileModel -> {
+                return getMimeType(absolutePathModel.value)
+            }
+
+            is AbsolutePathModel.UriStrModel -> {
+                val uri = absolutePathModel.value.toUriOrNull() ?: return null
+                return getMimeTypeOrNull(context = context, uri = uri)
+            }
+        }
+    }
 
     // ==========================================
     // Shared Internal Helpers

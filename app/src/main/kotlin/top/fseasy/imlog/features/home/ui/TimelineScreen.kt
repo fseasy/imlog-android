@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -35,7 +34,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.features.home.TimelineUiState
+import top.fseasy.imlog.features.home.ContentUiState
 import top.fseasy.imlog.features.home.TimelineViewModel
 
 sealed interface TimelineAction {
@@ -52,7 +51,7 @@ fun TimelineScreen(
     onSettingsClick: (TopicId) -> Unit,
     viewModel: TimelineViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.contentUiState.collectAsState()
 
     LaunchedEffect(topicId) {
         viewModel.loadTopic(topicId)
@@ -84,7 +83,7 @@ fun TimelineScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimelineContent(
-    uiState: TimelineUiState,
+    uiState: ContentUiState,
     onTimelineAction: (TimelineAction) -> Unit,
     onComposerAction: (ComposerAction) -> Unit,
     modifier: Modifier = Modifier,

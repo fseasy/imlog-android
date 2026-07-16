@@ -18,6 +18,7 @@ import top.fseasy.imlog.domain.model.toMetadataUnion
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.WorkerRunner
+import java.io.File
 import javax.inject.Inject
 
 /**
@@ -53,16 +54,39 @@ class SendMessageFileUseCase @Inject constructor(
     private val messageRepository: MessageRepository,
     private val workerRunner: WorkerRunner,
 ) {
+    suspend fun sendVoice(
+        audioCacheFile: File,
+        userId: UserId,
+        topicId: TopicId,
+        messageTimestampMs: Long,
+    ) {
+        val srcMetadata = storageRepository.getAudioMetadata(audioCacheFile)
+        val messageId = try {
+            initializeFileMessage(
+                srcUriStr = srcUriStr,
+                senderId = userId,
+                topicId = topicId,
+                messageTimestampMs = messageTimestampMs,
+                messageType = MessageType.VOICE,
+                srcMetadata = srcMetadata.toMetadataUnion()
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Failed in insert pending message stage, can't do anything")
+            // can't do anything, just return...
+            return
+        }
+    }
+
     // If success, will run as normal. else, will set a failure in the db.
     // UI get the failure by the db in async way. So there is no need to return anything.
-    suspend fun sendAudioInstantLogic(
+    suspend fun sendAudio(
         srcUriStr: UriStr,
         userId: UserId,
         topicId: TopicId,
         messageTimestampMs: Long,
         messageType: MessageType = MessageType.AUDIO,
     ) {
-        // 1. insert pending message
+        // 1. initialize the file message record to db
         val srcMetadata = storageRepository.getAudioMetadataOrNull(srcUriStr) ?: run {
             Timber.e("Failed to get audio metadata, $srcUriStr isn't an invalid uri")
             return
@@ -99,10 +123,20 @@ class SendMessageFileUseCase @Inject constructor(
             is CopyStageResult.Success -> result
         }
 
-        workerRunner.finishSendingAudio()
+        workerRunner.finishSendingAudio(
+            messageId = messageId,
+            userId = userId,
+            topicId = topicId,
+            messageTimestampMs = messageTimestampMs,
+            srcMetadata = srcMetadata,
+            cacheFilename = copyInternalSuccessResult.resultFilename
+        )
     }
 
-    private suspend fun sendAudioWorkerLogic(
+    /**
+     * Should be called in Worker to make the following logic more stable
+     */
+    suspend fun finishSendingAudioWorkerLogic(
         messageId: MessageId,
         userId: UserId,
         topicId: TopicId,
@@ -111,9 +145,7 @@ class SendMessageFileUseCase @Inject constructor(
         cacheFilename: String,
     ) {
         val internalCacheFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(
-            userId = userId,
-            timestampMs = messageTimestampMs,
-            filename = cacheFilename
+            userId = userId, timestampMs = messageTimestampMs, filename = cacheFilename
         )
         // 1. copy internal cache to shared storage
         when (val result = copyInternalCacheToSharedStorageAndUpdateState(
@@ -135,8 +167,7 @@ class SendMessageFileUseCase @Inject constructor(
         }
         // 2. clean cache and processing status record
         when (val result = finishProcessingTask(
-            messageId,
-            internalCachePathModel = internalCacheFilePath
+            messageId, internalCachePathModel = internalCacheFilePath
         )) {
             is FinishTaskStageResult.Failure -> return setProcessingTaskFailed(
                 messageId = messageId,
@@ -168,9 +199,7 @@ class SendMessageFileUseCase @Inject constructor(
         )
 
         val result = storageRepository.copyFile(
-            srcPath = internalCacheFilePath,
-            targetPath = targetStoragePath,
-            srcMimeType = mimeType
+            srcPath = internalCacheFilePath, targetPath = targetStoragePath, srcMimeType = mimeType
         )
         val copyResult = when (result) {
             is FileCopyResult.Error -> return CopyStageResult.Failure(

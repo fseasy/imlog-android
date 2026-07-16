@@ -8,6 +8,7 @@ import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
+import java.io.File
 
 
 data class SavedMedia(
@@ -139,6 +140,16 @@ interface StorageRepository {
     /**
      * No exception will be thrown. If uri invalid, return null. else return metadata
      * that might be inaccurate in edge condition where data is corrupted.
+     *
+     * Run in IO threads.
      */
     suspend fun getAudioMetadataOrNull(uriStr: UriStr): AudioMetadata?
+
+    /***
+     * Only for File. As file obj is valid, so it will always return a metadata even file is invalid.
+     * - in that condition, the fields is a default value for audio file.
+     *
+     * Run in IO thread
+     */
+    suspend fun getAudioMetadata(file: File): AudioMetadata
 }

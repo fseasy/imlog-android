@@ -8,8 +8,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import timber.log.Timber
+import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.VoiceRecordingState
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -19,7 +21,7 @@ import kotlin.uuid.Uuid
  */
 class VoiceRecorder(private val coroutineScope: CoroutineScope) {
 
-    private val _state = MutableStateFlow(VoiceRecordingState.IDLE)
+    private val _state = MutableStateFlow(VoiceRecordingState.Idle)
     val state: StateFlow<VoiceRecordingState> = _state.asStateFlow()
 
     private val _elapsedMs = MutableStateFlow(0L)
@@ -30,30 +32,35 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) {
     private var startTimeMs: Long = 0L
     private var timerJob: Job? = null
 
+    companion object {
+        const val OUTPUT_AUDIO_FORMAT = MediaRecorder.OutputFormat.MPEG_4
+        const val OUTPUT_AUDIO_ENCODER = MediaRecorder.AudioEncoder.AAC
+        const val OUTPUT_AUDIO_MIME_TYPE = "audio/mp4"
+        const val OUTPUT_AUDIO_FILE_SUFFIX = ".m4a"
+
+        fun generateOutputAudioDefaultFilename(prefix: String = "recording"): String {
+            return "${prefix}_${System.currentTimeMillis()}$OUTPUT_AUDIO_FILE_SUFFIX"
+        }
+    }
+
     /**
      * 开始录制。允许从 IDLE 或 STOPPED 状态开始。
      */
     @OptIn(ExperimentalUuidApi::class)
-    fun start(context: Context) {
+    fun start(context: Context, outputFile: File) {
         // 允许从 IDLE 或 STOPPED 状态重新开始录音
-        if (_state.value == VoiceRecordingState.RECORDING) return
+        if (_state.value == VoiceRecordingState.Recording) return
 
         // 重置状态
         _elapsedMs.value = 0L
-
-        val voiceTmpName = "voice_${
-            Uuid.random()
-                .toHexString()
-        }.m4a"
-        val file = File(context.cacheDir, voiceTmpName)
-        currentFile = file
+        currentFile = outputFile
 
         try {
-            mediaRecorder = createMediaRecorder(context, file).apply {
+            mediaRecorder = createMediaRecorder(context, outputFile).apply {
                 prepare()
                 start()
             }
-            _state.value = VoiceRecordingState.RECORDING
+            _state.value = VoiceRecordingState.Recording
             startTimeMs = System.currentTimeMillis()
             startTimer()
         } catch (e: Exception) {
@@ -66,7 +73,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) {
      * 停止录制并返回音频文件；若录制尚未开始或已取消，返回 null。
      */
     fun stop(): File? {
-        if (_state.value != VoiceRecordingState.RECORDING) return null
+        if (_state.value != VoiceRecordingState.Recording) return null
         return finishRecording(cancel = false)
     }
 
@@ -74,7 +81,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) {
      * 取消录制，删除临时文件，返回 null。
      */
     fun cancel() {
-        if (_state.value == VoiceRecordingState.IDLE) return
+        if (_state.value == VoiceRecordingState.Idle) return
         finishRecording(cancel = true)
     }
 
@@ -104,11 +111,11 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) {
         // 如果是取消录音，或者停止时发生异常，则清理文件并返回 null
         if (cancel || !isStopSuccess) {
             file?.delete()
-            _state.value = VoiceRecordingState.IDLE
+            _state.value = VoiceRecordingState.Idle
             _elapsedMs.value = 0L
             return null
         } else {
-            _state.value = VoiceRecordingState.STOPPED
+            _state.value = VoiceRecordingState.Stopped
             return file
         }
     }
@@ -118,7 +125,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) {
         timerJob = coroutineScope.launch {
             while (isActive) {
                 _elapsedMs.value = System.currentTimeMillis() - startTimeMs
-                delay(60) // 配合标准设备刷新率
+                delay(60.milliseconds) // 配合标准设备刷新率
             }
         }
     }
@@ -136,8 +143,8 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) {
             MediaRecorder()
         }.apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            setOutputFormat(OUTPUT_AUDIO_FORMAT)
+            setAudioEncoder(OUTPUT_AUDIO_ENCODER)
             // 配置音频参数以保证音质和跨设备兼容性
             setAudioSamplingRate(44100) // 采样率，CD音质
             setAudioEncodingBitRate(96000) // 比特率，128kbps 是质量和体积的好平衡点
@@ -155,7 +162,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) {
         mediaRecorder = null
         currentFile?.delete()
         currentFile = null
-        _state.value = VoiceRecordingState.IDLE
+        _state.value = VoiceRecordingState.Idle
         _elapsedMs.value = 0L
     }
 

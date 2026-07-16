@@ -12,6 +12,7 @@ import timber.log.Timber
 import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.VideoMetadata
+import java.io.File
 import java.util.EnumMap
 
 /**
@@ -19,6 +20,9 @@ import java.util.EnumMap
  * It depends on MemiTypeUtils and MediaDurationUtils in fallback route.
  */
 object MetadataResolveUtils {
+    // ****************
+    // Uri Apis
+    // *********************
     /**
      * RUN IN IO.
      * @param defaultName if methods failed to get filename, return this one instead
@@ -143,6 +147,37 @@ object MetadataResolveUtils {
             mimeType = mimeType,
             width = width,
             height = height
+        )
+    }
+
+    // *****************
+    // File Apis
+    // *****************
+
+    /**
+     * Run in IO thread for io parts.
+     */
+    suspend fun forAudioFile(
+        file: File,
+    ): AudioMetadata {
+        val displayName = file.name
+        val fileSize = withContext(Dispatchers.IO) {
+            try {
+                if (file.exists()) file.length() else 0L
+            } catch (e: SecurityException) {
+                Timber.w(e, "Failed to get file size for file: $file")
+                0L
+            }
+        }
+
+        val mimeType = MimeTypeUtils.getMimeTypeOrNull(file) ?: "audio/*"
+        val duration = MediaDurationUtils.getDuration(file)
+
+        return AudioMetadata(
+            displayName = displayName,
+            fileSize = fileSize,
+            mimeType = mimeType,
+            duration = duration
         )
     }
 

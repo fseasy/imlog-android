@@ -22,6 +22,8 @@ object MediaDurationUtils {
     /**
      * Retrieves the duration of a media file (Audio or Video) in milliseconds.
      * Returns 0 if unresolved or if the file is invalid.
+     *
+     * Run in IO thread.
      */
     suspend fun getDuration(file: File): Long {
         return getDurationOrNull(file) ?: DEFAULT_DURATION
