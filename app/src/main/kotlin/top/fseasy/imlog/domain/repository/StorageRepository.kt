@@ -138,13 +138,5 @@ interface StorageRepository {
      *
      * Run in IO threads.
      */
-    suspend fun getAudioMetadataOrNull(uriStr: UriStr): AudioMetadata?
-
-    /***
-     * No exception will be thrown. If file doesn't exist, return null. else return metadata
-     * that might be inaccurate in edge condition where data is corrupted.
-     *
-     * Run in IO thread
-     */
-    suspend fun getAudioMetadataOrNull(file: File): AudioMetadata
+    suspend fun getAudioMetadataOrNull(fileAbsolutePath: AbsolutePathModel): AudioMetadata?
 }

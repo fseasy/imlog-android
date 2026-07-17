@@ -9,6 +9,8 @@ import android.provider.OpenableColumns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import top.fseasy.imlog.data.mapper.toUriOrNull
+import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.VideoMetadata
@@ -20,9 +22,7 @@ import java.util.EnumMap
  * It depends on MemiTypeUtils and MediaDurationUtils in fallback route.
  */
 object MetadataResolveUtils {
-    // ****************
-    // Uri Apis
-    // *********************
+
     /**
      * RUN IN IO.
      * @param defaultName if methods failed to get filename, return this one instead
@@ -39,11 +39,64 @@ object MetadataResolveUtils {
         result.displayName ?: getDisplayNameFallbackOrDefault(uri, defaultName)
     }
 
+    /**
+     * If uriStr failed to be parsed as uri, or file not exists, return null.
+     * Run in IO thread for io parts.
+     */
+    suspend fun resolveAudio(filePath: AbsolutePathModel, context: Context): AudioMetadata? =
+        when (filePath) {
+            is AbsolutePathModel.UriStrModel ->
+                filePath.value.toUriOrNull()
+                    ?.let { resolveAudio(context, uri = it) }
+
+            is AbsolutePathModel.FileModel -> resolveAudio(filePath.value)
+        }
+
+    /**
+     * If file not exists, return null.
+     * Run in IO thread for io parts.
+     */
+    suspend fun resolveAudio(
+        file: File,
+    ): AudioMetadata? {
+        val exists = withContext(Dispatchers.IO) {
+            try {
+                file.exists()
+            } catch (e: SecurityException) {
+                Timber.w(e, "Failed to access for file: $file")
+                false
+            }
+        }
+        if (!exists) {
+            return null
+        }
+
+        val displayName = file.name
+        val fileSize = withContext(Dispatchers.IO) {
+            try {
+                file.length()
+            } catch (e: SecurityException) {
+                Timber.w(e, "Failed to get file size for file: $file")
+                0L
+            }
+        }
+
+        val mimeType = MimeTypeUtils.getMimeTypeOrNull(file) ?: "audio/*"
+        val duration = MediaDurationUtils.getDuration(file)
+
+        return AudioMetadata(
+            displayName = displayName, fileSize = fileSize, mimeType = mimeType, duration = duration
+        )
+    }
+
     /***
      * Run IN IO.
      * No exceptions will be thrown.
+     *
+     * We don't check if the uri exists, so we always return a AudioMetadata
+     * even if it actually does not exist.
      */
-    suspend fun forAudioUri(
+    suspend fun resolveAudio(
         context: Context,
         uri: Uri,
     ): AudioMetadata = withContext(Dispatchers.IO) {
@@ -70,7 +123,7 @@ object MetadataResolveUtils {
      * Run IN IO.
      * No exceptions will be thrown.
      */
-    suspend fun forVideoUri(
+    suspend fun resolveVideo(
         context: Context,
         uri: Uri,
     ): VideoMetadata = withContext(Dispatchers.IO) {
@@ -114,7 +167,7 @@ object MetadataResolveUtils {
      * Run IN IO.
      * No exceptions will be thrown.
      */
-    suspend fun forImageUri(
+    suspend fun resolveImage(
         context: Context,
         uri: Uri,
     ): ImageMetadata = withContext(Dispatchers.IO) {
@@ -149,38 +202,6 @@ object MetadataResolveUtils {
             height = height
         )
     }
-
-    // *****************
-    // File Apis
-    // *****************
-
-    /**
-     * Run in IO thread for io parts.
-     */
-    suspend fun forAudioFile(
-        file: File,
-    ): AudioMetadata {
-        val displayName = file.name
-        val fileSize = withContext(Dispatchers.IO) {
-            try {
-                if (file.exists()) file.length() else 0L
-            } catch (e: SecurityException) {
-                Timber.w(e, "Failed to get file size for file: $file")
-                0L
-            }
-        }
-
-        val mimeType = MimeTypeUtils.getMimeTypeOrNull(file) ?: "audio/*"
-        val duration = MediaDurationUtils.getDuration(file)
-
-        return AudioMetadata(
-            displayName = displayName,
-            fileSize = fileSize,
-            mimeType = mimeType,
-            duration = duration
-        )
-    }
-
 
     /** FALLBACK: Get path's last part name (filepath -> filename, dirpath -> dirname)
      * use This only when metadata.displayName is null

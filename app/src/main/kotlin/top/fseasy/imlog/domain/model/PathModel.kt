@@ -15,7 +15,9 @@ sealed interface SharedStorageRootSource {
 }
 
 /**
- * Used to fit the clean architecture requirements, mainly used as output stream.
+ * Used in condition that needs an output paths.
+ * Use this way to obey the clean architecture requirements.
+ * Limit this class usage in Domain layer and StorageRepository.
  * @see top.fseasy.imlog.domain.usecase.StoragePathUseCase to know the storage choose reason
  * @see top.fseasy.imlog.data.mapper StoragePathModelMapper.kt
  */
@@ -43,8 +45,10 @@ sealed interface StoragePathModel {
 }
 
 /**
- * Mainly Used in file handling result, or input file.
+ * In domain layer, it's used in user-given file condition, or file processing result.
+ * In data/UI layer, should prefer use this type instead of @StoragePathModel.
  * @StoragePathModel can be transformed to this type, with platform specific context.
+ *
  * @see top.fseasy.imlog.data.mapper AbsolutePathModelMapper.kt
  */
 sealed interface AbsolutePathModel {

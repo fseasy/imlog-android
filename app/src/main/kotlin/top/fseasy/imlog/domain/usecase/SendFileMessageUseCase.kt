@@ -65,7 +65,10 @@ class SendMessageFileUseCase @Inject constructor(
     ) {
         val audioCacheFile =
             storagePathUseCase.buildMessageCacheFileStoragePath(userId, audioCacheFilename)
-        val srcMetadata = storageRepository.getAudioMetadataOrNull(audioCacheFile)
+        val srcMetadata = storageRepository.getAudioMetadataOrNull(audioCacheFile) ?: run {
+            Timber.w("Failed to get audio metadata, <$audioCacheFilename> => <$audioCacheFile> is invalid file")
+            return
+        }
         val messageId = try {
             initializeCacheFileSourceFileMessage(
                 cacheFilename = audioCacheFilename,
@@ -80,6 +83,7 @@ class SendMessageFileUseCase @Inject constructor(
             // can't do anything, just return...
             return
         }
+        // TODO: start do following worker
     }
 
     // If success, will run as normal. else, will set a failure in the db.
@@ -92,10 +96,12 @@ class SendMessageFileUseCase @Inject constructor(
         messageType: MessageType = MessageType.AUDIO,
     ) {
         // 1. initialize the file message record to db
-        val srcMetadata = storageRepository.getAudioMetadataOrNull(srcUriStr) ?: run {
-            Timber.e("Failed to get audio metadata, $srcUriStr isn't an invalid uri")
-            return
-        }
+        val srcMetadata =
+            storageRepository.getAudioMetadataOrNull(AbsolutePathModel.UriStrModel(srcUriStr))
+                ?: run {
+                    Timber.w("Failed to get audio metadata, $srcUriStr is invalid")
+                    return
+                }
         val messageId = try {
             initializeUriSourceFileMessage(
                 srcUriStr = srcUriStr,
@@ -150,7 +156,7 @@ class SendMessageFileUseCase @Inject constructor(
         cacheFilename: String,
     ) {
         val internalCacheFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(
-            userId = userId, timestampMs = messageTimestampMs, filename = cacheFilename
+            userId = userId, filename = cacheFilename
         )
         // 1. copy internal cache to shared storage
         when (val result = copyInternalCacheToSharedStorageAndUpdateState(
@@ -249,7 +255,7 @@ class SendMessageFileUseCase @Inject constructor(
             timestampMs = messageTimestampMs, originalFilename = originalDisplayName
         )
         val cachePath = storagePathUseCase.buildMessageCacheFileStoragePath(
-            userId, timestampMs = messageTimestampMs, filename = cacheFilename
+            userId, filename = cacheFilename
         )
         val result = storageRepository.copyFile(
             AbsolutePathModel.UriStrModel(srcUriStr), targetPath = cachePath

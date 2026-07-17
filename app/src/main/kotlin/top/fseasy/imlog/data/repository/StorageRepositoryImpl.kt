@@ -12,6 +12,7 @@ import top.fseasy.imlog.data.constants.THUMBNAIL_MAX_WIDTH
 import top.fseasy.imlog.data.mapper.createDirectory
 import top.fseasy.imlog.data.mapper.ensureDirectorUri
 import top.fseasy.imlog.data.mapper.ensureFileUri
+import top.fseasy.imlog.data.mapper.findUriOrThrow
 import top.fseasy.imlog.data.mapper.toAbsolutePathModelsWithoutCreating
 import top.fseasy.imlog.data.mapper.toFileWithCreatingDirectories
 import top.fseasy.imlog.data.mapper.toFileWithoutCreatingDirectories
@@ -98,20 +99,16 @@ class StorageRepositoryImpl @Inject constructor(
                 MetadataResolveUtils.getDisplayNameOrDefault(context, it, defaultName)
             } ?: defaultName
 
+    override suspend fun getAudioMetadataOrNull(filePath: StoragePathModel): AudioMetadata? =
+        runCatching {
+            filePath.toAbsolutePathModelsWithoutCreating(
+                ::getSharedStorageRootUriWithCache, context
+            )
+        }.getOrNull()
+            ?.let { getAudioMetadataOrNull(it.last()) }
 
-    override suspend fun getAudioMetadataOrNull(filePath: StoragePathModel): AudioMetadata? {
-        // TODO. call both condition
-    }
-
-
-    override suspend fun getAudioMetadataOrNull(uriStr: UriStr): AudioMetadata? =
-        uriStr.toUriOrNull()
-            ?.let {
-                MetadataResolveUtils.forAudioUri(context, uri = it)
-            }
-
-    override suspend fun getAudioMetadataOrNull(file: File): AudioMetadata =
-        MetadataResolveUtils.forAudioFile(file)
+    override suspend fun getAudioMetadataOrNull(fileAbsolutePath: AbsolutePathModel): AudioMetadata? =
+        MetadataResolveUtils.resolveAudio(fileAbsolutePath, context = context)
 
     /**
      * Run in IO threads for io parts.
@@ -128,8 +125,7 @@ class StorageRepositoryImpl @Inject constructor(
             }
 
             is StoragePathModel.SharedStorageOnly -> filePath.ensureDirectorUri(
-                ::getSharedStorageRootUriWithCache,
-                context = context
+                ::getSharedStorageRootUriWithCache, context = context
             )
 
             is StoragePathModel.InternalOnly -> {
@@ -193,9 +189,7 @@ class StorageRepositoryImpl @Inject constructor(
         mimeType: String,
     ): UriStr {
         val fileUri = filePath.ensureFileUri(
-            ::getSharedStorageRootUriWithCache,
-            context = context,
-            mimeType = mimeType
+            ::getSharedStorageRootUriWithCache, context = context, mimeType = mimeType
         )
         when (val r = writeData2Uri(context, tgtFileUri = fileUri, content = content)) {
             is WriteDataResult.Error -> throw r.cause
@@ -210,8 +204,7 @@ class StorageRepositoryImpl @Inject constructor(
         srcMimeType: String?,
     ): FileCopyResult = copyFile(
         srcAbsolutePath = srcPath.toAbsolutePathModelsWithoutCreating(
-            ::getSharedStorageRootUriWithCache,
-            context
+            ::getSharedStorageRootUriWithCache, context
         )
             .last(), // Use last to prefer getting local file
         targetPath = targetPath, srcMimeType = srcMimeType
@@ -269,9 +262,7 @@ class StorageRepositoryImpl @Inject constructor(
         srcMimeType: String,
     ): FileCopyResult {
         val tgtUri = pathModel.ensureFileUri(
-            ::getSharedStorageRootUriWithCache,
-            context = context,
-            mimeType = srcMimeType
+            ::getSharedStorageRootUriWithCache, context = context, mimeType = srcMimeType
         )
         return copyBetweenUri(
             context,
@@ -323,8 +314,7 @@ class StorageRepositoryImpl @Inject constructor(
 
         val absolutePaths = try {
             filePath.toAbsolutePathModelsWithoutCreating(
-                ::getSharedStorageRootUriWithCache,
-                context
+                ::getSharedStorageRootUriWithCache, context
             )
         } catch (e: FileNotFoundException) {
             Timber.d(e, "deleteFile: Failed to locate file on shared-storage: $filePath")
