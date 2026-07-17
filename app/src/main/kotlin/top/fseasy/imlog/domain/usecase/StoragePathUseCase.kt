@@ -125,12 +125,10 @@ class StoragePathUseCase @Inject constructor(
      */
     fun buildMessageCacheFileStoragePath(
         userId: UserId,
-        timestampMs: Long,
         filename: String,
     ) = buildInternalCacheStoragePath(
         userId,
         resourceName = ResourceName.MessageCache,
-        timestampMs = timestampMs,
         filename = filename
     )
 
@@ -173,7 +171,6 @@ class StoragePathUseCase @Inject constructor(
     private fun buildInternalCacheStoragePath(
         userId: UserId,
         resourceName: ResourceName,
-        timestampMs: Long,
         filename: String,
     ): StoragePathModel.InternalOnly = StoragePathModel.InternalOnly(
         buildList {

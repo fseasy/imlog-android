@@ -5,20 +5,22 @@ import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.domain.model.FileDeleteResult
-import top.fseasy.imlog.domain.model.MediaMetadataUnion
+import top.fseasy.imlog.domain.model.FileMetadataUnion
 import top.fseasy.imlog.domain.model.MessageAudioProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
+import top.fseasy.imlog.domain.model.RetryModel
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.toMetadataUnion
+import top.fseasy.imlog.domain.repository.DbRunner
+import top.fseasy.imlog.domain.repository.MessageFileSource
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.WorkerRunner
-import java.io.File
 import javax.inject.Inject
 
 /**
@@ -53,17 +55,20 @@ class SendMessageFileUseCase @Inject constructor(
     private val storageRepository: StorageRepository,
     private val messageRepository: MessageRepository,
     private val workerRunner: WorkerRunner,
+    private val dbRunner: DbRunner,
 ) {
     suspend fun sendVoice(
-        audioCacheFile: File,
+        audioCacheFilename: String,
         userId: UserId,
         topicId: TopicId,
         messageTimestampMs: Long,
     ) {
-        val srcMetadata = storageRepository.getAudioMetadata(audioCacheFile)
+        val audioCacheFile =
+            storagePathUseCase.buildMessageCacheFileStoragePath(userId, audioCacheFilename)
+        val srcMetadata = storageRepository.getAudioMetadataOrNull(audioCacheFile)
         val messageId = try {
-            initializeFileMessage(
-                srcUriStr = srcUriStr,
+            initializeCacheFileSourceFileMessage(
+                cacheFilename = audioCacheFilename,
                 senderId = userId,
                 topicId = topicId,
                 messageTimestampMs = messageTimestampMs,
@@ -92,7 +97,7 @@ class SendMessageFileUseCase @Inject constructor(
             return
         }
         val messageId = try {
-            initializeFileMessage(
+            initializeUriSourceFileMessage(
                 srcUriStr = srcUriStr,
                 senderId = userId,
                 topicId = topicId,
@@ -308,21 +313,55 @@ class SendMessageFileUseCase @Inject constructor(
     /**
      * @throws Throwable
      */
-    private suspend fun initializeFileMessage(
+    private suspend fun initializeUriSourceFileMessage(
         srcUriStr: UriStr,
         senderId: UserId,
         topicId: TopicId,
         messageTimestampMs: Long,
         messageType: MessageType,
-        srcMetadata: MediaMetadataUnion,
-    ) = messageRepository.initializeFileMessage(
-        topicId = topicId,
-        senderId = senderId,
-        messageType = messageType,
-        srcUriStr = srcUriStr,
-        messageTimestampMs = messageTimestampMs,
-        srcMetadata = srcMetadata
-    )
+        srcMetadata: FileMetadataUnion,
+    ): MessageId = dbRunner.runInTransaction(retry = RetryModel.OnAnyException) {
+        val messageId = messageRepository.syncInsertInitialFileMessage(
+            topicId = topicId,
+            senderId = senderId,
+            type = messageType,
+            timestampMs = messageTimestampMs,
+            fileMetadata = srcMetadata
+        )
+        messageRepository.syncInsertInitialFileProcessingTaskState(
+            messageId = messageId,
+            fileSource = MessageFileSource.FromUriStr(srcUriStr),
+            taskStartTime = messageTimestampMs
+        )
+        messageId
+    }
+
+    /**
+     * @param cacheFile: its path must obey the @StoragePathUseCase.buildMessageCacheFileStoragePath
+     * @throws Throwable
+     */
+    private suspend fun initializeCacheFileSourceFileMessage(
+        cacheFilename: String,
+        senderId: UserId,
+        topicId: TopicId,
+        messageTimestampMs: Long,
+        messageType: MessageType,
+        srcMetadata: FileMetadataUnion,
+    ): MessageId = dbRunner.runInTransaction(retry = RetryModel.OnAnyException) {
+        val messageId = messageRepository.syncInsertInitialFileMessage(
+            topicId = topicId,
+            senderId = senderId,
+            type = messageType,
+            timestampMs = messageTimestampMs,
+            fileMetadata = srcMetadata
+        )
+        messageRepository.syncInsertInitialFileProcessingTaskState(
+            messageId = messageId,
+            fileSource = MessageFileSource.FromMessageCacheFile(cacheFilename),
+            taskStartTime = messageTimestampMs
+        )
+        messageId
+    }
 
     /**
      * Run in IO in each io parts.

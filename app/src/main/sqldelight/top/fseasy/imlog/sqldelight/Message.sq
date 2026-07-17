@@ -41,8 +41,10 @@ CREATE INDEX idx_messages_sender_created ON messages(sender_id, created_at);
 CREATE TABLE message_file_processing_task_states (
    message_id TEXT NOT NULL PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
    -- || processing intermediate results ||  used for ui rendering, failed task retry
-   -- used to show before thumnail and internal-raw data are prepared.
-   src_uri TEXT NOT NULL,
+   --    used to show before thumnail and internal-raw data are prepared.
+   --    one of src_uri and internal_cached_filename must be exists when initializing!
+   --    Business logic needs to ensure it!
+   src_uri TEXT,
    internal_cached_filename TEXT,
    -- || stage processing task details || used for ui rendering, failed task retry
    task_tart_time INTEGER NOT NULL,

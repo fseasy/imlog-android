@@ -31,7 +31,7 @@ data class ImageMetadata(
  * Superset of all media metadata fields.
  * Used as a common transfer object between business logic and database layer.
  */
-data class MediaMetadataUnion(
+data class FileMetadataUnion(
     val displayName: String,
     val fileSize: Long,
     val mimeType: String,
@@ -40,7 +40,7 @@ data class MediaMetadataUnion(
     val duration: Long?,
 )
 
-fun AudioMetadata.toMetadataUnion() = MediaMetadataUnion(
+fun AudioMetadata.toMetadataUnion() = FileMetadataUnion(
     displayName = displayName,
     fileSize = fileSize,
     mimeType = mimeType,
@@ -49,7 +49,7 @@ fun AudioMetadata.toMetadataUnion() = MediaMetadataUnion(
     height = null
 )
 
-fun VideoMetadata.toMetadataUnion() = MediaMetadataUnion(
+fun VideoMetadata.toMetadataUnion() = FileMetadataUnion(
     displayName = displayName,
     fileSize = fileSize,
     mimeType = mimeType,
@@ -58,7 +58,7 @@ fun VideoMetadata.toMetadataUnion() = MediaMetadataUnion(
     duration = duration,
 )
 
-fun ImageMetadata.toMetadataUnion() = MediaMetadataUnion(
+fun ImageMetadata.toMetadataUnion() = FileMetadataUnion(
     displayName = displayName,
     fileSize = fileSize,
     mimeType = mimeType,

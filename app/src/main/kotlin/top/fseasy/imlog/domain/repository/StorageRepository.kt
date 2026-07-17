@@ -5,7 +5,6 @@ import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.domain.model.FileDeleteResult
 import top.fseasy.imlog.domain.model.StoragePathModel
-import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import java.io.File
@@ -51,18 +50,6 @@ interface StorageRepository {
         userId: UserId,
         uriStr: UriStr?,
     ): Result<Unit>
-
-    /**
-     * Perform media (img, video) saving logics:
-     * 1. copy raw to shared storage
-     * 2. generate thumbnail, save to private external storage
-     */
-    suspend fun saveMessageMedia(
-        userId: UserId,
-        topicId: TopicId,
-        srcUriStr: UriStr,
-        messageTimestampMs: Long,
-    ): MediaSaveResult
 
     /**
      * Run in IO. No exception will be thrown. (all will be swallowed and return default)
@@ -138,6 +125,14 @@ interface StorageRepository {
     ): FileDeleteResult
 
     /**
+     * No exception will be thrown. If path is invalid, return null. else return metadata
+     * that might be inaccurate in edge condition where data is corrupted.
+     *
+     * Run in IO threads.
+     */
+    suspend fun getAudioMetadataOrNull(filePath: StoragePathModel): AudioMetadata?
+
+    /**
      * No exception will be thrown. If uri invalid, return null. else return metadata
      * that might be inaccurate in edge condition where data is corrupted.
      *
@@ -146,10 +141,10 @@ interface StorageRepository {
     suspend fun getAudioMetadataOrNull(uriStr: UriStr): AudioMetadata?
 
     /***
-     * Only for File. As file obj is valid, so it will always return a metadata even file is invalid.
-     * - in that condition, the fields is a default value for audio file.
+     * No exception will be thrown. If file doesn't exist, return null. else return metadata
+     * that might be inaccurate in edge condition where data is corrupted.
      *
      * Run in IO thread
      */
-    suspend fun getAudioMetadata(file: File): AudioMetadata
+    suspend fun getAudioMetadataOrNull(file: File): AudioMetadata
 }

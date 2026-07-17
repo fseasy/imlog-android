@@ -37,3 +37,8 @@ Sign up screen:
 
 DataLoading Screen:
 - navigate to specific screen
+
+## Migration work in the future
+
+1. remove java.io.File in the Domain layer. Use kotlinx-io for KMP.
+  

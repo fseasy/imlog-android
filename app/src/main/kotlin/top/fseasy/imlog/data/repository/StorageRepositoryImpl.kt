@@ -99,13 +99,18 @@ class StorageRepositoryImpl @Inject constructor(
             } ?: defaultName
 
 
+    override suspend fun getAudioMetadataOrNull(filePath: StoragePathModel): AudioMetadata? {
+        // TODO. call both condition
+    }
+
+
     override suspend fun getAudioMetadataOrNull(uriStr: UriStr): AudioMetadata? =
         uriStr.toUriOrNull()
             ?.let {
                 MetadataResolveUtils.forAudioUri(context, uri = it)
             }
 
-    override suspend fun getAudioMetadata(file: File): AudioMetadata =
+    override suspend fun getAudioMetadataOrNull(file: File): AudioMetadata =
         MetadataResolveUtils.forAudioFile(file)
 
     /**

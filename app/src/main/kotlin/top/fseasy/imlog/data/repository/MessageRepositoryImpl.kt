@@ -2,7 +2,6 @@ package top.fseasy.imlog.data.repository
 
 import android.content.Context
 import androidx.core.net.toUri
-import androidx.work.WorkManager
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
@@ -12,23 +11,18 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import top.fseasy.imlog.data.util.retryOnAnyException
-import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
-import top.fseasy.imlog.domain.model.MediaMetadataUnion
+import top.fseasy.imlog.domain.model.FileMetadataUnion
 import top.fseasy.imlog.domain.model.Message
-import top.fseasy.imlog.domain.model.MessageFactory
-import top.fseasy.imlog.domain.model.MessageFileProcessingStatus
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Statistics
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.toMessageMediaProcessStatus
+import top.fseasy.imlog.domain.repository.MessageFileSource
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
-import top.fseasy.imlog.worker.DeleteFileWorker
-import top.fseasy.imlog.worker.MediaFileProcessWorker
 import javax.inject.Inject
 import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.GetMessagesByTopic as GetMessagesByTopicRowEntity
@@ -60,6 +54,40 @@ class MessageRepositoryImpl @Inject constructor(
             .mapToOne(dispatcher)
             .map { Statistics(totalDays = it.total_days, totalMessages = it.total_messages) }
 
+    override fun syncInsertInitialFileMessage(
+        topicId: TopicId,
+        senderId: UserId,
+        type: MessageType,
+        timestampMs: Long,
+        fileMetadata: FileMetadataUnion,
+    ): MessageId {
+        val initialMessage = createInitialFileMessageEntity(
+            topicId = topicId,
+            senderId = senderId,
+            type = type,
+            timestampMs = timestampMs,
+            srcMetadata = fileMetadata
+        )
+        database.messageQueries.insertMessage(initialMessage)
+        return MessageId(initialMessage.id)
+    }
+
+    override fun syncInsertInitialFileProcessingTaskState(
+        messageId: MessageId,
+        fileSource: MessageFileSource,
+        taskStartTime: Long,
+    ) {
+        val initialStateEntity = createInitialFileProcessingTaskStateEntity(
+            messageId = messageId,
+            fileSource = fileSource,
+            taskStartTime = taskStartTime
+        )
+
+        database.messageFileProcessingQueries.insertMessageFileProcessingState(
+            initialStateEntity
+        )
+    }
+
     /**
      * insert message to DB. only suitable for Text message because the other message need extra file process.
      * TODO: remove this when we also need some side effects when processing text message
@@ -70,36 +98,6 @@ class MessageRepositoryImpl @Inject constructor(
 
     override suspend fun delete(messageId: MessageId): Boolean = withContext(dispatcher) {
         database.messageQueries.deleteMessageLogical(id = messageId.value).value > 0L
-    }
-
-    override suspend fun initializeFileMessage(
-        topicId: TopicId,
-        senderId: UserId,
-        messageType: MessageType,
-        srcUriStr: UriStr,
-        srcMetadata: MediaMetadataUnion,
-        messageTimestampMs: Long,
-    ) = withContext(dispatcher) {
-        retryOnAnyException {
-            val initialMessage = createInitialFileMessageEntity(
-                topicId = topicId,
-                senderId = senderId,
-                type = messageType,
-                timestampMs = messageTimestampMs,
-                srcMetadata = srcMetadata
-            )
-            val messageId = MessageId(initialMessage.id)
-            val pendingStateEntity = createFileProcessingTaskStateEntity(
-                messageId = messageId, srcUriStr = srcUriStr, taskStartTime = messageTimestampMs
-            )
-            database.transaction {
-                database.messageQueries.insertMessage(initialMessage)
-                database.messageFileProcessingQueries.insertMessageFileProcessingState(
-                    pendingStateEntity
-                )
-            }
-            messageId
-        }
     }
 
     override suspend fun setFileProcessingInternalCacheFilename(
@@ -124,7 +122,6 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
-
     override suspend fun setFileProcessingTaskFail(
         messageId: MessageId,
         stage: MessageProcessingErrorStage,
@@ -147,96 +144,32 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun sendMediaMessage(
-        topicId: TopicId,
-        senderId: UserId,
-        messageType: MessageType,
-        srcMediaCopySource: MessageMediaCopySource,
-    ): Unit = withContext(dispatcher) {
-        // insert pending message
-        val now = System.currentTimeMillis()
-        val srcMediaUri = when (srcMediaCopySource) {
-            is MessageMediaCopySource.FromUri -> srcMediaCopySource.uri
-            is MessageMediaCopySource.FromFile -> srcMediaCopySource.file.toUri()
-        }
 
-        val messageId = retrySQLiteOnKeyConflict {
-            val pendingMessage = MessageFactory.createPendingMedia(
-                topicId = topicId,
-                senderId = senderId,
-                type = messageType,
-                timestampMs = now,
-            )
-            val pendingStateEntity = Message_media_processing_temp_states(
-                message_id = pendingMessage.id.value,
-                status = MessageFileProcessingStatus.Processing.value,
-                src_uri = srcMediaUri.toString()
-            )
-            database.transaction {
-                database.messageQueries.insertMessage(pendingMessage.toEntity())
-                database.messageQueries.insertMessageMediaProcessingTempStates(pendingStateEntity)
-            }
-            pendingMessage.id
-        }
-        // invoke worker to processing media file
-        val mediaProcessRequest = MediaFileProcessWorker.createRequest(
-            messageId = messageId,
-            topicId = topicId,
-            senderId = senderId,
-            messageTimestampMs = now,
-            srcMediaUri = srcMediaUri
-        )
-        if (srcMediaCopySource is MessageMediaCopySource.FromFile && srcMediaCopySource.deleteOnCopySuccess) {
-            val deleteRequest = DeleteFileWorker.createRequest(srcMediaCopySource.file.toString())
-            WorkManager.getInstance(context)
-                .beginWith(mediaProcessRequest)
-                .then(deleteRequest)
-                .enqueue()
-        } else {
-            WorkManager.getInstance(context)
-                .enqueue(mediaProcessRequest)
-        }
-    }
-
-    override suspend fun finishMediaProcessing(
+    private fun createInitialFileProcessingTaskStateEntity(
         messageId: MessageId,
-        savedMedia: SavedMedia,
-    ) {
-        database.transaction {
-            database.messageQueries.updateMessageMediaFields(
-                raw_filename = savedMedia.filename,
-                original_filename = savedMedia.originalFilename,
-                file_size = savedMedia.fileSize,
-                thumbnail_name = savedMedia.thumbnailFilename,
-                mime_type = savedMedia.mimeType,
-                duration = savedMedia.duration,
-                width = savedMedia.width?.toLong(),
-                height = savedMedia.height?.toLong(),
-                message_id = messageId.value
-            )
-            database.messageQueries.deleteMessageMediaProcessingTempStates(messageId.value)
-        }
-    }
-
-    private fun createFileProcessingTaskStateEntity(
-        messageId: MessageId,
-        srcUriStr: UriStr,
+        fileSource: MessageFileSource,
         taskStartTime: Long,
-    ) = FileProcessingTaskStateEntity(
-        message_id = messageId.value,
-        src_uri = srcUriStr.value,
-        internal_cached_filename = null,
-        task_tart_time = taskStartTime,
-        error_stage = null,
-        error_user_retryable = null,
-    )
+    ): FileProcessingTaskStateEntity {
+        val (srcUriDbStr, internalCacheFilename) = when (fileSource) {
+            is MessageFileSource.FromUriStr -> fileSource.uriStr.value to null
+            is MessageFileSource.FromMessageCacheFile -> null to fileSource.filename
+        }
+        return FileProcessingTaskStateEntity(
+            message_id = messageId.value,
+            src_uri = srcUriDbStr,
+            internal_cached_filename = internalCacheFilename,
+            task_tart_time = taskStartTime,
+            error_stage = null,
+            error_user_retryable = null,
+        )
+    }
 
     private fun createInitialFileMessageEntity(
         topicId: TopicId,
         senderId: UserId,
         type: MessageType,
         timestampMs: Long,
-        srcMetadata: MediaMetadataUnion,
+        srcMetadata: FileMetadataUnion,
     ) = MessageEntity(
         id = MessageId.random().value,
         topic_id = topicId.value,

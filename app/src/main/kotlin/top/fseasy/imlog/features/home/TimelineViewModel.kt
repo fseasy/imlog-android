@@ -104,8 +104,7 @@ class TimelineViewModel @Inject constructor(
         )
 
     val voiceRecordingUiState: StateFlow<VoiceRecordingUiState> = combine(
-        voiceRecorder.state,
-        voiceRecorder.elapsedMs
+        voiceRecorder.state, voiceRecorder.elapsedMs
     ) { state, elapsedMs ->
         VoiceRecordingUiState(state, elapsedMs)
     }.stateIn(
@@ -123,23 +122,18 @@ class TimelineViewModel @Inject constructor(
             VoiceRecordingState.Idle -> voiceRecorder.cancel()
             VoiceRecordingState.Recording -> {
                 launchWithTopicUserId { topicId, userId ->
-                    val now = System.currentTimeMillis()
-                    val outputFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(
-                        userId = userId,
-                        timestampMs = now,
-                        filename = storagePathUseCase.buildTimestampedFilename(
-                            now,
-                            originalFilename = VoiceRecorder.generateOutputAudioDefaultFilename("voice")
-                        )
-                    )
-                    val outputFile = outputFilePath.toFileWithCreatingDirectories(context)
+                    val outputFile =
+                        generateVoiceRecordingOutputFileInMessageCacheRule(userId = userId)
                     voiceRecorder.start(context, outputFile)
                 }
             }
 
             VoiceRecordingState.Stopped -> {
                 voiceRecorder.stop()
-                    ?.let { sendVoiceMessage(it) }
+                    ?.let {
+                        // It follows the message cache file generating rule, so only filename is necessary
+                        sendVoiceMessage(it.name)
+                    }
             }
         }
     }
@@ -173,14 +167,13 @@ class TimelineViewModel @Inject constructor(
         })
     }
 
-    fun sendVoiceMessage(cacheVoiceFile: File) {
+    fun sendVoiceMessage(audioCacheFilename: String) {
         launchWithTopicUserId({ tid, uid ->
             sendFileMessageUseCase.sendVoice(
-                cacheVoiceFile,
+                audioCacheFilename,
                 userId = uid,
                 topicId = tid,
                 messageTimestampMs = System.currentTimeMillis(),
-                messageType = MessageType.AUDIO
             )
         })
     }
@@ -211,5 +204,19 @@ class TimelineViewModel @Inject constructor(
                 else -> Unit
             }
         }
+    }
+
+    private suspend fun generateVoiceRecordingOutputFileInMessageCacheRule(
+        userId: UserId,
+        now: Long = System.currentTimeMillis(),
+    ): File {
+        val filename = storagePathUseCase.buildTimestampedFilename(
+            now, originalFilename = VoiceRecorder.generateOutputAudioDefaultFilename("voice")
+        )
+        val outputFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(
+            userId = userId, filename = filename
+        )
+        val outputFile = outputFilePath.toFileWithCreatingDirectories(context)
+        return outputFile
     }
 }
