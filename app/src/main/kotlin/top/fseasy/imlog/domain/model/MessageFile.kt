@@ -10,6 +10,7 @@ data class AudioMetadata(
     val duration: Long,
 )
 
+@Serializable
 data class VideoMetadata(
     val displayName: String,
     val fileSize: Long,
@@ -19,6 +20,7 @@ data class VideoMetadata(
     val height: Int,
 )
 
+@Serializable
 data class ImageMetadata(
     val displayName: String,
     val fileSize: Long,
@@ -31,6 +33,7 @@ data class ImageMetadata(
  * Superset of all media metadata fields.
  * Used as a common transfer object between business logic and database layer.
  */
+@Serializable
 data class FileMetadataUnion(
     val displayName: String,
     val fileSize: Long,
@@ -67,6 +70,16 @@ fun ImageMetadata.toMetadataUnion() = FileMetadataUnion(
     duration = null,
 )
 
+@Serializable
+data class FinishFileSendingWorkerPayload(
+    val messageId: MessageId,
+    val userId: UserId,
+    val topicId: TopicId,
+    val messageTimestampMs: Long,
+    val fileMetadata: FileMetadataUnion,
+    val cacheFilename: String,
+)
+
 sealed interface MessageProcessingErrorStage {
     val value: String
 }
@@ -91,3 +104,31 @@ enum class MessageAudioProcessingErrorStage(override val value: String) :
 
 fun String?.toMessageAudioErrorStage(): MessageAudioProcessingErrorStage? =
     this?.let { MessageAudioProcessingErrorStage.fromValue(it) }
+
+
+/***
+ * Why almost duplicated?
+ * - To make the whole stages more clear for each type.
+ */
+enum class MessageImageProcessingErrorStage(override val value: String) :
+    MessageProcessingErrorStage {
+    CopySrcToInternalCache(value = "copy_src2internal_cache"),
+    SetInternalFilenameToDb(value = "set_internal_filename2db"),
+    CopyToSharedStorage("copy2shared_storage"),
+    SetRawFilenameToDb("set_raw_filename2db"),
+    GenerateThumbnail("generate_thumbnail"),
+    SetThumbnailFilenameToDb("set_thumbnail_filename2db"),
+    DeleteInternalFileCache("delete_internal_file_cache"),
+    DeleteTaskStateFromDb("delete_task_state_from_db"),
+    IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
+    ;
+
+    companion object {
+        private val valueMap = entries.associateBy(MessageImageProcessingErrorStage::value)
+
+        fun fromValue(value: String) = valueMap[value]
+    }
+}
+
+fun String?.toMessageImageErrorStage(): MessageImageProcessingErrorStage? =
+    this?.let { MessageImageProcessingErrorStage.fromValue(it) }

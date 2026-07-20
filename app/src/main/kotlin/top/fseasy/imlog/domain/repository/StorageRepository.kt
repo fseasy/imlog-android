@@ -4,10 +4,10 @@ import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.domain.model.FileDeleteResult
+import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
-import java.io.File
 
 
 data class SavedMedia(
@@ -55,6 +55,17 @@ interface StorageRepository {
      * Run in IO. No exception will be thrown. (all will be swallowed and return default)
      */
     suspend fun getDisplayNameOrDefault(uriStr: UriStr, defaultName: String): String
+
+    /**
+     * Transform @StoragePathModel to absolute path models (DuralWrite will get 2 models!)
+     * without creating non-existed uri or files.
+     * if this is a StoragePathModel.DuralWrite, will return a list ordering in `[UriStrModel, FileModel]`
+     *
+     * io parts run in IO.
+     *
+     * @throws Exception all exceptions came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
+     */
+    suspend fun resolveStoragePathToAbsolutePathsWithoutCreating(storagePath: StoragePathModel): List<AbsolutePathModel>
 
     /** Run in IO thread in io parts.
      * @param mimeType: set it properly when filePathModel includes Uri.
@@ -139,4 +150,13 @@ interface StorageRepository {
      * Run in IO threads.
      */
     suspend fun getAudioMetadataOrNull(fileAbsolutePath: AbsolutePathModel): AudioMetadata?
+
+    /**
+     * No exception will be thrown. If uri invalid, return null. else return metadata
+     * that might be inaccurate in edge condition where data is corrupted.
+     *
+     * Run in IO threads.
+     */
+    suspend fun getImageMetadataOrNull(fileAbsolutePath: AbsolutePathModel): ImageMetadata?
+
 }

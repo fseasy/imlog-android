@@ -1,13 +1,18 @@
 package top.fseasy.imlog.domain.usecase
 
+import androidx.compose.animation.scaleIn
 import timber.log.Timber
+import top.fseasy.imlog.data.constants.TIMELINE_THUMBNAIL_COMPRESS_FORMAT
+import top.fseasy.imlog.data.constants.TIMELINE_THUMBNAIL_COMPRESS_QUALITY
+import top.fseasy.imlog.data.constants.TIMELINE_THUMBNAIL_MAX_SIZE
 import top.fseasy.imlog.domain.model.AbsolutePathModel
-import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.domain.model.FileDeleteResult
 import top.fseasy.imlog.domain.model.FileMetadataUnion
+import top.fseasy.imlog.domain.model.FinishFileSendingWorkerPayload
 import top.fseasy.imlog.domain.model.MessageAudioProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageId
+import top.fseasy.imlog.domain.model.MessageImageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.RetryModel
@@ -21,34 +26,12 @@ import top.fseasy.imlog.domain.repository.MessageFileSource
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.WorkerRunner
+import top.fseasy.imlog.domain.service.ImageThumbnailGenerateRequest
+import top.fseasy.imlog.domain.service.ThumbnailFormat
+import top.fseasy.imlog.domain.service.ThumbnailScale
+import top.fseasy.imlog.domain.service.ThumbnailService
 import javax.inject.Inject
 
-/**
- * Shared on copying stages (copy to internal, copy to shared storage)
- */
-
-private enum class CopyStageFailureType {
-    CopyFile, SaveFilenameToDb, UpdateDbIllegalState;
-}
-
-private sealed interface CopyStageResult {
-    data class Success(
-        val resultFilename: String,
-        val bytesCopied: Long,
-        val resultAbsolutePath: AbsolutePathModel,
-    ) : CopyStageResult
-
-    data class Failure(val type: CopyStageFailureType, val retryable: Boolean) : CopyStageResult
-}
-
-private enum class FinishTaskFailureType {
-    DeleteCacheFile, DeleteTaskStateFromDb
-}
-
-private sealed interface FinishTaskStageResult {
-    data object Success : FinishTaskStageResult
-    data class Failure(val type: FinishTaskFailureType) : FinishTaskStageResult
-}
 
 class SendMessageFileUseCase @Inject constructor(
     private val storagePathUseCase: StoragePathUseCase,
@@ -56,6 +39,7 @@ class SendMessageFileUseCase @Inject constructor(
     private val messageRepository: MessageRepository,
     private val workerRunner: WorkerRunner,
     private val dbRunner: DbRunner,
+    private val thumbnailService: ThumbnailService,
 ) {
     suspend fun sendVoice(
         audioCacheFilename: String,
@@ -65,7 +49,7 @@ class SendMessageFileUseCase @Inject constructor(
     ) {
         val audioCacheFile =
             storagePathUseCase.buildMessageCacheFileStoragePath(userId, audioCacheFilename)
-        val srcMetadata = storageRepository.getAudioMetadataOrNull(audioCacheFile) ?: run {
+        val fileMetadata = storageRepository.getAudioMetadataOrNull(audioCacheFile) ?: run {
             Timber.w("Failed to get audio metadata, <$audioCacheFilename> => <$audioCacheFile> is invalid file")
             return
         }
@@ -76,14 +60,23 @@ class SendMessageFileUseCase @Inject constructor(
                 topicId = topicId,
                 messageTimestampMs = messageTimestampMs,
                 messageType = MessageType.VOICE,
-                srcMetadata = srcMetadata.toMetadataUnion()
+                fileMetadata = fileMetadata.toMetadataUnion()
             )
         } catch (e: Exception) {
             Timber.e(e, "Failed in insert pending message stage, can't do anything")
             // can't do anything, just return...
             return
         }
-        // TODO: start do following worker
+        workerRunner.finishSendingAudio(
+            FinishFileSendingWorkerPayload(
+                messageId = messageId,
+                userId = userId,
+                topicId = topicId,
+                messageTimestampMs = messageTimestampMs,
+                fileMetadata = fileMetadata.toMetadataUnion(),
+                cacheFilename = audioCacheFilename
+            )
+        )
     }
 
     // If success, will run as normal. else, will set a failure in the db.
@@ -93,7 +86,6 @@ class SendMessageFileUseCase @Inject constructor(
         userId: UserId,
         topicId: TopicId,
         messageTimestampMs: Long,
-        messageType: MessageType = MessageType.AUDIO,
     ) {
         // 1. initialize the file message record to db
         val srcMetadata =
@@ -108,8 +100,8 @@ class SendMessageFileUseCase @Inject constructor(
                 senderId = userId,
                 topicId = topicId,
                 messageTimestampMs = messageTimestampMs,
-                messageType = messageType,
-                srcMetadata = srcMetadata.toMetadataUnion()
+                messageType = MessageType.AUDIO,
+                fileMetadata = srcMetadata.toMetadataUnion()
             )
         } catch (e: Exception) {
             Timber.e(e, "Failed in insert pending message stage, can't do anything")
@@ -135,38 +127,37 @@ class SendMessageFileUseCase @Inject constructor(
         }
 
         workerRunner.finishSendingAudio(
-            messageId = messageId,
-            userId = userId,
-            topicId = topicId,
-            messageTimestampMs = messageTimestampMs,
-            srcMetadata = srcMetadata,
-            cacheFilename = copyInternalSuccessResult.resultFilename
+            FinishFileSendingWorkerPayload(
+                messageId = messageId,
+                userId = userId,
+                topicId = topicId,
+                messageTimestampMs = messageTimestampMs,
+                fileMetadata = srcMetadata.toMetadataUnion(),
+                cacheFilename = copyInternalSuccessResult.resultFilename
+            )
         )
     }
 
     /**
-     * Should be called in Worker to make the following logic more stable
+     * Shared between sendAudio & sendVoice
+     * Should be called in Worker to make the following logic running more stably
      */
     suspend fun finishSendingAudioWorkerLogic(
-        messageId: MessageId,
-        userId: UserId,
-        topicId: TopicId,
-        messageTimestampMs: Long,
-        srcMetadata: AudioMetadata,
-        cacheFilename: String,
+        payload: FinishFileSendingWorkerPayload,
     ) {
         val internalCacheFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(
-            userId = userId, filename = cacheFilename
+            userId = payload.userId, filename = payload.cacheFilename
         )
+        val messageId = payload.messageId
         // 1. copy internal cache to shared storage
         when (val result = copyInternalCacheToSharedStorageAndUpdateState(
             messageId = messageId,
-            userId = userId,
-            topicId = topicId,
-            messageTimestampMs = messageTimestampMs,
-            originalDisplayName = srcMetadata.displayName,
+            userId = payload.userId,
+            topicId = payload.topicId,
+            messageTimestampMs = payload.messageTimestampMs,
+            originalDisplayName = payload.fileMetadata.displayName,
             internalCacheFilePath = internalCacheFilePath,
-            mimeType = srcMetadata.mimeType
+            mimeType = payload.fileMetadata.mimeType
         )) {
             is CopyStageResult.Failure -> return setProcessingTaskFailed(
                 messageId = messageId,
@@ -187,6 +178,150 @@ class SendMessageFileUseCase @Inject constructor(
             )
 
             is FinishTaskStageResult.Success -> Timber.d("AudioFile from $messageId success")
+        }
+    }
+
+    suspend fun sendImage(
+        srcUriStr: UriStr,
+        userId: UserId,
+        topicId: TopicId,
+        messageTimestampMs: Long,
+    ) {
+        // 1. initialize the file message record to db
+        val fileMetadata =
+            storageRepository.getImageMetadataOrNull(AbsolutePathModel.UriStrModel(srcUriStr))
+                ?: run {
+                    Timber.w("Failed to get image metadata, $srcUriStr is invalid")
+                    return
+                }
+        val messageId = try {
+            initializeUriSourceFileMessage(
+                srcUriStr = srcUriStr,
+                senderId = userId,
+                topicId = topicId,
+                messageTimestampMs = messageTimestampMs,
+                messageType = MessageType.IMAGE,
+                fileMetadata = fileMetadata.toMetadataUnion()
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Failed in insert pending message stage, can't do anything")
+            // can't do anything, just return...
+            return
+        }
+
+        // 2. copy src file to internal cache, then update status
+        val copyInternalSuccessResult = when (val result = copySrcToInternalCacheAndUpdateState(
+            messageId = messageId,
+            userId = userId,
+            srcUriStr = srcUriStr,
+            messageTimestampMs = messageTimestampMs,
+            originalDisplayName = fileMetadata.displayName,
+        )) {
+            is CopyStageResult.Failure -> return setProcessingTaskFailed(
+                messageId = messageId,
+                stage = result.type.toImageProcessingErrorStageOnCopyingInternal(),
+                errorUserRetryable = result.retryable
+            )
+
+            is CopyStageResult.Success -> result
+        }
+
+        workerRunner.finishSendingImage(
+            FinishFileSendingWorkerPayload(
+                messageId = messageId,
+                userId = userId,
+                topicId = topicId,
+                messageTimestampMs = messageTimestampMs,
+                fileMetadata = fileMetadata.toMetadataUnion(),
+                cacheFilename = copyInternalSuccessResult.resultFilename
+            )
+        )
+    }
+
+    /**
+     * Should be called in Worker to make the following logic running more stably
+     */
+    suspend fun finishSendingImageWorkerLogic(
+        payload: FinishFileSendingWorkerPayload,
+    ) {
+        val internalCacheFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(
+            userId = payload.userId, filename = payload.cacheFilename
+        )
+        val messageId = payload.messageId
+        // 1. copy internal cache to shared storage
+        when (val result = copyInternalCacheToSharedStorageAndUpdateState(
+            messageId = messageId,
+            userId = payload.userId,
+            topicId = payload.topicId,
+            messageTimestampMs = payload.messageTimestampMs,
+            originalDisplayName = payload.fileMetadata.displayName,
+            internalCacheFilePath = internalCacheFilePath,
+            mimeType = payload.fileMetadata.mimeType
+        )) {
+            is CopyStageResult.Failure -> return setProcessingTaskFailed(
+                messageId = messageId,
+                stage = result.type.toAudioProcessingErrorStageOnCopyingShared(),
+                errorUserRetryable = result.retryable
+            )
+
+            is CopyStageResult.Success -> Unit
+        }
+        // 2. clean cache and processing status record
+        when (val result = finishProcessingTask(
+            messageId, internalCachePathModel = internalCacheFilePath
+        )) {
+            is FinishTaskStageResult.Failure -> return setProcessingTaskFailed(
+                messageId = messageId,
+                stage = result.type.toImageProcessingErrorStage(),
+                errorUserRetryable = false // system will retry it, user don't need to retry.
+            )
+
+            is FinishTaskStageResult.Success -> Timber.d("MessageFile from $messageId success")
+        }
+    }
+
+    /**
+     * Should be called in Worker to make the following logic running more stably
+     */
+    private suspend fun runFinishSendingFile(
+        payload: FinishFileSendingWorkerPayload,
+        errorStageMapper: ProcessingErrorStageMapper,
+
+        ) {
+        val internalCacheFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(
+            userId = payload.userId, filename = payload.cacheFilename
+        )
+        val messageId = payload.messageId
+        // 1. copy internal cache to shared storage
+        when (val result = copyInternalCacheToSharedStorageAndUpdateState(
+            messageId = messageId,
+            userId = payload.userId,
+            topicId = payload.topicId,
+            messageTimestampMs = payload.messageTimestampMs,
+            originalDisplayName = payload.fileMetadata.displayName,
+            internalCacheFilePath = internalCacheFilePath,
+            mimeType = payload.fileMetadata.mimeType
+        )) {
+            is CopyStageResult.Failure -> return setProcessingTaskFailed(
+                messageId = messageId,
+                stage = errorStageMapper.mapRawPersistentRawCopyFailure(result.type),
+                errorUserRetryable = result.retryable
+            )
+
+            is CopyStageResult.Success -> Unit
+        }
+
+        // 2. clean cache and processing status record
+        when (val result = finishProcessingTask(
+            messageId, internalCachePathModel = internalCacheFilePath
+        )) {
+            is FinishTaskStageResult.Failure -> return setProcessingTaskFailed(
+                messageId = messageId,
+                stage = errorStageMapper.mapFinishTaskFailure(result.type),
+                errorUserRetryable = false // system will retry it, user don't need to retry.
+            )
+
+            is FinishTaskStageResult.Success -> Timber.d("MessageFile from $messageId success")
         }
     }
 
@@ -325,14 +460,14 @@ class SendMessageFileUseCase @Inject constructor(
         topicId: TopicId,
         messageTimestampMs: Long,
         messageType: MessageType,
-        srcMetadata: FileMetadataUnion,
+        fileMetadata: FileMetadataUnion,
     ): MessageId = dbRunner.runInTransaction(retry = RetryModel.OnAnyException) {
         val messageId = messageRepository.syncInsertInitialFileMessage(
             topicId = topicId,
             senderId = senderId,
             type = messageType,
             timestampMs = messageTimestampMs,
-            fileMetadata = srcMetadata
+            fileMetadata = fileMetadata
         )
         messageRepository.syncInsertInitialFileProcessingTaskState(
             messageId = messageId,
@@ -343,7 +478,7 @@ class SendMessageFileUseCase @Inject constructor(
     }
 
     /**
-     * @param cacheFile: its path must obey the @StoragePathUseCase.buildMessageCacheFileStoragePath
+     * @param cacheFilename: obey the @StoragePathUseCase.buildMessageCacheFileStoragePath
      * @throws Throwable
      */
     private suspend fun initializeCacheFileSourceFileMessage(
@@ -352,14 +487,14 @@ class SendMessageFileUseCase @Inject constructor(
         topicId: TopicId,
         messageTimestampMs: Long,
         messageType: MessageType,
-        srcMetadata: FileMetadataUnion,
+        fileMetadata: FileMetadataUnion,
     ): MessageId = dbRunner.runInTransaction(retry = RetryModel.OnAnyException) {
         val messageId = messageRepository.syncInsertInitialFileMessage(
             topicId = topicId,
             senderId = senderId,
             type = messageType,
             timestampMs = messageTimestampMs,
-            fileMetadata = srcMetadata
+            fileMetadata = fileMetadata
         )
         messageRepository.syncInsertInitialFileProcessingTaskState(
             messageId = messageId,
@@ -367,6 +502,54 @@ class SendMessageFileUseCase @Inject constructor(
             taskStartTime = messageTimestampMs
         )
         messageId
+    }
+
+    /**
+     * @param srcUriStr As Ui will first render with source uri, so first try this value
+     *                  to share the thumbnail result if possible, which is inherent supported by Coil
+     */
+    private suspend fun generateThumbnailAndUpdateState(
+        messageId: MessageId,
+        srcUriStr: UriStr?,
+        cacheFilepath: StoragePathModel.InternalOnly,
+        messageType: MessageType,
+    ) {
+        val scale = ThumbnailScale.FitMaxSize(maxSize = TIMELINE_THUMBNAIL_MAX_SIZE)
+        val quality = TIMELINE_THUMBNAIL_COMPRESS_QUALITY
+        val format = TIMELINE_THUMBNAIL_COMPRESS_FORMAT
+        suspend fun generateImageThumbnail(input: AbsolutePathModel): ByteArray {
+            val request = ImageThumbnailGenerateRequest(
+                input = input,
+                scale = scale,
+                quality = quality,
+                format = format,
+            )
+            return thumbnailService.generateImageThumbnail(request)
+        }
+
+        // @throw Exception when failed on all
+        suspend fun generateOnTowSource(executeGenerate: suspend (AbsolutePathModel) -> ByteArray): ByteArray {
+            // First try source, continue if none or fail
+            if (srcUriStr != null) {
+                try {
+                    return executeGenerate(AbsolutePathModel.UriStrModel(srcUriStr))
+                } catch (e: Exception) {
+                    Timber.w(e, "Generate Thumbnail failed on source uri: $srcUriStr")
+                    // go to next
+                }
+            }
+            // then try cache as input, throw when fail
+            return executeGenerate(
+                storageRepository.resolveStoragePathToAbsolutePathsWithoutCreating(
+                    cacheFilepath
+                )
+                    .last()
+            )
+        }
+
+        when (messageType) {
+
+        }
     }
 
     /**
@@ -431,6 +614,48 @@ private fun isInternalToSharedStorageCopyErrorRetriable(error: FileCopyResult.Er
     }
 
 
+/**
+ * Used in copying stages (copy raw to internal cache, to shared storage)
+ */
+private enum class CopyStageFailureType {
+    CopyFile, SaveFilenameToDb, UpdateDbIllegalState;
+}
+
+private sealed interface CopyStageResult {
+    data class Success(
+        val resultFilename: String,
+        val bytesCopied: Long,
+        val resultAbsolutePath: AbsolutePathModel,
+    ) : CopyStageResult
+
+    data class Failure(val type: CopyStageFailureType, val retryable: Boolean) : CopyStageResult
+}
+
+private enum class ThumbnailTaskFailureType {
+    Generate, SaveFilenameToDb
+}
+
+/**
+ * Used in finishing task stage
+ */
+private enum class FinishTaskFailureType {
+    DeleteCacheFile, DeleteTaskStateFromDb
+}
+
+private sealed interface FinishTaskStageResult {
+    data object Success : FinishTaskStageResult
+    data class Failure(val type: FinishTaskFailureType) : FinishTaskStageResult
+}
+
+private data class ProcessingErrorStageMapper(
+    val mapCacheRawCopyFailure: (CopyStageFailureType) -> MessageProcessingErrorStage,
+    val mapRawPersistentRawCopyFailure: (CopyStageFailureType) -> MessageProcessingErrorStage,
+    val mapThumbnailFailure: (ThumbnailTaskFailureType) -> MessageProcessingErrorStage,
+    val mapFinishTaskFailure: (FinishTaskFailureType) -> MessageProcessingErrorStage,
+)
+
+private
+
 private fun CopyStageFailureType.toAudioProcessingErrorStageOnCopyingInternal() = when (this) {
     CopyStageFailureType.CopyFile -> MessageAudioProcessingErrorStage.CopySrcToInternalCache
     CopyStageFailureType.SaveFilenameToDb -> MessageAudioProcessingErrorStage.SetInternalFilenameToDb
@@ -446,4 +671,15 @@ private fun CopyStageFailureType.toAudioProcessingErrorStageOnCopyingShared() = 
 private fun FinishTaskFailureType.toAudioProcessingErrorStage() = when (this) {
     FinishTaskFailureType.DeleteCacheFile -> MessageAudioProcessingErrorStage.DeleteInternalFileCache
     FinishTaskFailureType.DeleteTaskStateFromDb -> MessageAudioProcessingErrorStage.DeleteTaskStateFromDb
+}
+
+private fun CopyStageFailureType.toImageProcessingErrorStageOnCopyingInternal() = when (this) {
+    CopyStageFailureType.CopyFile -> MessageImageProcessingErrorStage.CopySrcToInternalCache
+    CopyStageFailureType.SaveFilenameToDb -> MessageImageProcessingErrorStage.SetInternalFilenameToDb
+    CopyStageFailureType.UpdateDbIllegalState -> MessageImageProcessingErrorStage.IllegalState
+}
+
+private fun FinishTaskFailureType.toImageProcessingErrorStage() = when (this) {
+    FinishTaskFailureType.DeleteCacheFile -> MessageImageProcessingErrorStage.DeleteInternalFileCache
+    FinishTaskFailureType.DeleteTaskStateFromDb -> MessageImageProcessingErrorStage.DeleteTaskStateFromDb
 }

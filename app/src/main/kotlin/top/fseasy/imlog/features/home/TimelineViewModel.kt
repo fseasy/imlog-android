@@ -10,8 +10,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -78,25 +78,26 @@ class TimelineViewModel @Inject constructor(
             .filterNotNull()
     ) { tid, uid ->
         tid to uid
-    }.flatMapLatest { (tid, uid) ->
-        combine(
-            topicRepository.observeTopic(tid),
-            messageRepository.observeTopicMessages(tid, uid),
-        ) { topic, messages ->
-            when (topic) {
-                null -> ContentUiState.Error("Failed to load Topic for id: $tid")
-                else -> ContentUiState.Success(
-                    topic = topic,
-                    messages = messages.map { m ->
-                        MessageUiState(
-                            message = m, thumbnailModel = buildThumbnailModel(m, uid)
-                        )
-                    },
-                    currentUserId = uid,
-                )
+    }.distinctUntilChanged()
+        .flatMapLatest { (tid, uid) ->
+            combine(
+                topicRepository.observeTopic(tid),
+                messageRepository.observeTopicMessages(tid, uid),
+            ) { topic, messages ->
+                when (topic) {
+                    null -> ContentUiState.Error("Failed to load Topic for id: $tid")
+                    else -> ContentUiState.Success(
+                        topic = topic,
+                        messages = messages.map { m ->
+                            MessageUiState(
+                                message = m, thumbnailModel = buildThumbnailModel(m, uid)
+                            )
+                        },
+                        currentUserId = uid,
+                    )
+                }
             }
         }
-    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -113,11 +114,16 @@ class TimelineViewModel @Inject constructor(
         initialValue = VoiceRecordingUiState()
     )
 
+    override fun onCleared() {
+        super.onCleared()
+        voiceRecorder.cancel()
+    }
+
     fun loadTopic(topicId: TopicId) {
         _topicId.value = topicId
     }
 
-    fun setVoiceRecorderState(state: VoiceRecordingState) {
+    fun onVoiceRecorderStateChange(state: VoiceRecordingState) {
         when (state) {
             VoiceRecordingState.Idle -> voiceRecorder.cancel()
             VoiceRecordingState.Recording -> {
@@ -162,7 +168,6 @@ class TimelineViewModel @Inject constructor(
                 userId = uid,
                 topicId = tid,
                 messageTimestampMs = System.currentTimeMillis(),
-                messageType = MessageType.AUDIO
             )
         })
     }
@@ -182,10 +187,6 @@ class TimelineViewModel @Inject constructor(
         // TODO: 实现剪贴板复制
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        voiceRecorder.cancel()
-    }
 
     private fun buildThumbnailModel(
         message: Message,

@@ -5,48 +5,50 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.serialization.KSerializer
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.AudioMetadata
+import top.fseasy.imlog.domain.model.FinishFileSendingWorkerPayload
+import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.usecase.SendMessageFileUseCase
 import top.fseasy.imlog.domain.util.defaultJson
 
-class SaveAudioMessageWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
-    private val sendFileMessageUseCase: SendMessageFileUseCase,
-) : CoroutineWorker(context, workerParams) {
+/**
+ * Why define a generic T: for future payload expansion on different file type
+ */
+abstract class BaseFinishFileSendingWorker<T>(
+    context: Context,
+    workerParams: WorkerParameters,
+) : CoroutineWorker(appContext = context, workerParams) {
+
+    /**
+     * Actual logic
+     */
+    protected abstract suspend fun executeUseCase(payload: T)
+
+    /**
+     * Used to deserialize the payload
+     */
+    protected abstract val payloadSerializer: KSerializer<T>
+
     override suspend fun doWork(): Result {
-        val messageId = inputData.getString(KEY_MESSAGE_ID)
-            ?.let(::MessageId) ?: return failureWithLog("InputData: No MessageId")
-        val userId = inputData.getString(KEY_USER_ID)
-            ?.let(::UserId) ?: return failureWithLog("InputData: no UserId")
-        val topicId = inputData.getString(KEY_TOPIC_ID)
-            ?.let(::TopicId) ?: return failureWithLog("InputData: no TopicId")
-        val messageTimestampMs = inputData.getLong(KEY_MESSAGE_TIMESTAMP_MS, -1)
-            .takeIf { it > 0 } ?: return failureWithLog("InputData: no MessageTimeMs")
-        val srcMetadataJson = inputData.getString(KEY_SRC_FILE_METADATA)
-            ?: return failureWithLog("InputData: no src-file-metadata")
-        val srcMetadata =
+        val serializedPayload = inputData.getString(KEY_INPUT_PAYLOAD)
+            ?: return failureWithLog("InputData: no payload found")
+        val payload =
             try {
-                defaultJson.decodeFromString<AudioMetadata>(srcMetadataJson)
+                defaultJson.decodeFromString(payloadSerializer, serializedPayload)
             } catch (e: Exception) {
-                return failureWithLog("Failed to deserialize src-metadata-json: $srcMetadataJson, e=${e.message}")
+                return failureWithLog(
+                    "Failed to deserialize payload: $serializedPayload",
+                    throwable = e
+                )
             }
-        val cacheFilename = inputData.getString(KEY_CACHE_FILENAME)
-            ?: return failureWithLog("InputData: no cache-filename")
         val maxRetries = DEFAULT_MAX_RETRIES
         return try {
-            sendFileMessageUseCase.finishSendingAudioWorkerLogic(
-                messageId = messageId,
-                userId = userId,
-                topicId = topicId,
-                messageTimestampMs = messageTimestampMs,
-                srcMetadata = srcMetadata,
-                cacheFilename = cacheFilename,
-            )
+            executeUseCase(payload)
             Result.success()
         } catch (e: Exception) {
             // runAttemptCount is WorkManager's internal counter
@@ -58,5 +60,33 @@ class SaveAudioMessageWorker @AssistedInject constructor(
             }
         }
     }
+}
 
+class SaveAudioMessageWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val sendFileMessageUseCase: SendMessageFileUseCase,
+) : BaseFinishFileSendingWorker<FinishFileSendingWorkerPayload>(context, workerParams) {
+
+    override suspend fun executeUseCase(payload: FinishFileSendingWorkerPayload) {
+        sendFileMessageUseCase.finishSendingAudioWorkerLogic(payload)
+    }
+
+    override val payloadSerializer: KSerializer<FinishFileSendingWorkerPayload>
+        get() = FinishFileSendingWorkerPayload.serializer()
+}
+
+
+class SaveImageMessageWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val sendFileMessageUseCase: SendMessageFileUseCase,
+) : BaseFinishFileSendingWorker<FinishFileSendingWorkerPayload>(context, workerParams) {
+
+    override suspend fun executeUseCase(payload: FinishFileSendingWorkerPayload) {
+        sendFileMessageUseCase.finishSendingImageWorkerLogic(payload)
+    }
+
+    override val payloadSerializer: KSerializer<FinishFileSendingWorkerPayload>
+        get() = FinishFileSendingWorkerPayload.serializer()
 }

@@ -7,41 +7,33 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import top.fseasy.imlog.data.constants.THUMBNAIL_MAX_HEIGHT
-import top.fseasy.imlog.data.constants.THUMBNAIL_MAX_WIDTH
 import top.fseasy.imlog.data.mapper.createDirectory
 import top.fseasy.imlog.data.mapper.ensureDirectorUri
 import top.fseasy.imlog.data.mapper.ensureFileUri
-import top.fseasy.imlog.data.mapper.findUriOrThrow
 import top.fseasy.imlog.data.mapper.toAbsolutePathModelsWithoutCreating
 import top.fseasy.imlog.data.mapper.toFileWithCreatingDirectories
-import top.fseasy.imlog.data.mapper.toFileWithoutCreatingDirectories
 import top.fseasy.imlog.data.mapper.toUri
 import top.fseasy.imlog.data.mapper.toUriOrNull
 import top.fseasy.imlog.data.mapper.toUriOrThrow
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.data.util.FileWriteMode
-import top.fseasy.imlog.data.util.GenerateThumbnailResult
 import top.fseasy.imlog.data.util.MetadataResolveUtils
 import top.fseasy.imlog.data.util.MimeTypeUtils
 import top.fseasy.imlog.data.util.UriPathUtil
 import top.fseasy.imlog.data.util.WriteDataResult
 import top.fseasy.imlog.data.util.copyBetweenUri
 import top.fseasy.imlog.data.util.copyUriToFile
-import top.fseasy.imlog.data.util.generateAndSaveThumbnail
 import top.fseasy.imlog.data.util.writeData2Uri
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.domain.model.FileDeleteResult
+import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.StoragePathModel
-import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.StorageRepository
-import top.fseasy.imlog.domain.util.resolveSubPaths
 import top.fseasy.imlog.sqldelight.SqlDelightDb
-import java.io.File
 import java.io.FileNotFoundException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -93,6 +85,13 @@ class StorageRepositoryImpl @Inject constructor(
         storageUriCache[userId] = uri
     }
 
+    override suspend fun resolveStoragePathToAbsolutePathsWithoutCreating(storagePath: StoragePathModel): List<AbsolutePathModel> {
+        return storagePath.toAbsolutePathModelsWithoutCreating(
+            ::getSharedStorageRootUriWithCache,
+            context
+        )
+    }
+
     override suspend fun getDisplayNameOrDefault(uriStr: UriStr, defaultName: String): String =
         uriStr.toUriOrNull()
             ?.let {
@@ -101,14 +100,15 @@ class StorageRepositoryImpl @Inject constructor(
 
     override suspend fun getAudioMetadataOrNull(filePath: StoragePathModel): AudioMetadata? =
         runCatching {
-            filePath.toAbsolutePathModelsWithoutCreating(
-                ::getSharedStorageRootUriWithCache, context
-            )
+            resolveStoragePathToAbsolutePathsWithoutCreating(filePath)
         }.getOrNull()
             ?.let { getAudioMetadataOrNull(it.last()) }
 
     override suspend fun getAudioMetadataOrNull(fileAbsolutePath: AbsolutePathModel): AudioMetadata? =
         MetadataResolveUtils.resolveAudio(fileAbsolutePath, context = context)
+
+    override suspend fun getImageMetadataOrNull(fileAbsolutePath: AbsolutePathModel): ImageMetadata? =
+        MetadataResolveUtils.resolveImage(fileAbsolutePath, context)
 
     /**
      * Run in IO threads for io parts.
@@ -202,13 +202,20 @@ class StorageRepositoryImpl @Inject constructor(
         srcPath: StoragePathModel,
         targetPath: StoragePathModel,
         srcMimeType: String?,
-    ): FileCopyResult = copyFile(
-        srcAbsolutePath = srcPath.toAbsolutePathModelsWithoutCreating(
-            ::getSharedStorageRootUriWithCache, context
+    ): FileCopyResult =
+        runCatching {
+            resolveStoragePathToAbsolutePathsWithoutCreating(srcPath)
+        }.fold(
+            onSuccess = { srcAbsolutePaths ->
+                copyFile(
+                    srcAbsolutePaths.last(), // Use last to prefer getting local file
+                    targetPath = targetPath, srcMimeType = srcMimeType
+                )
+            },
+            onFailure = { e ->
+                FileCopyResult.Error.SrcOpenUnexpected(e)
+            }
         )
-            .last(), // Use last to prefer getting local file
-        targetPath = targetPath, srcMimeType = srcMimeType
-    )
 
     /**
      * Run in IO.
@@ -313,9 +320,7 @@ class StorageRepositoryImpl @Inject constructor(
     ): FileDeleteResult {
 
         val absolutePaths = try {
-            filePath.toAbsolutePathModelsWithoutCreating(
-                ::getSharedStorageRootUriWithCache, context
-            )
+            resolveStoragePathToAbsolutePathsWithoutCreating(filePath)
         } catch (e: FileNotFoundException) {
             Timber.d(e, "deleteFile: Failed to locate file on shared-storage: $filePath")
             return FileDeleteResult.FileNotExist
@@ -335,60 +340,5 @@ class StorageRepositoryImpl @Inject constructor(
         return FileDeleteResult.Success
     }
 
-    private suspend fun generateImageOrVideoThumbnailFromSrcCandidates(
-        userId: UserId,
-        topicId: TopicId,
-        messageTimestampMs: Long,
-        thumbnailFilename: String,
-        srcUriCandidates: List<Pair<String, Uri>>,
-    ): Pair<Boolean, Throwable?> {
-        val thumbnailFile = calcThumbnailFile(
-            userId = userId,
-            topicId = topicId,
-            messageTimestampMs = messageTimestampMs,
-            thumbnailFilename = thumbnailFilename
-        )
-
-        var generateThumbnailLastError: Throwable? = null
-        for ((uriName, tryUri) in srcUriCandidates) {
-
-            when (val generateThumbResult = generateAndSaveThumbnail(
-                context,
-                tryUri,
-                targetFile = thumbnailFile,
-                maxWidth = THUMBNAIL_MAX_WIDTH,
-                maxHeight = THUMBNAIL_MAX_HEIGHT
-            )) {
-                is GenerateThumbnailResult.Success -> {
-                    return true to null
-                }
-
-                is GenerateThumbnailResult.Error -> {
-                    Timber.i(
-                        generateThumbResult.cause, "Generate thumbnail failed for $uriName Uri "
-                    )
-                    generateThumbnailLastError = generateThumbResult.cause
-                }
-            }
-        }
-        return false to generateThumbnailLastError
-    }
-
-    private fun calcThumbnailFile(
-        userId: UserId,
-        topicId: TopicId,
-        messageTimestampMs: Long,
-        thumbnailFilename: String,
-    ): File {
-        val thumbnailFullRelativePath = messageFilePathUseCase.generateFullRelativePath(
-            userId = userId,
-            topicId = topicId,
-            timestampMs = messageTimestampMs,
-            filename = thumbnailFilename
-        )
-        return thumbnailRootDir.resolveSubPaths(
-            thumbnailFullRelativePath, true, lastPathIsFile = true
-        )
-    }
 }
 

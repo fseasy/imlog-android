@@ -14,4 +14,3 @@ value class UriStr(val value: String) {
         require(value.isNotBlank()) { "URI string cannot be blank" }
     }
 }
-

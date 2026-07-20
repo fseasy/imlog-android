@@ -68,11 +68,12 @@ suspend fun StoragePathModel.InternalOnly.createDirectory(context: Context): Fil
  * @param userRootUriProvider see @top.fseasy.imlog.data.repository.StorageRepositoryImpl.getSharedStorageRootUriWithCache
  * @throws Exception
  */
-suspend fun SharedStorageRootSource.toUri(userRootUriProvider: suspend (UserId) -> Uri?) = when (this) {
-    is SharedStorageRootSource.Direct -> this.uriStr.toUriOrThrow()
-    is SharedStorageRootSource.LookupByUser -> userRootUriProvider(this.userId)
-        ?: throw IllegalStateException("Storage root URI for current user ${this.userId} is null.")
-}
+suspend fun SharedStorageRootSource.toUri(userRootUriProvider: suspend (UserId) -> Uri?) =
+    when (this) {
+        is SharedStorageRootSource.Direct -> this.uriStr.toUriOrThrow()
+        is SharedStorageRootSource.LookupByUser -> userRootUriProvider(this.userId)
+            ?: throw IllegalStateException("Storage root URI for current user ${this.userId} is null.")
+    }
 
 
 /** Ensure file uri: find or create file (+ mimeType) uri for the given path and root uri.
@@ -143,6 +144,9 @@ suspend fun StoragePathModel.SharedStorageOnly.findUriOrThrow(
  * if this is a StoragePathModel.DuralWrite, will return a list ordering in `[UriStrModel, FileModel]`
  *
  * io parts run in IO.
+ *
+ * @see top.fseasy.imlog.domain.repository.StorageRepository.resolveStoragePathToAbsolutePathsWithoutCreating
+ *      it wraps this function and export it to domain level
  *
  * @throws Exception all exceptions came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
  */

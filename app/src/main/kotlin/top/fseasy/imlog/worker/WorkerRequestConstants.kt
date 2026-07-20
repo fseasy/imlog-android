@@ -8,4 +8,5 @@ internal const val KEY_SRC_URI = "src_uri"
 internal const val KEY_SRC_FILE_METADATA = "src_file_metadata"
 internal const val KEY_MAX_RETRIES = "max_retries"
 internal const val KEY_CACHE_FILENAME = "cache_filename"
+internal const val KEY_INPUT_PAYLOAD = "input_payload"
 internal const val DEFAULT_MAX_RETRIES = 3

@@ -3,6 +3,7 @@ package top.fseasy.imlog.data.util
 import android.content.Context
 import android.database.Cursor
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.MediaStore
 import android.provider.OpenableColumns
@@ -19,7 +20,7 @@ import java.util.EnumMap
 
 /**
  * A higher wrapper for file metadata resolving.
- * It depends on MemiTypeUtils and MediaDurationUtils in fallback route.
+ * It depends on MimeTypeUtils and MediaDurationUtils in fallback route.
  */
 object MetadataResolveUtils {
 
@@ -45,9 +46,8 @@ object MetadataResolveUtils {
      */
     suspend fun resolveAudio(filePath: AbsolutePathModel, context: Context): AudioMetadata? =
         when (filePath) {
-            is AbsolutePathModel.UriStrModel ->
-                filePath.value.toUriOrNull()
-                    ?.let { resolveAudio(context, uri = it) }
+            is AbsolutePathModel.UriStrModel -> filePath.value.toUriOrNull()
+                ?.let { resolveAudio(context, uri = it) }
 
             is AbsolutePathModel.FileModel -> resolveAudio(filePath.value)
         }
@@ -163,6 +163,19 @@ object MetadataResolveUtils {
         )
     }
 
+    /**
+     * @return If uriStr failed to be parsed as uri, or file not exists, return null.
+     *
+     * Run in IO thread for io parts.
+     */
+    suspend fun resolveImage(filePath: AbsolutePathModel, context: Context): ImageMetadata? =
+        when (filePath) {
+            is AbsolutePathModel.UriStrModel -> filePath.value.toUriOrNull()
+                ?.let { resolveImage(context, uri = it) }
+
+            is AbsolutePathModel.FileModel -> resolveImage(filePath.value)
+        }
+
     /***
      * Run IN IO.
      * No exceptions will be thrown.
@@ -184,14 +197,14 @@ object MetadataResolveUtils {
             result.displayName ?: getDisplayNameFallbackOrDefault(uri, "unknown_img.jpg")
         val fileSize = result.fileSize ?: syncGetFileSizeFallback(context, uri)
         val mimeType = result.mimeType ?: MimeTypeUtils.getMimeTypeOrNull(context, uri) ?: "image/*"
-        var width = result.width
-        var height = result.height
-
-        // if any missing, call fallback to set
-        if (width == null || height == null) {
-            val fallback = syncGetImageDimensionFallback(context, uri)
-            if (width == null) width = fallback.width
-            if (height == null) height = fallback.height
+        val (rWidth, rHeight) = result.width to result.height
+        val (width, height) = if (rWidth != null && rHeight != null) {
+            rWidth to rHeight
+        } else {
+            val readingResult = ImageUtil.readDimension(context, uri = uri)
+            val w = readingResult?.width ?: rWidth ?: 0
+            val h = readingResult?.height ?: rHeight ?: 0
+            w to h
         }
 
         ImageMetadata(
@@ -202,6 +215,46 @@ object MetadataResolveUtils {
             height = height
         )
     }
+
+    /**
+     * If file not exists, return null.
+     * Run in IO thread for io parts.
+     */
+    suspend fun resolveImage(
+        file: File,
+    ): ImageMetadata? {
+        val exists = withContext(Dispatchers.IO) {
+            try {
+                file.exists()
+            } catch (e: SecurityException) {
+                Timber.w(e, "Failed to access for file: $file")
+                false
+            }
+        }
+        if (!exists) {
+            return null
+        }
+
+        val displayName = file.name
+        val fileSize = withContext(Dispatchers.IO) {
+            try {
+                file.length()
+            } catch (e: SecurityException) {
+                Timber.w(e, "Failed to get file size for file: $file")
+                0L
+            }
+        }
+
+        val mimeType = MimeTypeUtils.getMimeTypeOrNull(file) ?: "image/*"
+        val dimension = ImageUtil.readDimension(file) ?: ImageDimension(0, 0)
+
+        return ImageMetadata(
+            displayName = displayName, fileSize = fileSize, mimeType = mimeType,
+            width = dimension.width,
+            height = dimension.height,
+        )
+    }
+
 
     /** FALLBACK: Get path's last part name (filepath -> filename, dirpath -> dirname)
      * use This only when metadata.displayName is null
@@ -234,21 +287,17 @@ object MetadataResolveUtils {
      * batch get duration, width, height by MediaMetadataRetriever
      */
     private fun syncGetVideoMetadataOrZero(context: Context, uri: Uri): VideoRetrieverData {
-        var retriever: android.media.MediaMetadataRetriever? = null
+        var retriever: MediaMetadataRetriever? = null
         return try {
-            retriever = android.media.MediaMetadataRetriever()
-                .apply {
-                    setDataSource(context, uri)
-                }
-            val duration =
-                retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
-                    ?.toLong() ?: 0L
-            val width =
-                retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
-                    ?.toInt() ?: 0
-            val height =
-                retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
-                    ?.toInt() ?: 0
+            retriever = MediaMetadataRetriever().apply {
+                setDataSource(context, uri)
+            }
+            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLong() ?: 0L
+            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                ?.toInt() ?: 0
+            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                ?.toInt() ?: 0
             VideoRetrieverData(duration, width, height)
         } catch (e: Exception) {
             Timber.i(e, "failed to extra metadata by MediaMetadataRetriever")
@@ -260,29 +309,6 @@ object MetadataResolveUtils {
             }
         }
     }
-
-
-    private data class ImageDimension(val width: Int, val height: Int)
-
-    /**
-     * Read the image boundary without decoding the whole image. It's high efficiency.
-     * Sync BLOCKING IO.
-     */
-    private fun syncGetImageDimensionFallback(context: Context, uri: Uri): ImageDimension {
-        return try {
-            context.contentResolver.openInputStream(uri)
-                ?.use { stream ->
-                    val options = BitmapFactory.Options()
-                        .apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeStream(stream, null, options)
-                    ImageDimension(options.outWidth, options.outHeight)
-                } ?: ImageDimension(0, 0)
-        } catch (e: Exception) {
-            Timber.i(e, "Failed to get image dimension by decodeStream")
-            ImageDimension(0, 0)
-        }
-    }
-
 
     private enum class MetaDataField {
         DISPLAY_NAME, FILE_SIZE, MIME_TYPE, DURATION, WIDTH, HEIGHT

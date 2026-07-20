@@ -1,17 +1,12 @@
 package top.fseasy.imlog.domain.repository
 
-import top.fseasy.imlog.domain.model.AudioMetadata
-import top.fseasy.imlog.domain.model.MessageId
-import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.model.FinishFileSendingWorkerPayload
 
 interface WorkerRunner {
     suspend fun finishSendingAudio(
-        messageId: MessageId,
-        userId: UserId,
-        topicId: TopicId,
-        messageTimestampMs: Long,
-        srcMetadata: AudioMetadata,
-        cacheFilename: String,
+        payload: FinishFileSendingWorkerPayload
+    )
+    suspend fun finishSendingImage(
+        payload: FinishFileSendingWorkerPayload
     )
 }

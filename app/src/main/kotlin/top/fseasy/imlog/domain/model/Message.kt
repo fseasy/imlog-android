@@ -1,6 +1,7 @@
 package top.fseasy.imlog.domain.model
 
 import android.net.Uri
+import kotlinx.serialization.Serializable
 import kotlin.String
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -16,6 +17,7 @@ enum class MessageType(val value: String) {
 }
 
 @JvmInline
+@Serializable
 value class MessageId(val value: String) {
     init {
         require(value.startsWith(PREFIX)) { "Invalid MessageId prefix" }

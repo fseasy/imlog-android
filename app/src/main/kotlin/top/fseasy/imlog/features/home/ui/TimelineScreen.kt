@@ -71,7 +71,7 @@ fun TimelineScreen(
                 is ComposerAction.SendImage -> viewModel.sendImageMessage(action.uri)
                 is ComposerAction.SendVideo -> viewModel.sendVideoMessage(action.uri)
                 is ComposerAction.SendAudio -> viewModel.sendAudioMessage(action.uri)
-                is ComposerAction.SetVoiceRecordingState -> viewModel.setVoiceRecorderState(
+                is ComposerAction.SetVoiceRecordingState -> viewModel.onVoiceRecorderStateChange(
                     action.state
                 )
             }

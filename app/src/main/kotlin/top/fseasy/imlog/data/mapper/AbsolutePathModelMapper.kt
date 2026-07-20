@@ -18,3 +18,13 @@ fun AbsolutePathModel.toUri(context: Context): Uri = when (this) {
     is AbsolutePathModel.FileModel -> this.value.toFileProviderUri(context)
     is AbsolutePathModel.UriStrModel -> this.value.toUriOrThrow()
 }
+
+/**
+ * Get the actual value.
+ * Used in condition that supports Any inputs (like coil)
+ * @throws Exception if invalid uri
+ */
+fun AbsolutePathModel.toActualFileOrUri(context: Context): Any = when (this) {
+    is AbsolutePathModel.FileModel -> this.value
+    is AbsolutePathModel.UriStrModel -> this.value.toUriOrThrow()
+}
