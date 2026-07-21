@@ -122,6 +122,18 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun setFileMessageThumbnailFilename(
+        messageId: MessageId,
+        filename: String?,
+    ): Boolean = withContext(dispatcher) {
+        retryOnAnyException {
+            database.messageQueries.updateMessageThumbnailFilename(
+                filename = filename, messageId = messageId.value
+            ).value > 0L
+        }
+    }
+
+
     override suspend fun setFileProcessingTaskFail(
         messageId: MessageId,
         stage: MessageProcessingErrorStage,

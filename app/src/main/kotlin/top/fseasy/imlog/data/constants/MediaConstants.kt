@@ -1,10 +1,10 @@
 package top.fseasy.imlog.data.constants
 
 import top.fseasy.imlog.BuildConfig
-import top.fseasy.imlog.domain.service.ThumbnailFormat
+import top.fseasy.imlog.domain.model.AppImageFormat
 
 const val TIMELINE_THUMBNAIL_MAX_SIZE = 360
 const val TIMELINE_THUMBNAIL_COMPRESS_QUALITY = 80
-val TIMELINE_THUMBNAIL_COMPRESS_FORMAT = ThumbnailFormat.Webp
+val TIMELINE_THUMBNAIL_COMPRESS_FORMAT = AppImageFormat.Webp
 
 const val FILE_PROVIDER_AUTHORITIES = "${BuildConfig.APPLICATION_ID}.fileprovider"

@@ -6,7 +6,11 @@ import kotlinx.coroutines.delay
 import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
 
-
+/**
+ * A wrapper to retry.
+ *
+ * @exception CancellationException Will always rethrow it if occurs.
+ */
 suspend fun <T> retry(
     maxAttempts: Int,
     delayMs: Long,
@@ -62,6 +66,12 @@ suspend fun <T> retry(
     }
 }
 
+/**
+ * Retry on SQLiteConstraintException
+ *
+ * @exception CancellationException Will always rethrow it if occurs.
+ * @exception Exception
+ */
 suspend fun <T> retrySQLiteOnKeyConflict(
     maxAttempts: Int = 3,
     block: suspend () -> T,
@@ -73,6 +83,11 @@ suspend fun <T> retrySQLiteOnKeyConflict(
     block = block
 )
 
+/**
+ * Retry when any exception (except CancellationException)
+ *
+ * @exception CancellationException Will always rethrow it if occurs.
+ */
 suspend fun <T> retryOnAnyException(
     maxAttempts: Int = 3,
     delayMs: Long = 1500L,

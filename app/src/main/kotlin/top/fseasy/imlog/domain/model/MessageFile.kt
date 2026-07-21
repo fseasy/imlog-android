@@ -117,6 +117,7 @@ enum class MessageImageProcessingErrorStage(override val value: String) :
     CopyToSharedStorage("copy2shared_storage"),
     SetRawFilenameToDb("set_raw_filename2db"),
     GenerateThumbnail("generate_thumbnail"),
+    SaveThumbnailFile("save_thumbnail_file"),
     SetThumbnailFilenameToDb("set_thumbnail_filename2db"),
     DeleteInternalFileCache("delete_internal_file_cache"),
     DeleteTaskStateFromDb("delete_task_state_from_db"),

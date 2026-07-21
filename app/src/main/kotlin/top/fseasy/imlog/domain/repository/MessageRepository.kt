@@ -12,6 +12,10 @@ import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 
 
+/**
+ * Use this type to specify the file source when insert initial file message.
+ * WHY don't reuse the AbsolutePathModel?? -> To ensure the file follow the storage path rule.
+ */
 sealed interface MessageFileSource {
     data class FromUriStr(val uriStr: UriStr) : MessageFileSource
 
@@ -60,6 +64,8 @@ interface MessageRepository {
 
     /**
      * run IN IO.
+     *
+     * @param filename set to null to delete the filed in db
      * @throws Throwable
      * @return if set success (based on affected rows)
      */
@@ -70,10 +76,23 @@ interface MessageRepository {
 
     /**
      * run IN IO.
+     *
+     * @param filename set to null to delete the filed in db
      * @throws Throwable
      * @return if set success (based on affected rows)
      */
     suspend fun setFileMessageRawFilename(
+        messageId: MessageId,
+        filename: String?,
+    ): Boolean
+
+    /**
+     * run IN IO.
+     * @param filename set to null to delete the filed in db
+     * @throws Throwable
+     * @return if set success (based on affected rows)
+     */
+    suspend fun setFileMessageThumbnailFilename(
         messageId: MessageId,
         filename: String?,
     ): Boolean

@@ -1,6 +1,7 @@
 package top.fseasy.imlog.domain.service
 
 import top.fseasy.imlog.domain.model.AbsolutePathModel
+import top.fseasy.imlog.domain.model.AppImageFormat
 
 sealed interface ThumbnailScale {
     /**
@@ -14,15 +15,11 @@ sealed interface ThumbnailScale {
     data class FillByCroppingCenter(val width: Int, val height: Int) : ThumbnailScale
 }
 
-enum class ThumbnailFormat {
-    Webp, Jpeg, Png;
-}
-
 data class ImageThumbnailGenerateRequest(
     val input: AbsolutePathModel,
     val scale: ThumbnailScale,
     val quality: Int = 75, // Value between 0 - 100
-    val format: ThumbnailFormat,
+    val format: AppImageFormat,
 )
 
 interface ThumbnailService {
