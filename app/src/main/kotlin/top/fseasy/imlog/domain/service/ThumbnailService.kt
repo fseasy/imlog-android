@@ -8,7 +8,11 @@ sealed interface ThumbnailScale {
     /**
      * Obey the input image's aspect and fit to the max-size boundary.
      */
-    data class FitMaxSize(val maxSize: Int) : ThumbnailScale
+    data class FitMaxSize(val maxSize: Int) : ThumbnailScale {
+        init {
+            require(maxSize > 0) { "MaxSize must > 0, given $maxSize" }
+        }
+    }
 
     /**
      * Fill to the requested size by cropping the image center.
@@ -25,7 +29,8 @@ data class ImageThumbnailGenerateRequest(
 
 data class VideoThumbnailGenerateRequest(
     val input: AbsolutePathModel,
-    val videoDuration: Duration, // Used to quickly decide the key frame position
+    val inputWidth: Int,
+    val inputHeight: Int,
     val scale: ThumbnailScale,
     val quality: Int = 75, // Value between 0 - 100
     val format: AppImageFormat,
