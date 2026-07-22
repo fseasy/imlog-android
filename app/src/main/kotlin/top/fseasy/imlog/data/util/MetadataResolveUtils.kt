@@ -2,11 +2,14 @@ package top.fseasy.imlog.data.util
 
 import android.content.Context
 import android.database.Cursor
-import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import androidx.annotation.OptIn
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.inspector.MetadataRetriever
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -17,6 +20,8 @@ import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.VideoMetadata
 import java.io.File
 import java.util.EnumMap
+import androidx.concurrent.futures.await
+import kotlinx.coroutines.CancellationException
 
 /**
  * A higher wrapper for file metadata resolving.
@@ -147,7 +152,7 @@ object MetadataResolveUtils {
 
         // call MediaMetadataRetriever if any missing
         if (duration == null || width == null || height == null) {
-            val fallback = syncGetVideoMetadataOrZero(context, uri)
+            val fallback = getVideoMetadataWithMedia3(context, uri)
             if (duration == null) duration = fallback.duration
             if (width == null) width = fallback.width
             if (height == null) height = fallback.height
@@ -284,28 +289,46 @@ object MetadataResolveUtils {
     )
 
     /**
-     * batch get duration, width, height by MediaMetadataRetriever
+     * Run in IO threads
+     *
+     * @throws CancellationException
      */
-    private fun syncGetVideoMetadataOrZero(context: Context, uri: Uri): VideoRetrieverData {
-        var retriever: MediaMetadataRetriever? = null
-        return try {
-            retriever = MediaMetadataRetriever().apply {
-                setDataSource(context, uri)
-            }
-            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                ?.toLong() ?: 0L
-            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
-                ?.toInt() ?: 0
-            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
-                ?.toInt() ?: 0
-            VideoRetrieverData(duration, width, height)
-        } catch (e: Exception) {
-            Timber.i(e, "failed to extra metadata by MediaMetadataRetriever")
-            VideoRetrieverData()
-        } finally {
+    @OptIn(UnstableApi::class)
+    private suspend fun getVideoMetadataWithMedia3(context: Context, uri: Uri): VideoRetrieverData {
+        val mediaItem = MediaItem.fromUri(uri)
+        return withContext(Dispatchers.IO) {
             try {
-                retriever?.release()
-            } catch (_: Exception) {
+                MetadataRetriever.Builder(context, mediaItem)
+                    .build()
+                    .use { retriever ->
+                        // 2. .await() transform ListenableFuture to suspend
+                        val durationUs = retriever.retrieveDurationUs()
+                            .await()
+                        val trackGroups = retriever.retrieveTrackGroups()
+                            .await()
+
+                        // 3. get w, h from TrackGroup
+                        var width = 0
+                        var height = 0
+                        for (i in 0 until trackGroups.length) {
+                            val trackGroup = trackGroups.get(i)
+                            for (j in 0 until trackGroup.length) {
+                                val format = trackGroup.getFormat(j)
+                                if (format.height > 0 && format.width > 0) {
+                                    width = format.width
+                                    height = format.height
+                                    break
+                                }
+                            }
+                        }
+                        val durationMs = durationUs / 1000
+                        VideoRetrieverData(durationMs, width, height)
+                    }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to extract metadata with Media3 MetadataRetriever")
+                VideoRetrieverData()
             }
         }
     }

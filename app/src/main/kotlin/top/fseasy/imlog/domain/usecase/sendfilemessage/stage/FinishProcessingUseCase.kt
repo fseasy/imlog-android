@@ -21,16 +21,16 @@ class FinishProcessingUseCase @Inject constructor(
      *
      * Run in IO in each io parts.
      */
-    suspend fun finishOnSuccess(
+    suspend fun onSuccess(
         messageId: MessageId,
         internalCachePathModel: StoragePathModel.InternalOnly,
-    ): FinishTaskStageResult {
+    ): FinishProcessingStageResult {
         when (storageRepository.deleteFile(internalCachePathModel)) {
             is FileDeleteResult.FileNotExist,
             is FileDeleteResult.Success,
                 -> Unit
 
-            is FileDeleteResult.Error -> return FinishTaskStageResult.Failure(FinishTaskFailureType.DeleteCacheFile)
+            is FileDeleteResult.Error -> return FinishProcessingStageResult.Failure(FinishProcessingStageFailureType.DeleteCacheFile)
         }
 
         try {
@@ -39,9 +39,9 @@ class FinishProcessingUseCase @Inject constructor(
             throw e
         } catch (e: Exception) {
             Timber.i(e, "delete file processing task state failed")
-            return FinishTaskStageResult.Failure(FinishTaskFailureType.DeleteTaskStateFromDb)
+            return FinishProcessingStageResult.Failure(FinishProcessingStageFailureType.DeleteTaskStateFromDb)
         }
-        return FinishTaskStageResult.Success
+        return FinishProcessingStageResult.Success
     }
 
     /**
@@ -49,7 +49,7 @@ class FinishProcessingUseCase @Inject constructor(
      *
      * No exception will be thrown, as this is the final step and there is no further handler to process it.
      */
-    suspend fun finishOnFailure(
+    suspend fun onFailure(
         messageId: MessageId,
         stage: MessageProcessingErrorStage,
         errorUserRetryable: Boolean,
@@ -76,11 +76,11 @@ class FinishProcessingUseCase @Inject constructor(
 /**
  * Used in finishing task stage
  */
-enum class FinishTaskFailureType {
+enum class FinishProcessingStageFailureType {
     DeleteCacheFile, DeleteTaskStateFromDb
 }
 
-sealed interface FinishTaskStageResult {
-    data object Success : FinishTaskStageResult
-    data class Failure(val type: FinishTaskFailureType) : FinishTaskStageResult
+sealed interface FinishProcessingStageResult {
+    data object Success : FinishProcessingStageResult
+    data class Failure(val type: FinishProcessingStageFailureType) : FinishProcessingStageResult
 }

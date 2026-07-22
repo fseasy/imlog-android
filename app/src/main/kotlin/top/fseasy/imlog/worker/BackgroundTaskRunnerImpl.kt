@@ -8,35 +8,32 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
-import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FinishFileSendingWorkerPayload
-import top.fseasy.imlog.domain.model.ImageMetadata
-import top.fseasy.imlog.domain.model.MessageId
-import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.repository.WorkerRunner
-import top.fseasy.imlog.domain.usecase.SendMessageFileUseCase
+import top.fseasy.imlog.domain.model.MessageType
+import top.fseasy.imlog.domain.repository.BackgroundTaskRunner
 import top.fseasy.imlog.domain.util.defaultJson
 import java.time.Duration
 import javax.inject.Inject
 
-class WorkerRunnerImpl @Inject constructor(
+class BackgroundTaskRunnerImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
-) : WorkerRunner {
-    override suspend fun finishSendingAudio(
-        payload: FinishFileSendingWorkerPayload,
-    ) {
-        enqueueFinishFileSendingWorker<SaveAudioMessageWorker>(
-            defaultJson.encodeToString(payload)
-        )
-    }
+) : BackgroundTaskRunner {
 
-    override suspend fun finishSendingImage(
-        payload: FinishFileSendingWorkerPayload,
-    ) {
-        enqueueFinishFileSendingWorker<SaveImageMessageWorker>(
-            defaultJson.encodeToString(payload)
-        )
+    override suspend fun finishSendingFileMessage(payload: FinishFileSendingWorkerPayload) {
+        val serializedPayload = defaultJson.encodeToString(payload)
+        when (payload.messageType) {
+            MessageType.AUDIO,
+            MessageType.VOICE,
+                -> enqueueFinishFileSendingWorker<SaveAudioMessageWorker>(
+                serializedPayload
+            )
+
+            MessageType.IMAGE -> enqueueFinishFileSendingWorker<SaveImageMessageWorker>(
+                serializedPayload
+            )
+
+            else -> error("Unsupported message type in sending background task")
+        }
     }
 
     private inline fun <reified W : ListenableWorker> enqueueFinishFileSendingWorker(

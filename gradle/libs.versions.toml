@@ -3,6 +3,7 @@ accompanist = "0.37.3"
 activityCompose = "1.13.0"
 agp = "9.2.1"
 androidImageCropper = "4.7.0"
+androidxConcurrent = "1.3.0"
 # @keep package name constants
 appPackageName = "top.fseasy.imlog"
 # @keep (used in code internal to escape the i18n app_name field)
@@ -43,6 +44,7 @@ androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 androidx-compose-ui-unit = { module = "androidx.compose.ui:ui-unit" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+androidx-concurrent-futures-ktx = { module = "androidx.concurrent:concurrent-futures-ktx", version.ref = "androidxConcurrent" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 androidx-hilt-common = { module = "androidx.hilt:hilt-common", version.ref = "hiltCommon" }
 androidx-hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hiltWork" }
@@ -55,6 +57,8 @@ androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-
 androidx-media3-common = { module = "androidx.media3:media3-common", version.ref = "media3" }
 androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
 androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
+androidx-media3-inspector = { module = "androidx.media3:media3-inspector", version.ref = "media3" }
+androidx-media3-inspector-frame = { module = "androidx.media3:media3-inspector-frame", version.ref = "media3" }
 # Note: it's independent from compose-bom
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }

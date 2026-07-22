@@ -33,8 +33,9 @@ class GenerateThumbnailUseCase @Inject constructor(
      * @param srcUriStr As Ui will first render with source uri, so first try this value
      *                  to share the thumbnail result if possible, which is inherent supported by Coil
      *
+     * @throws CancellationException don't need to cache it!
      */
-    suspend fun generateAndUpdateState(
+    suspend operator fun invoke(
         messageId: MessageId,
         userId: UserId,
         topicId: TopicId,
@@ -58,7 +59,9 @@ class GenerateThumbnailUseCase @Inject constructor(
             throw e
         } catch (e: Exception) {
             Timber.w(e, "Failed to generate thumbnail on $messageId, type=$messageType")
-            return GenerateThumbnailStageResult.Failure(GenerateThumbnailStageFailureType.Generate)
+            return GenerateThumbnailStageResult.Failure(
+                GenerateThumbnailStageFailureType.Generate, true
+            )
         }
         val thumbnailFilename = try {
             saveThumbnail(
@@ -70,7 +73,9 @@ class GenerateThumbnailUseCase @Inject constructor(
             throw e
         } catch (e: Exception) {
             Timber.w(e, "Failed to save thumbnail on $messageId, $messageType")
-            return GenerateThumbnailStageResult.Failure(GenerateThumbnailStageFailureType.SaveFile)
+            return GenerateThumbnailStageResult.Failure(
+                GenerateThumbnailStageFailureType.SaveFile, true
+            )
         }
         val isSetSuccess = try {
             messageRepository.setFileMessageThumbnailFilename(
@@ -80,10 +85,15 @@ class GenerateThumbnailUseCase @Inject constructor(
             throw e
         } catch (e: Exception) {
             Timber.w(e, "Failed to set thumbnail file name to db: $messageId, $messageType")
-            return GenerateThumbnailStageResult.Failure(GenerateThumbnailStageFailureType.SetFilenameToDb)
+            return GenerateThumbnailStageResult.Failure(
+                GenerateThumbnailStageFailureType.SetFilenameToDb, true
+            )
         }
         return when (isSetSuccess) {
-            false -> GenerateThumbnailStageResult.Failure(GenerateThumbnailStageFailureType.UpdateDbIllegalState)
+            false -> GenerateThumbnailStageResult.Failure(
+                GenerateThumbnailStageFailureType.UpdateDbIllegalState, false
+            )
+
             true -> GenerateThumbnailStageResult.Success
         }
     }
@@ -92,6 +102,21 @@ class GenerateThumbnailUseCase @Inject constructor(
      * @throws Exception
      */
     private suspend fun generateImageThumbnail(input: AbsolutePathModel): ByteArray {
+        val scale = ThumbnailScale.FitMaxSize(maxSize = TIMELINE_THUMBNAIL_MAX_SIZE)
+        val quality = TIMELINE_THUMBNAIL_COMPRESS_QUALITY
+        val request = ImageThumbnailGenerateRequest(
+            input = input,
+            scale = scale,
+            quality = quality,
+            format = thumbnailFormat,
+        )
+        return thumbnailService.generateImageThumbnail(request)
+    }
+
+    /**
+     * @throws Exception
+     */
+    private suspend fun generateVideoThumbnail(input: AbsolutePathModel): ByteArray {
         val scale = ThumbnailScale.FitMaxSize(maxSize = TIMELINE_THUMBNAIL_MAX_SIZE)
         val quality = TIMELINE_THUMBNAIL_COMPRESS_QUALITY
         val request = ImageThumbnailGenerateRequest(
@@ -163,6 +188,7 @@ enum class GenerateThumbnailStageFailureType {
 sealed interface GenerateThumbnailStageResult {
     data object Success : GenerateThumbnailStageResult
     data object Skip : GenerateThumbnailStageResult
-    data class Failure(val type: GenerateThumbnailStageFailureType) : GenerateThumbnailStageResult
+    data class Failure(val type: GenerateThumbnailStageFailureType, val retryable: Boolean) :
+        GenerateThumbnailStageResult
 }
 

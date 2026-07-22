@@ -20,7 +20,7 @@ class InitializeFileMessageUseCase @Inject constructor(
     /**
      * @throws Throwable
      */
-    suspend fun initializeUriSourceFileMessage(
+    suspend fun forUriSource(
         srcUriStr: UriStr,
         senderId: UserId,
         topicId: TopicId,
@@ -47,7 +47,7 @@ class InitializeFileMessageUseCase @Inject constructor(
      * @param cacheFilename: obey the @StoragePathUseCase.buildMessageCacheFileStoragePath
      * @throws Throwable
      */
-    suspend fun initializeCacheFileSourceFileMessage(
+    suspend fun forCacheFileSource(
         cacheFilename: String,
         senderId: UserId,
         topicId: TopicId,
