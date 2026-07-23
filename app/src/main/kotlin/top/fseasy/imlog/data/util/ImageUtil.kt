@@ -3,6 +3,7 @@ package top.fseasy.imlog.data.util
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -18,15 +19,17 @@ object ImageUtil {
      *
      * run in IO threads.
      */
-    suspend fun readDimension(context: Context, uri: Uri): ImageDimension? =
+    suspend fun readDimensionOrNull(context: Context, uri: Uri): ImageDimension? =
         withContext(Dispatchers.IO) {
             try {
                 context.contentResolver.openInputStream(uri)
                     ?.use { stream ->
                         syncReadImageDimensionFromStream(stream)
                     }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Timber.i(e, "Failed to open input stream from uri")
+                Timber.i(e, "Failed to read dimension")
                 null
             }
         }
@@ -37,33 +40,32 @@ object ImageUtil {
      *
      * run in IO thread.
      */
-    suspend fun readDimension(file: File): ImageDimension? = withContext(Dispatchers.IO) {
+    suspend fun readDimensionOrNull(file: File): ImageDimension? = withContext(Dispatchers.IO) {
         try {
             if (!file.exists()) return@withContext null
             file.inputStream()
                 .use { stream ->
                     syncReadImageDimensionFromStream(stream)
                 }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Timber.i(e, "Failed to open input stream from file")
+            Timber.i(e, "Failed to read dimension")
             null
         }
     }
 
     /**
      * Core logic to read dimensions from InputStream.
+     * @throws IllegalArgumentException from decodeStream
      */
-    private fun syncReadImageDimensionFromStream(stream: java.io.InputStream): ImageDimension? {
-        return try {
-            val options = BitmapFactory.Options()
-                .apply {
-                    inJustDecodeBounds = true
-                }
-            BitmapFactory.decodeStream(stream, null, options)
-            ImageDimension(options.outWidth, options.outHeight)
-        } catch (e: Exception) {
-            Timber.i(e, "Failed to decode stream bounds")
-            null
-        }
+    private fun syncReadImageDimensionFromStream(stream: java.io.InputStream): ImageDimension {
+        // No need to try as upper will handle it.
+        val options = BitmapFactory.Options()
+            .apply {
+                inJustDecodeBounds = true
+            }
+        BitmapFactory.decodeStream(stream, null, options)
+        return ImageDimension(options.outWidth, options.outHeight)
     }
 }

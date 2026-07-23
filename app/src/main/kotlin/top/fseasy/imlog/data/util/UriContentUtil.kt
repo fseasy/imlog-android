@@ -2,6 +2,7 @@ package top.fseasy.imlog.data.util
 
 import android.content.Context
 import android.net.Uri
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.fseasy.imlog.data.mapper.toUriStr
@@ -45,6 +46,8 @@ suspend fun writeData2Uri(
         WriteDataResult.Error.PermissionDenied(e)
     } catch (e: FileNotFoundException) {
         WriteDataResult.Error.FileOpenFailed(e)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         WriteDataResult.Error.Unexpected(e)
     }
@@ -69,6 +72,8 @@ suspend fun copyBetweenUri(
         return@withContext FileCopyResult.Error.SrcPermissionDenied(e)
     } catch (e: FileNotFoundException) {
         return@withContext FileCopyResult.Error.SrcNotFound(e)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         return@withContext FileCopyResult.Error.SrcOpenUnexpected(e)
     }
@@ -85,6 +90,8 @@ suspend fun copyBetweenUri(
             return@withContext FileCopyResult.Error.TgtPermissionDenied(e)
         } catch (e: FileNotFoundException) {
             return@withContext FileCopyResult.Error.TgtNotFound(e)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return@withContext FileCopyResult.Error.TgtOpenUnexpected(e)
         }
@@ -104,6 +111,8 @@ suspend fun copyBetweenUri(
             }
         } catch (e: IOException) {
             FileCopyResult.Error.CopyIOError(e)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             FileCopyResult.Error.CopyUnexpected(e)
         }
@@ -123,6 +132,8 @@ suspend fun copyUriToFile(
         destination.parentFile?.mkdirs()
     } catch (e: SecurityException) {
         return@withContext FileCopyResult.Error.TgtPermissionDenied(e)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         return@withContext FileCopyResult.Error.TgtOpenUnexpected(e)
     }
@@ -137,6 +148,8 @@ suspend fun copyUriToFile(
         return@withContext FileCopyResult.Error.SrcPermissionDenied(e)
     } catch (e: FileNotFoundException) {
         return@withContext FileCopyResult.Error.SrcNotFound(e)
+    } catch (e: CancellationException) {
+        throw e
     } catch (e: Exception) {
         return@withContext FileCopyResult.Error.SrcOpenUnexpected(e)
     }
@@ -149,6 +162,8 @@ suspend fun copyUriToFile(
             return@withContext FileCopyResult.Error.TgtPermissionDenied(e)
         } catch (e: FileNotFoundException) {
             return@withContext FileCopyResult.Error.TgtNotFound(e)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return@withContext FileCopyResult.Error.TgtOpenUnexpected(e)
         }
@@ -161,7 +176,9 @@ suspend fun copyUriToFile(
                 )
             } catch (e: IOException) {
                 return@withContext FileCopyResult.Error.CopyIOError(e)
-            } catch (e: Throwable) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 return@withContext FileCopyResult.Error.CopyUnexpected(e)
             }
         }

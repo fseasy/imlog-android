@@ -4,8 +4,10 @@ import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import top.fseasy.imlog.data.constants.TIMELINE_THUMBNAIL_COMPRESS_FORMAT
 import top.fseasy.imlog.data.constants.TIMELINE_THUMBNAIL_COMPRESS_QUALITY
-import top.fseasy.imlog.data.constants.TIMELINE_THUMBNAIL_MAX_SIZE
+import top.fseasy.imlog.data.constants.TIMELINE_THUMBNAIL_MAX_HEIGHT
+import top.fseasy.imlog.data.constants.TIMELINE_THUMBNAIL_MAX_WIDTH
 import top.fseasy.imlog.domain.model.AbsolutePathModel
+import top.fseasy.imlog.domain.model.FileMetadataUnion
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.StoragePathModel
@@ -14,7 +16,7 @@ import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.StorageRepository
-import top.fseasy.imlog.domain.service.ImageThumbnailGenerateRequest
+import top.fseasy.imlog.domain.service.ThumbnailGenerateRequest
 import top.fseasy.imlog.domain.service.ThumbnailScale
 import top.fseasy.imlog.domain.service.ThumbnailService
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
@@ -40,19 +42,22 @@ class GenerateThumbnailUseCase @Inject constructor(
         userId: UserId,
         topicId: TopicId,
         messageTimestampMs: Long,
+        messageType: MessageType,
         srcUriStr: UriStr?,
         cacheFilePath: StoragePathModel.InternalOnly,
-        messageType: MessageType,
+        fileMetadata: FileMetadataUnion,
     ): GenerateThumbnailStageResult {
 
         val generateFunction = when (messageType) {
             MessageType.AUDIO -> ::generateImageThumbnail
+            MessageType.VIDEO -> ::generateVideoThumbnail
             else -> return GenerateThumbnailStageResult.Skip
         }
         val thumbnailBytes = try {
             generateOnTowSources(
                 srcUriStr = srcUriStr,
                 cacheFilePath = cacheFilePath,
+                fileMetadata = fileMetadata,
                 executeGenerate = generateFunction
             )
         } catch (e: CancellationException) {
@@ -101,31 +106,48 @@ class GenerateThumbnailUseCase @Inject constructor(
     /**
      * @throws Exception
      */
-    private suspend fun generateImageThumbnail(input: AbsolutePathModel): ByteArray {
-        val scale = ThumbnailScale.FitMaxSize(maxSize = TIMELINE_THUMBNAIL_MAX_SIZE)
-        val quality = TIMELINE_THUMBNAIL_COMPRESS_QUALITY
-        val request = ImageThumbnailGenerateRequest(
-            input = input,
-            scale = scale,
-            quality = quality,
-            format = thumbnailFormat,
-        )
+    private suspend fun generateImageThumbnail(
+        input: AbsolutePathModel,
+        fileMetadata: FileMetadataUnion,
+    ): ByteArray {
+        val request = buildThumbnailRequest(input, fileMetadata)
         return thumbnailService.generateImageThumbnail(request)
     }
 
     /**
      * @throws Exception
      */
-    private suspend fun generateVideoThumbnail(input: AbsolutePathModel): ByteArray {
-        val scale = ThumbnailScale.FitMaxSize(maxSize = TIMELINE_THUMBNAIL_MAX_SIZE)
+    private suspend fun generateVideoThumbnail(
+        input: AbsolutePathModel,
+        fileMetadata: FileMetadataUnion,
+    ): ByteArray {
+        val request = buildThumbnailRequest(input, fileMetadata)
+        return thumbnailService.generateVideoThumbnail(request)
+    }
+
+    /**
+     * Currently the request is the same
+     */
+    private fun buildThumbnailRequest(
+        input: AbsolutePathModel,
+        fileMetadata: FileMetadataUnion,
+    ): ThumbnailGenerateRequest {
+        val inputWidth = requireNotNull(fileMetadata.width) { "width in metadata is null" }
+        val inputHeight = requireNotNull(fileMetadata.height) { "height in metadata is null" }
+        val scale = ThumbnailScale.ScaleToFit(
+            TIMELINE_THUMBNAIL_MAX_WIDTH,
+            TIMELINE_THUMBNAIL_MAX_HEIGHT
+        )
         val quality = TIMELINE_THUMBNAIL_COMPRESS_QUALITY
-        val request = ImageThumbnailGenerateRequest(
+        val request = ThumbnailGenerateRequest(
             input = input,
+            inputWidth = inputWidth,
+            inputHeight = inputHeight,
             scale = scale,
             quality = quality,
             format = thumbnailFormat,
         )
-        return thumbnailService.generateImageThumbnail(request)
+        return request
     }
 
     /**
@@ -135,12 +157,13 @@ class GenerateThumbnailUseCase @Inject constructor(
     private suspend fun generateOnTowSources(
         srcUriStr: UriStr?,
         cacheFilePath: StoragePathModel.InternalOnly,
-        executeGenerate: suspend (AbsolutePathModel) -> ByteArray,
+        fileMetadata: FileMetadataUnion,
+        executeGenerate: suspend (AbsolutePathModel, FileMetadataUnion) -> ByteArray,
     ): ByteArray {
         // First try source, continue if none or fail
         if (srcUriStr != null) {
             try {
-                return executeGenerate(AbsolutePathModel.UriStrModel(srcUriStr))
+                return executeGenerate(AbsolutePathModel.UriStrModel(srcUriStr), fileMetadata)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -149,10 +172,10 @@ class GenerateThumbnailUseCase @Inject constructor(
             }
         }
         // then try cache as input, throw when fail
-        return executeGenerate(
+        val cacheAbsolutePath =
             storageRepository.resolveStoragePathToAbsolutePathsWithoutCreating(cacheFilePath)
                 .last()
-        )
+        return executeGenerate(cacheAbsolutePath, fileMetadata)
     }
 
     /**

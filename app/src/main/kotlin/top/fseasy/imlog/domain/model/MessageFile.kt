@@ -1,13 +1,14 @@
 package top.fseasy.imlog.domain.model
 
 import kotlinx.serialization.Serializable
+import kotlin.time.Duration
 
 @Serializable
 data class AudioMetadata(
     val displayName: String,
     val fileSize: Long,
     val mimeType: String,
-    val duration: Long,
+    val duration: Duration,
 )
 
 @Serializable
@@ -15,7 +16,7 @@ data class VideoMetadata(
     val displayName: String,
     val fileSize: Long,
     val mimeType: String,
-    val duration: Long,
+    val duration: Duration,
     val width: Int,
     val height: Int,
 )
@@ -40,7 +41,7 @@ data class FileMetadataUnion(
     val mimeType: String,
     val width: Int?,
     val height: Int?,
-    val duration: Long?,
+    val duration: Duration?,
 )
 
 fun AudioMetadata.toMetadataUnion() = FileMetadataUnion(
@@ -161,3 +162,27 @@ enum class MessageImageProcessingErrorStage(override val value: String) :
 
 fun String?.toMessageImageErrorStage(): MessageImageProcessingErrorStage? =
     this?.let { MessageImageProcessingErrorStage.fromValue(it) }
+
+enum class MessageVideoProcessingErrorStage(override val value: String) :
+    MessageProcessingErrorStage {
+    CopySrcToInternalCache(value = "copy_src2internal_cache"),
+    SetInternalFilenameToDb(value = "set_internal_filename2db"),
+    CopyToSharedStorage("copy2shared_storage"),
+    SetRawFilenameToDb("set_raw_filename2db"),
+    GenerateThumbnail("generate_thumbnail"),
+    SaveThumbnailFile("save_thumbnail_file"),
+    SetThumbnailFilenameToDb("set_thumbnail_filename2db"),
+    DeleteInternalFileCache("delete_internal_file_cache"),
+    DeleteTaskStateFromDb("delete_task_state_from_db"),
+    IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
+    ;
+
+    companion object {
+        private val valueMap = entries.associateBy(MessageVideoProcessingErrorStage::value)
+
+        fun fromValue(value: String) = valueMap[value]
+    }
+}
+
+fun String?.toMessageVideoErrorStage(): MessageVideoProcessingErrorStage? =
+    this?.let { MessageVideoProcessingErrorStage.fromValue(it) }

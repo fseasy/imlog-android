@@ -2,14 +2,9 @@ package top.fseasy.imlog.data.util
 
 import android.content.Context
 import android.database.Cursor
-import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.MediaStore
 import android.provider.OpenableColumns
-import androidx.annotation.OptIn
-import androidx.media3.common.MediaItem
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.inspector.MetadataRetriever
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -20,8 +15,8 @@ import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.VideoMetadata
 import java.io.File
 import java.util.EnumMap
-import androidx.concurrent.futures.await
-import kotlinx.coroutines.CancellationException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * A higher wrapper for file metadata resolving.
@@ -117,7 +112,9 @@ object MetadataResolveUtils {
             result.displayName ?: getDisplayNameFallbackOrDefault(uri, "unknown_audio")
         val fileSize = result.fileSize ?: syncGetFileSizeFallback(context, uri)
         val mimeType = result.mimeType ?: MimeTypeUtils.getMimeTypeOrNull(context, uri) ?: "audio/*"
-        val duration = result.duration ?: MediaDurationUtils.getDuration(context, uri)
+        val duration =
+            result.duration ?: MediaDurationUtils.getDurationWithReadingFileOrNull(context, uri)
+            ?: 0.milliseconds
 
         AudioMetadata(
             displayName = displayName, fileSize = fileSize, mimeType = mimeType, duration = duration
@@ -150,12 +147,12 @@ object MetadataResolveUtils {
         var width = result.width
         var height = result.height
 
-        // call MediaMetadataRetriever if any missing
+        // read file if any query result is null
         if (duration == null || width == null || height == null) {
-            val fallback = getVideoMetadataWithMedia3(context, uri)
-            if (duration == null) duration = fallback.duration
-            if (width == null) width = fallback.width
-            if (height == null) height = fallback.height
+            val fallback = VideoUtil.readDimensionOrNull(context, uri)
+            duration = fallback?.duration ?: duration ?: 0.milliseconds
+            width = fallback?.width ?: width ?: 0
+            height = fallback?.height ?: height ?: 0
         }
 
         VideoMetadata(
@@ -165,6 +162,48 @@ object MetadataResolveUtils {
             duration = duration,
             width = width,
             height = height
+        )
+    }
+
+    /**
+     * If file not exists, return null.
+     * Run in IO thread for io parts.
+     */
+    suspend fun resolveVideo(
+        context: Context,
+        file: File,
+    ): VideoMetadata? {
+        val exists = withContext(Dispatchers.IO) {
+            try {
+                file.exists()
+            } catch (e: SecurityException) {
+                Timber.w(e, "Failed to access for file: $file")
+                false
+            }
+        }
+        if (!exists) {
+            return null
+        }
+
+        val displayName = file.name
+        val fileSize = withContext(Dispatchers.IO) {
+            try {
+                file.length()
+            } catch (e: SecurityException) {
+                Timber.w(e, "Failed to get file size for file: $file")
+                0L
+            }
+        }
+
+        val mimeType = MimeTypeUtils.getMimeTypeOrNull(file) ?: "image/*"
+        val dimension =
+            VideoUtil.readDimensionOrNull(context, file) ?: VideoDimension(0.milliseconds, 0, 0)
+
+        return VideoMetadata(
+            displayName = displayName, fileSize = fileSize, mimeType = mimeType,
+            width = dimension.width,
+            height = dimension.height,
+            duration = dimension.duration
         )
     }
 
@@ -206,7 +245,7 @@ object MetadataResolveUtils {
         val (width, height) = if (rWidth != null && rHeight != null) {
             rWidth to rHeight
         } else {
-            val readingResult = ImageUtil.readDimension(context, uri = uri)
+            val readingResult = ImageUtil.readDimensionOrNull(context, uri = uri)
             val w = readingResult?.width ?: rWidth ?: 0
             val h = readingResult?.height ?: rHeight ?: 0
             w to h
@@ -251,7 +290,7 @@ object MetadataResolveUtils {
         }
 
         val mimeType = MimeTypeUtils.getMimeTypeOrNull(file) ?: "image/*"
-        val dimension = ImageUtil.readDimension(file) ?: ImageDimension(0, 0)
+        val dimension = ImageUtil.readDimensionOrNull(file) ?: ImageDimension(0, 0)
 
         return ImageMetadata(
             displayName = displayName, fileSize = fileSize, mimeType = mimeType,
@@ -282,56 +321,6 @@ object MetadataResolveUtils {
         }
     }
 
-    private class VideoRetrieverData(
-        val duration: Long = 0L,
-        val width: Int = 0,
-        val height: Int = 0,
-    )
-
-    /**
-     * Run in IO threads
-     *
-     * @throws CancellationException
-     */
-    @OptIn(UnstableApi::class)
-    private suspend fun getVideoMetadataWithMedia3(context: Context, uri: Uri): VideoRetrieverData {
-        val mediaItem = MediaItem.fromUri(uri)
-        return withContext(Dispatchers.IO) {
-            try {
-                MetadataRetriever.Builder(context, mediaItem)
-                    .build()
-                    .use { retriever ->
-                        // 2. .await() transform ListenableFuture to suspend
-                        val durationUs = retriever.retrieveDurationUs()
-                            .await()
-                        val trackGroups = retriever.retrieveTrackGroups()
-                            .await()
-
-                        // 3. get w, h from TrackGroup
-                        var width = 0
-                        var height = 0
-                        for (i in 0 until trackGroups.length) {
-                            val trackGroup = trackGroups.get(i)
-                            for (j in 0 until trackGroup.length) {
-                                val format = trackGroup.getFormat(j)
-                                if (format.height > 0 && format.width > 0) {
-                                    width = format.width
-                                    height = format.height
-                                    break
-                                }
-                            }
-                        }
-                        val durationMs = durationUs / 1000
-                        VideoRetrieverData(durationMs, width, height)
-                    }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to extract metadata with Media3 MetadataRetriever")
-                VideoRetrieverData()
-            }
-        }
-    }
 
     private enum class MetaDataField {
         DISPLAY_NAME, FILE_SIZE, MIME_TYPE, DURATION, WIDTH, HEIGHT
@@ -341,7 +330,9 @@ object MetadataResolveUtils {
         val displayName: String? get() = getString(MetaDataField.DISPLAY_NAME)
         val fileSize: Long? get() = getLong(MetaDataField.FILE_SIZE)
         val mimeType: String? get() = getString(MetaDataField.MIME_TYPE)
-        val duration: Long? get() = getLong(MetaDataField.DURATION)
+
+        // It's ms
+        val duration: Duration? get() = getLong(MetaDataField.DURATION)?.milliseconds
         val width: Int? get() = getInt(MetaDataField.WIDTH)
         val height: Int? get() = getInt(MetaDataField.HEIGHT)
 

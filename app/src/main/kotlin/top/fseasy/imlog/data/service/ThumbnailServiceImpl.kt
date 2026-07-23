@@ -1,10 +1,7 @@
 package top.fseasy.imlog.data.service
 
-import android.R
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
-import android.media.MediaMetadataRetriever
 import androidx.annotation.OptIn
 import androidx.concurrent.futures.await
 import androidx.media3.common.MediaItem
@@ -12,7 +9,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.Presentation
 import androidx.media3.inspector.frame.FrameExtractor
 import coil3.imageLoader
-import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
@@ -23,46 +19,33 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.fseasy.imlog.data.mapper.toActualFileOrUri
+import top.fseasy.imlog.data.mapper.toBitmapCompressFormat
 import top.fseasy.imlog.data.mapper.toUri
-import top.fseasy.imlog.domain.service.ImageThumbnailGenerateRequest
 import top.fseasy.imlog.domain.model.AppImageFormat
-import top.fseasy.imlog.domain.service.ThumbnailScale
+import top.fseasy.imlog.domain.service.ThumbnailGenerateRequest
 import top.fseasy.imlog.domain.service.ThumbnailService
-import top.fseasy.imlog.domain.service.VideoThumbnailGenerateRequest
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.min
-import kotlin.math.roundToInt
-import kotlin.text.compareTo
 
 @Singleton
 class ThumbnailServiceImpl @Inject constructor(
     @param:ApplicationContext val context: Context,
 ) : ThumbnailService {
-    override suspend fun generateImageThumbnail(request: ImageThumbnailGenerateRequest): ByteArray =
+    override suspend fun generateImageThumbnail(request: ThumbnailGenerateRequest): ByteArray =
         withContext(Dispatchers.IO) {
             val sourceFile = request.input.toActualFileOrUri(context)
+            val (targetW, targetH) = request.scale.calculateScaledWidthHeight(
+                request.inputWidth,
+                request.inputHeight
+            )
             val requestBuilder = ImageRequest.Builder(context)
                 .data(sourceFile)
-                .precision(Precision.EXACT)     // EXACT，to ensure the least bytes
                 .allowHardware(false)   //  false to allow we get bytes from memory (can't get from GPU)
-
-            when (request.scale) {
-                is ThumbnailScale.FitMaxSize -> {
-                    val maxSize = request.scale.maxSize
-                    requestBuilder
-                        .size(maxSize, maxSize)
-                        .scale(Scale.FIT)
-                }
-
-                is ThumbnailScale.FillByCroppingCenter -> {
-                    requestBuilder
-                        .size(request.scale.width, request.scale.height)
-                        .scale(Scale.FILL) // Coil's Scale.FILL is Center Crop
-                }
-            }
+                .precision(Precision.EXACT)  // Exact to avoid any fuzzy condition
+                .scale(Scale.FILL) // Set to FILL is applicable to both Fit & Crop with our pre-calculated size
+                .size(targetW, targetH)
 
             val imageLoader = context.imageLoader
             val result = imageLoader.execute(requestBuilder.build())
@@ -71,20 +54,23 @@ class ThumbnailServiceImpl @Inject constructor(
             }
 
             bitmapToImageBytes(
-                result.image.toBitmap(),
-                quality = request.quality,
-                format = request.format
+                result.image.toBitmap(), quality = request.quality, format = request.format
             )
         }
 
     @OptIn(UnstableApi::class)
-    override suspend fun generateVideoThumbnail(request: VideoThumbnailGenerateRequest): ByteArray =
+    override suspend fun generateVideoThumbnail(request: ThumbnailGenerateRequest): ByteArray =
         withContext(Dispatchers.IO) {
             val mediaItem = MediaItem.fromUri(request.input.toUri(context))
-            val presentation = calculateVideoFramePresentation(
-                inputWidth = request.inputWidth,
-                inputHeight = request.inputHeight,
-                scale = request.scale
+            val (targetW, targetH) = request.scale.calculateScaledWidthHeight(
+                request.inputWidth,
+                request.inputHeight
+            )
+            // CROP suits for both 2 scale condition under our calculated size
+            val presentation = Presentation.createForWidthAndHeight(
+                targetW,
+                targetH,
+                Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP
             )
 
             FrameExtractor.Builder(context, mediaItem)
@@ -93,9 +79,7 @@ class ThumbnailServiceImpl @Inject constructor(
                 .use { extractor ->
                     val thumbnail = extractor.thumbnail.await()
                     bitmapToImageBytes(
-                        thumbnail.bitmap,
-                        quality = request.quality,
-                        format = request.format
+                        thumbnail.bitmap, quality = request.quality, format = request.format
                     )
                 }
         }
@@ -110,9 +94,7 @@ class ThumbnailServiceImpl @Inject constructor(
     ): ByteArray = withContext(Dispatchers.Default) {
         ByteArrayOutputStream().use { outputStream ->
             val success = bitmap.compress(
-                format.toBitmapCompressFormat(),
-                quality,
-                outputStream
+                format.toBitmapCompressFormat(), quality, outputStream
             )
             if (!success) {
                 throw IOException("Bitmap compression failed")
@@ -121,63 +103,4 @@ class ThumbnailServiceImpl @Inject constructor(
         }
     }
 
-    @OptIn(UnstableApi::class)
-    private fun calculateVideoFramePresentation(
-        inputWidth: Int,
-        inputHeight: Int,
-        scale: ThumbnailScale,
-    ): Presentation {
-        if (inputWidth <= 0 || inputHeight <= 0) {
-            throw IllegalArgumentException("Input w=$inputWidth, h=$inputHeight are not valid")
-        }
-
-        fun toEvenInt(i: Int): Int {
-            return if (i % 2 == 0) i else i - 1
-        }
-
-        fun toEvenInt(d: Double): Int {
-            val value = d.roundToInt()
-            return toEvenInt(value)
-        }
-
-        val wDouble = inputWidth.toDouble()
-        val hDouble = inputHeight.toDouble()
-
-        return when (scale) {
-            is ThumbnailScale.FitMaxSize -> {
-                // w x h => fit in maxSize x maxSize, need to scale the bigger one to the maxSize
-                //          if bigger one >= maxSize
-                val (targetWidthDouble, targetHeightDouble) = if (hDouble >= wDouble) {
-                    // height is the bigger one, use it as the max
-                    val h = min(hDouble, scale.maxSize.toDouble())
-                    val w = wDouble / hDouble * h
-                    w to h
-                } else {
-                    val w = min(wDouble, scale.maxSize.toDouble())
-                    val h = hDouble / wDouble * w
-                    w to h
-                }
-                Presentation.createForWidthAndHeight(
-                    toEvenInt(targetWidthDouble),
-                    toEvenInt(targetHeightDouble),
-                    // any layout is OK. use CROP to avoid stretch/padding under math precision edge issue
-                    Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP
-                )
-            }
-
-            is ThumbnailScale.FillByCroppingCenter -> {
-                Presentation.createForWidthAndHeight(
-                    toEvenInt(scale.width),
-                    toEvenInt(scale.height),
-                    Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP
-                )
-            }
-        }
-    }
-}
-
-fun AppImageFormat.toBitmapCompressFormat() = when (this) {
-    AppImageFormat.Webp -> Bitmap.CompressFormat.WEBP_LOSSY
-    AppImageFormat.Jpeg -> Bitmap.CompressFormat.JPEG
-    AppImageFormat.Png -> Bitmap.CompressFormat.PNG
 }

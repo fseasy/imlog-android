@@ -8,6 +8,7 @@ import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.model.VideoMetadata
 
 
 data class SavedMedia(
@@ -158,5 +159,13 @@ interface StorageRepository {
      * Run in IO threads.
      */
     suspend fun getImageMetadataOrNull(fileAbsolutePath: AbsolutePathModel): ImageMetadata?
+
+    /**
+     * No exception will be thrown. If uri invalid, return null. else return metadata
+     * that might be inaccurate in edge condition where data is corrupted.
+     *
+     * Run in IO threads.
+     */
+    suspend fun getVideoMetadataOrNull(fileAbsolutePath: AbsolutePathModel): VideoMetadata?
 
 }

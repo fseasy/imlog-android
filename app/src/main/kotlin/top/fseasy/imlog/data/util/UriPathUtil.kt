@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.util.LruCache
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -45,6 +46,8 @@ object UriPathUtil {
                         // Request permission if we need. Current we just return ignore this condition.
                         Timber.d(securityException, "Delete uri $uri failed on securityException")
                         FileDeleteResult.Error(securityException)
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         Timber.d(e, "Delete uri $uri failed")
                         FileDeleteResult.Error(e)
@@ -61,6 +64,8 @@ object UriPathUtil {
                         } else {
                             FileDeleteResult.Error(IllegalStateException("Uri [$uri] is invalid, no path found"))
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         Timber.d(e, "Delete `file://` schema uri [$uri] failed")
                         FileDeleteResult.Error(e)
@@ -219,6 +224,8 @@ object UriPathUtil {
         } catch (e: SecurityException) {
             Timber.e(e, "Resolve file get permission denied")
             FindOrCreateFileUriResult.Error.PermissionDenied(e)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Resolve file get unknown exception")
             FindOrCreateFileUriResult.Error.Unexpected(e)
@@ -272,6 +279,8 @@ object UriPathUtil {
                     }
                     null
                 }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Failed to find child: $displayName")
             null

@@ -6,7 +6,6 @@ import android.webkit.MimeTypeMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.fseasy.imlog.data.mapper.toUriOrNull
-import top.fseasy.imlog.data.mapper.toUriOrThrow
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import java.io.File
 import java.io.FileInputStream
@@ -39,9 +38,9 @@ object MimeTypeUtils {
         if (!file.exists() || file.isDirectory) return@withContext null
 
         // 1. Resolve via file extension
-        getMimeTypeFromExtension(file.extension)?.let { return@withContext it }
+        syncGetMimeTypeFromExtension(file.extension)?.let { return@withContext it }
         // 2. Resolve via file header bytes
-        getMimeTypeFromStream { FileInputStream(file) }?.let { return@withContext it }
+        syncGetMimeTypeFromStream { FileInputStream(file) }?.let { return@withContext it }
         // 3. have to return null
         null
     }
@@ -73,16 +72,16 @@ object MimeTypeUtils {
 
             // If the type is unresolved or generic, proceed with deeper analysis
             if (mimeType == null || mimeType == DEFAULT_MIME_TYPE) {
-                val extension = getExtensionFromUri(uri)
+                val extension = syncGetExtensionFromUri(uri)
 
                 // 2. Resolve via extension
-                val extMime = extension?.let { getMimeTypeFromExtension(it) }
+                val extMime = extension?.let { syncGetMimeTypeFromExtension(it) }
                 if (extMime != null) {
                     mimeType = extMime
                 } else {
                     // 3. Resolve via stream header bytes
                     val headerMime =
-                        getMimeTypeFromStream { context.contentResolver.openInputStream(uri) }
+                        syncGetMimeTypeFromStream { context.contentResolver.openInputStream(uri) }
                     if (headerMime != null) {
                         mimeType = headerMime
                     }
@@ -125,23 +124,23 @@ object MimeTypeUtils {
     /**
      * Performs MIME resolution using standard MimeTypeMap and fallback definitions.
      */
-    private fun getMimeTypeFromExtension(extension: String): String? {
+    private fun syncGetMimeTypeFromExtension(extension: String): String? {
         if (extension.isEmpty()) return null
         val lowerExt = extension.lowercase()
         return MimeTypeMap.getSingleton()
-            .getMimeTypeFromExtension(lowerExt) ?: getFallbackMimeType(lowerExt)
+            .getMimeTypeFromExtension(lowerExt) ?: syncGetFallbackMimeType(lowerExt)
     }
 
     /**
      * Reads the first 12 bytes from the opened stream to extract magic bytes.
      */
-    private fun getMimeTypeFromStream(openStream: () -> InputStream?): String? {
+    private fun syncGetMimeTypeFromStream(openStream: () -> InputStream?): String? {
         return try {
             openStream()?.use { input ->
                 val header = ByteArray(12)
                 val bytesRead = input.read(header)
                 if (bytesRead >= 4) {
-                    getMimeTypeFromHeaderBytes(header, bytesRead)
+                    syncGetMimeTypeFromHeaderBytes(header, bytesRead)
                 } else null
             }
         } catch (e: Exception) {
@@ -152,7 +151,7 @@ object MimeTypeUtils {
     /**
      * Inspects the byte array for matching file format signatures.
      */
-    private fun getMimeTypeFromHeaderBytes(header: ByteArray, bytesRead: Int): String? {
+    private fun syncGetMimeTypeFromHeaderBytes(header: ByteArray, bytesRead: Int): String? {
         return when {
             // RIFF Formats (WAV, WEBP)
             header.startsWith(0, b("RIFF")) && bytesRead >= 12 -> {
@@ -190,7 +189,7 @@ object MimeTypeUtils {
     /**
      * Extracts extension from a Uri by combining standard parsing and path fallback.
      */
-    private fun getExtensionFromUri(uri: Uri): String? {
+    private fun syncGetExtensionFromUri(uri: Uri): String? {
         val url = uri.toString()
         var extension = MimeTypeMap.getFileExtensionFromUrl(url)
         if (extension.isNullOrEmpty()) {
@@ -208,7 +207,7 @@ object MimeTypeUtils {
     /**
      * Static manual fallback mappings for newer or omitted extensions.
      */
-    private fun getFallbackMimeType(extension: String): String? {
+    private fun syncGetFallbackMimeType(extension: String): String? {
         return when (extension) {
             "webp" -> "image/webp"
             "heic" -> "image/heic"

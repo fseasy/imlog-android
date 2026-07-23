@@ -32,6 +32,7 @@ import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.model.VideoMetadata
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import java.io.FileNotFoundException
@@ -109,6 +110,10 @@ class StorageRepositoryImpl @Inject constructor(
 
     override suspend fun getImageMetadataOrNull(fileAbsolutePath: AbsolutePathModel): ImageMetadata? =
         MetadataResolveUtils.resolveImage(fileAbsolutePath, context)
+
+    override suspend fun getVideoMetadataOrNull(fileAbsolutePath: AbsolutePathModel): VideoMetadata? =
+        MetadataResolveUtils.resolveVideo(fileAbsolutePath, context)
+
 
     /**
      * Run in IO threads for io parts.

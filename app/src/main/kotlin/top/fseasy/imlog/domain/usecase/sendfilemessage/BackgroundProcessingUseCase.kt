@@ -29,7 +29,28 @@ class BackgroundProcessingUseCase @Inject constructor(
             userId = payload.userId, filename = payload.cacheFilename
         )
         val messageId = payload.messageId
-        // 1. copy internal cache to shared storage
+        // 1. generate thumbnail
+        when (val result = generateThumbnailUseCase(
+            messageId = messageId,
+            userId = payload.userId,
+            topicId = payload.topicId,
+            messageTimestampMs = payload.messageTimestampMs,
+            messageType = payload.messageType,
+            srcUriStr = payload.srcUriStr,
+            cacheFilePath = internalCacheFilePath,
+            fileMetadata = payload.fileMetadata,
+        )) {
+            is GenerateThumbnailStageResult.Failure -> return finishProcessingUseCase.onFailure(
+                messageId = messageId,
+                stage = failureTypeMapper.mapThumbnailFailure(result.type),
+                errorUserRetryable = result.retryable
+            )
+
+            is GenerateThumbnailStageResult.Success,
+            is GenerateThumbnailStageResult.Skip,
+                -> Unit
+        }
+        // 2. copy internal cache to shared storage
         when (val result = copyFileUseCase.copyInternalCacheToSharedStorageAndUpdateState(
             messageId = messageId,
             userId = payload.userId,
@@ -47,26 +68,7 @@ class BackgroundProcessingUseCase @Inject constructor(
 
             is CopyStageResult.Success -> Unit
         }
-        // 2. generate thumbnail
-        when (val result = generateThumbnailUseCase(
-            messageId = messageId,
-            userId = payload.userId,
-            topicId = payload.topicId,
-            messageTimestampMs = payload.messageTimestampMs,
-            srcUriStr = payload.srcUriStr,
-            cacheFilePath = internalCacheFilePath,
-            messageType = payload.messageType
-        )) {
-            is GenerateThumbnailStageResult.Failure -> return finishProcessingUseCase.onFailure(
-                messageId = messageId,
-                stage = failureTypeMapper.mapThumbnailFailure(result.type),
-                errorUserRetryable = result.retryable
-            )
 
-            is GenerateThumbnailStageResult.Success,
-            is GenerateThumbnailStageResult.Skip,
-                -> Unit
-        }
         // 3. finish processing on success: clean cache and processing status record
         when (val result = finishProcessingUseCase.onSuccess(
             messageId, internalCachePathModel = internalCacheFilePath
