@@ -12,6 +12,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+import javax.inject.Singleton
 import kotlin.random.Random
 
 /**
@@ -40,8 +41,13 @@ import kotlin.random.Random
  *
  *    user storage root: $root/$user_id/
  */
+
+/**
+ * Why Singleton: Will be used frequently and widely; has member val
+ */
+@Singleton
 class StoragePathUseCase @Inject constructor(
-    private val resourceProvider: ResourceProvider,
+    resourceProvider: ResourceProvider,
 ) {
     private val appStaticName = resourceProvider.getConstString(StringConstantId.AppStaticName)
     val defaultSharedStorageRootDirName = "${appStaticName}-storage"
@@ -127,9 +133,7 @@ class StoragePathUseCase @Inject constructor(
         userId: UserId,
         filename: String,
     ) = buildInternalCacheStoragePath(
-        userId,
-        resourceName = ResourceName.MessageCache,
-        filename = filename
+        userId, resourceName = ResourceName.MessageCache, filename = filename
     )
 
     /**

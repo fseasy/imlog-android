@@ -3,6 +3,7 @@ package top.fseasy.imlog.data.util
 import android.content.Context
 import android.net.Uri
 import android.webkit.MimeTypeMap
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.fseasy.imlog.data.mapper.toUriOrNull
@@ -67,6 +68,7 @@ object MimeTypeUtils {
             var mimeType = try {
                 context.contentResolver.getType(uri)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 null
             }
 
@@ -104,18 +106,19 @@ object MimeTypeUtils {
         return getMimeTypeOrNull(absolutePathModel, context) ?: DEFAULT_MIME_TYPE
     }
 
-    suspend fun getMimeTypeOrNull(absolutePathModel: AbsolutePathModel, context: Context): String? {
+    /**
+     * Retrieves the MIME type of absolutePathModel, falling back to null if unresolved.
+     * No exception will be thrown. Run in IO thread.
+     */
+    suspend fun getMimeTypeOrNull(absolutePathModel: AbsolutePathModel, context: Context): String? =
         when (absolutePathModel) {
-            is AbsolutePathModel.FileModel -> {
-                return getMimeType(absolutePathModel.value)
-            }
+            is AbsolutePathModel.FileModel -> getMimeType(absolutePathModel.value)
 
-            is AbsolutePathModel.UriStrModel -> {
-                val uri = absolutePathModel.value.toUriOrNull() ?: return null
-                return getMimeTypeOrNull(context = context, uri = uri)
-            }
+            is AbsolutePathModel.UriStrModel -> absolutePathModel.value.toUriOrNull()
+                ?.let {
+                    getMimeTypeOrNull(context = context, uri = it)
+                }
         }
-    }
 
     // ==========================================
     // Shared Internal Helpers
@@ -144,6 +147,7 @@ object MimeTypeUtils {
                 } else null
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             null
         }
     }

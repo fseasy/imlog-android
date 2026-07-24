@@ -2,7 +2,7 @@ package top.fseasy.imlog.domain.usecase.sendfilemessage
 
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.FileMetadataUnion
-import top.fseasy.imlog.domain.model.MessageVideoProcessingErrorStage
+import top.fseasy.imlog.domain.model.VideoMessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.toMetadataUnion
@@ -15,15 +15,8 @@ import javax.inject.Inject
 class SendVideoMessageUseCase @Inject constructor(
     dependencies: SendUriUseCaseBaseDependencies,
 ) : SendUriUseCaseBase(dependencies) {
-    override val messageType: MessageType
-        get() = MessageType.VIDEO
-
-    override suspend fun getMetadataOrNull(
-        storageRepository: StorageRepository,
-        srcUriStr: UriStr,
-    ): FileMetadataUnion? =
-        storageRepository.getVideoMetadataOrNull(AbsolutePathModel.UriStrModel(srcUriStr))
-            ?.toMetadataUnion()
+    override val messageTypeFromSendAction: MessageType
+        get() = MessageType.Video
 
     override val failureTypeMapper: ProcessingFailureTypeMapper
         get() = videoProcessingFailureTypeMapper
@@ -32,30 +25,30 @@ class SendVideoMessageUseCase @Inject constructor(
 internal val videoProcessingFailureTypeMapper = ProcessingFailureTypeMapper(
     mapCacheCopyFailure = { copyFailureType ->
         when (copyFailureType) {
-            CopyStageFailureType.CopyFile -> MessageVideoProcessingErrorStage.CopySrcToInternalCache
-            CopyStageFailureType.SaveFilenameToDb -> MessageVideoProcessingErrorStage.SetInternalFilenameToDb
-            CopyStageFailureType.UpdateDbIllegalState -> MessageVideoProcessingErrorStage.IllegalState
+            CopyStageFailureType.CopyFile -> VideoMessageProcessingErrorStage.CopySrcToInternalCache
+            CopyStageFailureType.SaveFilenameToDb -> VideoMessageProcessingErrorStage.SetInternalFilenameToDb
+            CopyStageFailureType.UpdateDbIllegalState -> VideoMessageProcessingErrorStage.IllegalState
         }
     },
     mapSharedStorageCopyFailure = { copyFailureType ->
         when (copyFailureType) {
-            CopyStageFailureType.CopyFile -> MessageVideoProcessingErrorStage.CopyToSharedStorage
-            CopyStageFailureType.SaveFilenameToDb -> MessageVideoProcessingErrorStage.SetRawFilenameToDb
-            CopyStageFailureType.UpdateDbIllegalState -> MessageVideoProcessingErrorStage.IllegalState
+            CopyStageFailureType.CopyFile -> VideoMessageProcessingErrorStage.CopyToSharedStorage
+            CopyStageFailureType.SaveFilenameToDb -> VideoMessageProcessingErrorStage.SetRawFilenameToDb
+            CopyStageFailureType.UpdateDbIllegalState -> VideoMessageProcessingErrorStage.IllegalState
         }
     },
     mapThumbnailFailure = { thumbnailFailureType ->
         when (thumbnailFailureType) {
-            GenerateThumbnailStageFailureType.Generate -> MessageVideoProcessingErrorStage.GenerateThumbnail
-            GenerateThumbnailStageFailureType.SaveFile -> MessageVideoProcessingErrorStage.SaveThumbnailFile
-            GenerateThumbnailStageFailureType.SetFilenameToDb -> MessageVideoProcessingErrorStage.SetThumbnailFilenameToDb
-            GenerateThumbnailStageFailureType.UpdateDbIllegalState -> MessageVideoProcessingErrorStage.IllegalState
+            GenerateThumbnailStageFailureType.Generate -> VideoMessageProcessingErrorStage.GenerateThumbnail
+            GenerateThumbnailStageFailureType.SaveFile -> VideoMessageProcessingErrorStage.SaveThumbnailFile
+            GenerateThumbnailStageFailureType.SetFilenameToDb -> VideoMessageProcessingErrorStage.SetThumbnailFilenameToDb
+            GenerateThumbnailStageFailureType.UpdateDbIllegalState -> VideoMessageProcessingErrorStage.IllegalState
         }
     },
     mapFinishTaskFailure = { finishFailureType ->
         when (finishFailureType) {
-            FinishProcessingStageFailureType.DeleteCacheFile -> MessageVideoProcessingErrorStage.DeleteInternalFileCache
-            FinishProcessingStageFailureType.DeleteTaskStateFromDb -> MessageVideoProcessingErrorStage.DeleteTaskStateFromDb
+            FinishProcessingStageFailureType.DeleteCacheFile -> VideoMessageProcessingErrorStage.DeleteInternalFileCache
+            FinishProcessingStageFailureType.DeleteTaskStateFromDb -> VideoMessageProcessingErrorStage.DeleteTaskStateFromDb
         }
     }
 )

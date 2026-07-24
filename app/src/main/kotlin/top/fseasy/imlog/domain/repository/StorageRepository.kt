@@ -4,6 +4,7 @@ import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.domain.model.FileDeleteResult
+import top.fseasy.imlog.domain.model.GenericFileMetadata
 import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UriStr
@@ -167,5 +168,20 @@ interface StorageRepository {
      * Run in IO threads.
      */
     suspend fun getVideoMetadataOrNull(fileAbsolutePath: AbsolutePathModel): VideoMetadata?
+
+    /**
+     * No exception will be thrown. If uri invalid, return null. else return metadata
+     *
+     * Run in IO threads.
+     */
+    suspend fun getGenericFileMetadataOrNull(fileAbsolutePath: AbsolutePathModel): GenericFileMetadata?
+
+    /**
+     * No exception will be thrown. If uri invalid, return null. else return mimetype
+     *
+     * Run in IO threads.
+     */
+    suspend fun getMimetypeOrNull(fileAbsolutePath: AbsolutePathModel): String?
+
 
 }

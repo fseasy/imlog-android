@@ -1,7 +1,7 @@
 package top.fseasy.imlog.domain.usecase.sendfilemessage
 
 import timber.log.Timber
-import top.fseasy.imlog.domain.model.FinishFileSendingWorkerPayload
+import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.CopyFileUseCase
 import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.CopyStageResult
@@ -22,7 +22,7 @@ class BackgroundProcessingUseCase @Inject constructor(
      * to make the following logic running more stably
      */
     internal suspend operator fun invoke(
-        payload: FinishFileSendingWorkerPayload,
+        payload: FinishSendingFileWorkerPayload,
         failureTypeMapper: ProcessingFailureTypeMapper,
     ) {
         val internalCacheFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(

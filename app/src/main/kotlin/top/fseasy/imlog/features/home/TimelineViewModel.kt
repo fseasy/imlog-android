@@ -154,11 +154,11 @@ class TimelineViewModel @Inject constructor(
     }
 
     fun sendImageMessage(uri: Uri) {
-        sendMediaMessage(MessageMediaCopySource.FromUri(uri), MessageType.IMAGE)
+        sendMediaMessage(MessageMediaCopySource.FromUri(uri), MessageType.Image)
     }
 
     fun sendVideoMessage(uri: Uri) {
-        sendMediaMessage(MessageMediaCopySource.FromUri(uri), MessageType.VIDEO)
+        sendMediaMessage(MessageMediaCopySource.FromUri(uri), MessageType.Video)
     }
 
     fun sendAudioMessage(uri: Uri) {
@@ -192,7 +192,7 @@ class TimelineViewModel @Inject constructor(
         message: Message,
         userId: UserId,
     ): ResourceModel? {
-        if (message.type != MessageType.IMAGE && message.type != MessageType.VIDEO) {
+        if (message.type != MessageType.Image && message.type != MessageType.Video) {
             return null
         }
         return null

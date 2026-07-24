@@ -2,7 +2,7 @@ package top.fseasy.imlog.domain.usecase.sendfilemessage
 
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.FileMetadataUnion
-import top.fseasy.imlog.domain.model.MessageAudioProcessingErrorStage
+import top.fseasy.imlog.domain.model.AudioMessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.toMetadataUnion
@@ -14,15 +14,8 @@ import javax.inject.Inject
 class SendAudioMessageUseCase @Inject constructor(
     dependencies: SendUriUseCaseBaseDependencies,
 ) : SendUriUseCaseBase(dependencies = dependencies) {
-    override val messageType: MessageType
-        get() = MessageType.AUDIO
-
-    override suspend fun getMetadataOrNull(
-        storageRepository: StorageRepository,
-        srcUriStr: UriStr,
-    ): FileMetadataUnion? =
-        storageRepository.getAudioMetadataOrNull(AbsolutePathModel.UriStrModel(srcUriStr))
-            ?.toMetadataUnion()
+    override val messageTypeFromSendAction: MessageType
+        get() = MessageType.Audio
 
     override val failureTypeMapper: ProcessingFailureTypeMapper
         get() = audioProcessingFailureTypeMapper
@@ -33,22 +26,22 @@ internal val audioProcessingFailureTypeMapper =
     ProcessingFailureTypeMapper(
         mapCacheCopyFailure = { copyFailureType ->
             when (copyFailureType) {
-                CopyStageFailureType.CopyFile -> MessageAudioProcessingErrorStage.CopySrcToInternalCache
-                CopyStageFailureType.SaveFilenameToDb -> MessageAudioProcessingErrorStage.SetInternalFilenameToDb
-                CopyStageFailureType.UpdateDbIllegalState -> MessageAudioProcessingErrorStage.IllegalState
+                CopyStageFailureType.CopyFile -> AudioMessageProcessingErrorStage.CopySrcToInternalCache
+                CopyStageFailureType.SaveFilenameToDb -> AudioMessageProcessingErrorStage.SetInternalFilenameToDb
+                CopyStageFailureType.UpdateDbIllegalState -> AudioMessageProcessingErrorStage.IllegalState
             }
         },
         mapSharedStorageCopyFailure = { copyFailureType ->
             when (copyFailureType) {
-                CopyStageFailureType.CopyFile -> MessageAudioProcessingErrorStage.CopyToSharedStorage
-                CopyStageFailureType.SaveFilenameToDb -> MessageAudioProcessingErrorStage.SetRawFilenameToDb
-                CopyStageFailureType.UpdateDbIllegalState -> MessageAudioProcessingErrorStage.IllegalState
+                CopyStageFailureType.CopyFile -> AudioMessageProcessingErrorStage.CopyToSharedStorage
+                CopyStageFailureType.SaveFilenameToDb -> AudioMessageProcessingErrorStage.SetRawFilenameToDb
+                CopyStageFailureType.UpdateDbIllegalState -> AudioMessageProcessingErrorStage.IllegalState
             }
         },
         mapThumbnailFailure = { error("Audio message don't have generate-thumbnail stage") },
         mapFinishTaskFailure = { finishFailureType ->
             when (finishFailureType) {
-                FinishProcessingStageFailureType.DeleteCacheFile -> MessageAudioProcessingErrorStage.DeleteInternalFileCache
-                FinishProcessingStageFailureType.DeleteTaskStateFromDb -> MessageAudioProcessingErrorStage.DeleteTaskStateFromDb
+                FinishProcessingStageFailureType.DeleteCacheFile -> AudioMessageProcessingErrorStage.DeleteInternalFileCache
+                FinishProcessingStageFailureType.DeleteTaskStateFromDb -> AudioMessageProcessingErrorStage.DeleteTaskStateFromDb
             }
         })

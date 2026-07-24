@@ -5,12 +5,14 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.data.mapper.toUriOrNull
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
+import top.fseasy.imlog.domain.model.GenericFileMetadata
 import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.VideoMetadata
 import java.io.File
@@ -36,8 +38,8 @@ object MetadataResolveUtils {
         val fields = setOf(
             MetaDataField.DISPLAY_NAME,
         )
-        val result = syncQueryMultipleMetadataOnUriOrNull(context, uri, fields)
-        result.displayName ?: getDisplayNameFallbackOrDefault(uri, defaultName)
+        val result = UriMetadataQuerier.syncQueryMultipleFieldsOrNull(context, uri, fields)
+        result.getDisplayNameOrExecuteFallback(uri, defaultName)
     }
 
     /**
@@ -59,33 +61,16 @@ object MetadataResolveUtils {
     suspend fun resolveAudio(
         file: File,
     ): AudioMetadata? {
-        val exists = withContext(Dispatchers.IO) {
-            try {
-                file.exists()
-            } catch (e: SecurityException) {
-                Timber.w(e, "Failed to access for file: $file")
-                false
-            }
-        }
-        if (!exists) {
-            return null
-        }
+        val genericFileMetadata =
+            resolveGenericFile(file, defaultMimeTypeWhenError = "audio/*") ?: return null
 
-        val displayName = file.name
-        val fileSize = withContext(Dispatchers.IO) {
-            try {
-                file.length()
-            } catch (e: SecurityException) {
-                Timber.w(e, "Failed to get file size for file: $file")
-                0L
-            }
-        }
-
-        val mimeType = MimeTypeUtils.getMimeTypeOrNull(file) ?: "audio/*"
         val duration = MediaDurationUtils.getDuration(file)
 
         return AudioMetadata(
-            displayName = displayName, fileSize = fileSize, mimeType = mimeType, duration = duration
+            displayName = genericFileMetadata.displayName,
+            fileSize = genericFileMetadata.fileSize,
+            mimeType = genericFileMetadata.mimeType,
+            duration = duration
         )
     }
 
@@ -106,12 +91,11 @@ object MetadataResolveUtils {
             MetaDataField.MIME_TYPE,
             MetaDataField.DURATION
         )
-        val result = syncQueryMultipleMetadataOnUriOrNull(context, uri, fields)
+        val result = UriMetadataQuerier.syncQueryMultipleFieldsOrNull(context, uri, fields)
 
-        val displayName =
-            result.displayName ?: getDisplayNameFallbackOrDefault(uri, "unknown_audio")
-        val fileSize = result.fileSize ?: syncGetFileSizeFallback(context, uri)
-        val mimeType = result.mimeType ?: MimeTypeUtils.getMimeTypeOrNull(context, uri) ?: "audio/*"
+        val displayName = result.getDisplayNameOrExecuteFallback(uri, "unknown_audio")
+        val fileSize = result.getFileSizeOrExecuteFallback(context, uri)
+        val mimeType = result.getMimeTypeOrExecuteFallback(context, uri = uri, default = "audio/*")
         val duration =
             result.duration ?: MediaDurationUtils.getDurationWithReadingFileOrNull(context, uri)
             ?: 0.milliseconds
@@ -121,8 +105,24 @@ object MetadataResolveUtils {
         )
     }
 
+    /**
+     * @return If uriStr failed to be parsed as uri, or file not exists, return null.
+     *
+     * Run in IO thread for io parts.
+     */
+    suspend fun resolveVideo(filePath: AbsolutePathModel, context: Context): VideoMetadata? =
+        when (filePath) {
+            is AbsolutePathModel.UriStrModel -> filePath.value.toUriOrNull()
+                ?.let { resolveVideo(context, uri = it) }
+
+            is AbsolutePathModel.FileModel -> resolveVideo(context, file = filePath.value)
+        }
+
     /***
+     * Because We don't check if the uri is valid, so it'll always return a VideoMetadata.
+     *
      * Run IN IO.
+     *
      * No exceptions will be thrown.
      */
     suspend fun resolveVideo(
@@ -137,12 +137,11 @@ object MetadataResolveUtils {
             MetaDataField.WIDTH,
             MetaDataField.HEIGHT
         )
-        val result = syncQueryMultipleMetadataOnUriOrNull(context, uri, fields)
+        val result = UriMetadataQuerier.syncQueryMultipleFieldsOrNull(context, uri, fields)
 
-        val displayName =
-            result.displayName ?: getDisplayNameFallbackOrDefault(uri, "unknown_video.mp4")
-        val fileSize = result.fileSize ?: syncGetFileSizeFallback(context, uri)
-        val mimeType = result.mimeType ?: MimeTypeUtils.getMimeTypeOrNull(context, uri) ?: "video/*"
+        val displayName = result.getDisplayNameOrExecuteFallback(uri, "unknown_video.mp4")
+        val fileSize = result.getFileSizeOrExecuteFallback(context, uri)
+        val mimeType = result.getMimeTypeOrExecuteFallback(context, uri, default = "video/*")
         var duration = result.duration
         var width = result.width
         var height = result.height
@@ -173,34 +172,15 @@ object MetadataResolveUtils {
         context: Context,
         file: File,
     ): VideoMetadata? {
-        val exists = withContext(Dispatchers.IO) {
-            try {
-                file.exists()
-            } catch (e: SecurityException) {
-                Timber.w(e, "Failed to access for file: $file")
-                false
-            }
-        }
-        if (!exists) {
-            return null
-        }
-
-        val displayName = file.name
-        val fileSize = withContext(Dispatchers.IO) {
-            try {
-                file.length()
-            } catch (e: SecurityException) {
-                Timber.w(e, "Failed to get file size for file: $file")
-                0L
-            }
-        }
-
-        val mimeType = MimeTypeUtils.getMimeTypeOrNull(file) ?: "image/*"
+        val genericFileMetadata =
+            resolveGenericFile(file, defaultMimeTypeWhenError = "video/*") ?: return null
         val dimension =
             VideoUtil.readDimensionOrNull(context, file) ?: VideoDimension(0.milliseconds, 0, 0)
 
         return VideoMetadata(
-            displayName = displayName, fileSize = fileSize, mimeType = mimeType,
+            displayName = genericFileMetadata.displayName,
+            fileSize = genericFileMetadata.fileSize,
+            mimeType = genericFileMetadata.mimeType,
             width = dimension.width,
             height = dimension.height,
             duration = dimension.duration
@@ -235,19 +215,18 @@ object MetadataResolveUtils {
             MetaDataField.WIDTH,
             MetaDataField.HEIGHT
         )
-        val result = syncQueryMultipleMetadataOnUriOrNull(context, uri, fields)
+        val result = UriMetadataQuerier.syncQueryMultipleFieldsOrNull(context, uri, fields)
 
-        val displayName =
-            result.displayName ?: getDisplayNameFallbackOrDefault(uri, "unknown_img.jpg")
-        val fileSize = result.fileSize ?: syncGetFileSizeFallback(context, uri)
-        val mimeType = result.mimeType ?: MimeTypeUtils.getMimeTypeOrNull(context, uri) ?: "image/*"
-        val (rWidth, rHeight) = result.width to result.height
-        val (width, height) = if (rWidth != null && rHeight != null) {
-            rWidth to rHeight
+        val displayName = result.getDisplayNameOrExecuteFallback(uri, "unknown_img.jpg")
+        val fileSize = result.getFileSizeOrExecuteFallback(context, uri)
+        val mimeType = result.getMimeTypeOrExecuteFallback(context, uri, default = "image/*")
+        val (qWidth, qHeight) = result.width to result.height
+        val (width, height) = if (qWidth != null && qHeight != null) {
+            qWidth to qHeight
         } else {
             val readingResult = ImageUtil.readDimensionOrNull(context, uri = uri)
-            val w = readingResult?.width ?: rWidth ?: 0
-            val h = readingResult?.height ?: rHeight ?: 0
+            val w = readingResult?.width ?: qWidth ?: 0
+            val h = readingResult?.height ?: qHeight ?: 0
             w to h
         }
 
@@ -267,6 +246,42 @@ object MetadataResolveUtils {
     suspend fun resolveImage(
         file: File,
     ): ImageMetadata? {
+        val genericFileMetadata =
+            resolveGenericFile(file, defaultMimeTypeWhenError = "image/*") ?: return null
+        val dimension = ImageUtil.readDimensionOrNull(file) ?: ImageDimension(0, 0)
+
+        return ImageMetadata(
+            displayName = genericFileMetadata.displayName,
+            fileSize = genericFileMetadata.fileSize,
+            mimeType = genericFileMetadata.mimeType,
+            width = dimension.width,
+            height = dimension.height,
+        )
+    }
+
+    /**
+     * If uriStr failed to be parsed as uri, or file not exists, return null.
+     * Run in IO thread for io parts.
+     */
+    suspend fun resolveGenericFile(
+        filePath: AbsolutePathModel,
+        context: Context,
+    ): GenericFileMetadata? = when (filePath) {
+        is AbsolutePathModel.UriStrModel -> filePath.value.toUriOrNull()
+            ?.let { resolveGenericFile(context, uri = it) }
+
+        is AbsolutePathModel.FileModel -> resolveGenericFile(filePath.value)
+    }
+
+    /**
+     * If file not exists, return null.
+     *
+     * Run in IO thread for io parts.
+     */
+    suspend fun resolveGenericFile(
+        file: File,
+        defaultMimeTypeWhenError: String = MimeTypeUtils.getErrorDefaultMimeType(),
+    ): GenericFileMetadata? {
         val exists = withContext(Dispatchers.IO) {
             try {
                 file.exists()
@@ -289,13 +304,41 @@ object MetadataResolveUtils {
             }
         }
 
-        val mimeType = MimeTypeUtils.getMimeTypeOrNull(file) ?: "image/*"
-        val dimension = ImageUtil.readDimensionOrNull(file) ?: ImageDimension(0, 0)
+        val mimeType = MimeTypeUtils.getMimeTypeOrNull(file) ?: defaultMimeTypeWhenError
 
-        return ImageMetadata(
-            displayName = displayName, fileSize = fileSize, mimeType = mimeType,
-            width = dimension.width,
-            height = dimension.height,
+        return GenericFileMetadata(
+            displayName = displayName, fileSize = fileSize, mimeType = mimeType
+        )
+    }
+
+    /***
+     * Run IN IO.
+     * No exceptions will be thrown.
+     *
+     * We don't check if the uri exists, so we always return a GenericFileMetadata
+     * even if it actually does not exist.
+     */
+    suspend fun resolveGenericFile(
+        context: Context,
+        uri: Uri,
+    ): GenericFileMetadata = withContext(Dispatchers.IO) {
+        val fields = setOf(
+            MetaDataField.DISPLAY_NAME,
+            MetaDataField.FILE_SIZE,
+            MetaDataField.MIME_TYPE,
+        )
+        val result = UriMetadataQuerier.syncQueryMultipleFieldsOrNull(context, uri, fields)
+
+        val displayName = result.getDisplayNameOrExecuteFallback(uri, "unknown_file")
+        val fileSize = result.getFileSizeOrExecuteFallback(context, uri)
+        val mimeType = result.getMimeTypeOrExecuteFallback(
+            context,
+            uri,
+            default = MimeTypeUtils.getErrorDefaultMimeType()
+        )
+
+        GenericFileMetadata(
+            displayName = displayName, fileSize = fileSize, mimeType = mimeType
         )
     }
 
@@ -316,17 +359,88 @@ object MetadataResolveUtils {
                     it.length
                 } ?: 0L
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Timber.i(e, "Failed to get file size of [$uri]")
             0L
         }
     }
 
+    private fun UriMetadataQuerier.MetadataResult.getDisplayNameOrExecuteFallback(
+        uri: Uri,
+        default: String,
+    ): String = this.displayName ?: getDisplayNameFallbackOrDefault(uri, default)
 
-    private enum class MetaDataField {
+    private fun UriMetadataQuerier.MetadataResult.getFileSizeOrExecuteFallback(
+        context: Context,
+        uri: Uri,
+    ): Long = this.fileSize ?: syncGetFileSizeFallback(context, uri)
+
+    private suspend fun UriMetadataQuerier.MetadataResult.getMimeTypeOrExecuteFallback(
+        context: Context,
+        uri: Uri,
+        default: String,
+    ): String = this.mimeType ?: MimeTypeUtils.getMimeTypeOrNull(context, uri) ?: default
+}
+
+
+private object UriMetadataQuerier {
+
+    /**
+     * batch Metadata with query providerResolver
+     * No thrownable => Swallow all exceptions and return empty.
+     */
+    fun syncQueryMultipleFieldsOrNull(
+        context: Context,
+        uri: Uri,
+        fields: Set<MetaDataField>,
+    ): MetadataResult {
+        if (fields.isEmpty()) {
+            return MetadataResult(EnumMap(MetaDataField::class.java))
+        }
+
+        val targetFields = fields.mapNotNull { field ->
+            val config = queryFieldConfigMap[field]
+            if (config != null) field to config else null
+        }
+
+        if (targetFields.isEmpty()) {
+            return MetadataResult(EnumMap(MetaDataField::class.java))
+        }
+
+        val projection = targetFields.map { it.second.column }
+            .distinct()
+            .toTypedArray()
+        val resultMap = EnumMap<MetaDataField, Any>(MetaDataField::class.java)
+
+        try {
+            context.contentResolver.query(uri, projection, null, null, null)
+                ?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        for ((field, config) in targetFields) {
+                            val index = cursor.getColumnIndex(config.column)
+                            if (index != -1 && !cursor.isNull(index)) {
+                                config.read(cursor, index)
+                                    ?.let { value ->
+                                        resultMap[field] = value
+                                    }
+                            }
+                        }
+                    }
+                }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Timber.i(e, "Failed to query metadata by contentResolver")
+            // pass through, leaves unfinished field as null result
+        }
+
+        return MetadataResult(resultMap)
+    }
+
+    enum class MetaDataField {
         DISPLAY_NAME, FILE_SIZE, MIME_TYPE, DURATION, WIDTH, HEIGHT
     }
 
-    private class MetadataResult(private val data: EnumMap<MetaDataField, Any>) {
+    class MetadataResult(private val data: EnumMap<MetaDataField, Any>) {
         val displayName: String? get() = getString(MetaDataField.DISPLAY_NAME)
         val fileSize: Long? get() = getLong(MetaDataField.FILE_SIZE)
         val mimeType: String? get() = getString(MetaDataField.MIME_TYPE)
@@ -367,54 +481,6 @@ object MetadataResolveUtils {
                 MetaDataField.HEIGHT,
                 QueryFieldConfig(MediaStore.MediaColumns.HEIGHT) { c, i -> c.getInt(i) })
         }
-
-    /**
-     * batch Metadata with query providerResolver
-     * No thrownable => Swallow all exceptions and return empty.
-     */
-    private fun syncQueryMultipleMetadataOnUriOrNull(
-        context: Context,
-        uri: Uri,
-        fields: Set<MetaDataField>,
-    ): MetadataResult {
-        if (fields.isEmpty()) {
-            return MetadataResult(EnumMap(MetaDataField::class.java))
-        }
-
-        val targetFields = fields.mapNotNull { field ->
-            val config = queryFieldConfigMap[field]
-            if (config != null) field to config else null
-        }
-
-        if (targetFields.isEmpty()) {
-            return MetadataResult(EnumMap(MetaDataField::class.java))
-        }
-
-        val projection = targetFields.map { it.second.column }
-            .distinct()
-            .toTypedArray()
-        val resultMap = EnumMap<MetaDataField, Any>(MetaDataField::class.java)
-
-        try {
-            context.contentResolver.query(uri, projection, null, null, null)
-                ?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        for ((field, config) in targetFields) {
-                            val index = cursor.getColumnIndex(config.column)
-                            if (index != -1 && !cursor.isNull(index)) {
-                                config.read(cursor, index)
-                                    ?.let { value ->
-                                        resultMap[field] = value
-                                    }
-                            }
-                        }
-                    }
-                }
-        } catch (e: Exception) {
-            Timber.i(e, "Failed to query metadata by contentResolver")
-            // pass through, leaves unfinished field as null result
-        }
-
-        return MetadataResult(resultMap)
-    }
 }
+
+private typealias MetaDataField = UriMetadataQuerier.MetaDataField

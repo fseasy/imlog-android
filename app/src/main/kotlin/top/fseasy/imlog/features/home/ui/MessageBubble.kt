@@ -67,7 +67,7 @@ fun MessageBubble(
         ) {
             val message = messageUiState.message
             when (message.type) {
-                MessageType.TEXT, null -> {
+                MessageType.Text, null -> {
                     Text(
                         text = message.content ?: "",
                         modifier = Modifier.padding(12.dp),
@@ -76,7 +76,7 @@ fun MessageBubble(
                     )
                 }
 
-                MessageType.VOICE -> {
+                MessageType.Voice -> {
                     AudioPlayer(
                         resourceModel = messageUiState.thumbnailModel,
                         duration = message.duration ?: 0,
@@ -84,7 +84,7 @@ fun MessageBubble(
                     )
                 }
 
-                MessageType.IMAGE -> {
+                MessageType.Image -> {
                     AsyncImage(
                         model = messageUiState.thumbnailModel,
                         contentDescription = "Image",
@@ -95,7 +95,7 @@ fun MessageBubble(
                     )
                 }
 
-                MessageType.VIDEO -> {
+                MessageType.Video -> {
                     VideoPlayer(
                         resourceModel = messageUiState.thumbnailModel,
                         duration = message.duration ?: 0,
@@ -103,7 +103,7 @@ fun MessageBubble(
                     )
                 }
 
-                MessageType.AUDIO -> {
+                MessageType.Audio -> {
                     AudioPlayer(
                         resourceModel = messageUiState.thumbnailModel,
                         duration = message.duration ?: 0,
@@ -111,7 +111,7 @@ fun MessageBubble(
                     )
                 }
 
-                MessageType.FILE -> {
+                MessageType.GenericFile -> {
                     Text(
                         text = "File: ${message.originalFilename}",
                         modifier = Modifier.padding(12.dp)

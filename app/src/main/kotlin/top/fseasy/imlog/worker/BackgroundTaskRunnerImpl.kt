@@ -8,7 +8,7 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
-import top.fseasy.imlog.domain.model.FinishFileSendingWorkerPayload
+import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.repository.BackgroundTaskRunner
 import top.fseasy.imlog.domain.util.defaultJson
@@ -19,16 +19,20 @@ class BackgroundTaskRunnerImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
 ) : BackgroundTaskRunner {
 
-    override suspend fun finishSendingFileMessage(payload: FinishFileSendingWorkerPayload) {
+    override suspend fun finishSendingFileMessage(payload: FinishSendingFileWorkerPayload) {
         val serializedPayload = defaultJson.encodeToString(payload)
         when (payload.messageType) {
-            MessageType.AUDIO,
-            MessageType.VOICE,
-                -> enqueueFinishFileSendingWorker<SaveAudioMessageWorker>(
+            MessageType.Audio,
+            MessageType.Voice,
+                -> enqueueFinishFileSendingWorker<FinishSendingAudioMessageWorker>(
                 serializedPayload
             )
 
-            MessageType.IMAGE -> enqueueFinishFileSendingWorker<SaveImageMessageWorker>(
+            MessageType.Image -> enqueueFinishFileSendingWorker<FinishSendingImageMessageWorker>(
+                serializedPayload
+            )
+
+            MessageType.Video -> enqueueFinishFileSendingWorker<FinishSendingImageMessageWorker>(
                 serializedPayload
             )
 

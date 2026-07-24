@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -28,6 +29,7 @@ import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.domain.model.FileDeleteResult
+import top.fseasy.imlog.domain.model.GenericFileMetadata
 import top.fseasy.imlog.domain.model.ImageMetadata
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UriStr
@@ -109,11 +111,16 @@ class StorageRepositoryImpl @Inject constructor(
         MetadataResolveUtils.resolveAudio(fileAbsolutePath, context = context)
 
     override suspend fun getImageMetadataOrNull(fileAbsolutePath: AbsolutePathModel): ImageMetadata? =
-        MetadataResolveUtils.resolveImage(fileAbsolutePath, context)
+        MetadataResolveUtils.resolveImage(fileAbsolutePath, context = context)
 
     override suspend fun getVideoMetadataOrNull(fileAbsolutePath: AbsolutePathModel): VideoMetadata? =
-        MetadataResolveUtils.resolveVideo(fileAbsolutePath, context)
+        MetadataResolveUtils.resolveVideo(fileAbsolutePath, context = context)
 
+    override suspend fun getGenericFileMetadataOrNull(fileAbsolutePath: AbsolutePathModel): GenericFileMetadata? =
+        MetadataResolveUtils.resolveGenericFile(fileAbsolutePath, context = context)
+
+    override suspend fun getMimetypeOrNull(fileAbsolutePath: AbsolutePathModel): String? =
+        MimeTypeUtils.getMimeTypeOrNull(fileAbsolutePath, context = context)
 
     /**
      * Run in IO threads for io parts.
@@ -329,6 +336,8 @@ class StorageRepositoryImpl @Inject constructor(
         } catch (e: FileNotFoundException) {
             Timber.d(e, "deleteFile: Failed to locate file on shared-storage: $filePath")
             return FileDeleteResult.FileNotExist
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.d(e, "deleteFile: error on locating file on shared-storage: $filePath")
             return FileDeleteResult.Error(e)

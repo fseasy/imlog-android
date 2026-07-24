@@ -8,7 +8,12 @@ import kotlin.uuid.Uuid
 
 
 enum class MessageType(val value: String) {
-    TEXT("text"), IMAGE("image"), VIDEO("video"), AUDIO("audio"), FILE("file"), VOICE("voice");
+    Text("text"),
+    Image("image"),
+    Video("video"),
+    Audio("audio"), Voice("voice"),
+    GenericFile("generic_file"),
+    ;
 
     companion object {
         private val valueMap = entries.associateBy(MessageType::value)
@@ -84,7 +89,7 @@ object MessageFactory {
             id = MessageId.random(),
             topicId = topicId,
             senderId = senderId,
-            type = MessageType.TEXT,
+            type = MessageType.Text,
             content = content,
             createdAt = timestampMs,
             attributesUpdatedAt = timestampMs

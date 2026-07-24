@@ -2,8 +2,9 @@ package top.fseasy.imlog.domain.usecase.sendfilemessage
 
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
+import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.FileMetadataUnion
-import top.fseasy.imlog.domain.model.FinishFileSendingWorkerPayload
+import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
@@ -19,16 +20,35 @@ import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.FinishProcessingUse
 import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.InitializeFileMessageUseCase
 import javax.inject.Inject
 
-abstract class SendSupportingBackgroundBase(
+abstract class SendUseCaseBase(
     private val backgroundProcessingUseCase: BackgroundProcessingUseCase,
+    private val storageRepository: StorageRepository,
 ) {
+    protected abstract val messageTypeFromSendAction: MessageType
+
+    /**
+     * Why: 1. We want to set the messageType to the real actual file for GenericFile.
+     *      2. this is the easist way to unifie the subclasses.
+     * */
+    protected suspend fun resolveMessageTypeForRender(srcPath: AbsolutePathModel): MessageType =
+        when (messageTypeFromSendAction) {
+            MessageType.GenericFile -> {
+                storageRepository.getMimetypeOrNull(srcPath)
+                    ?.let {
+                        fileMimeTypeToMessageType(it)
+                    } ?: MessageType.GenericFile
+            }
+
+            else -> messageTypeFromSendAction
+        }
+
 
     internal abstract val failureTypeMapper: ProcessingFailureTypeMapper
 
     /**
      * Export this api for background executor, like WorkerManager
      */
-    suspend fun runBackground(payload: FinishFileSendingWorkerPayload) {
+    suspend fun runBackground(payload: FinishSendingFileWorkerPayload) {
         backgroundProcessingUseCase(payload, failureTypeMapper)
     }
 }
@@ -43,14 +63,8 @@ data class SendUriUseCaseBaseDependencies @Inject constructor(
 )
 
 abstract class SendUriUseCaseBase(
-    private val dependencies: SendUriUseCaseBaseDependencies,
-) : SendSupportingBackgroundBase(dependencies.backgroundProcessingUseCase) {
-
-    protected abstract val messageType: MessageType
-    protected abstract suspend fun getMetadataOrNull(
-        storageRepository: StorageRepository,
-        srcUriStr: UriStr,
-    ): FileMetadataUnion?
+    internal val dependencies: SendUriUseCaseBaseDependencies,
+) : SendUseCaseBase(dependencies.backgroundProcessingUseCase, dependencies.storageRepository) {
 
     suspend operator fun invoke(
         srcUriStr: UriStr,
@@ -59,8 +73,17 @@ abstract class SendUriUseCaseBase(
         messageTimestampMs: Long,
     ): Boolean {
         // 1. initialize the file message record to db
-        val fileMetadata = getMetadataOrNull(dependencies.storageRepository, srcUriStr) ?: run {
-            Timber.w("Failed to get audio metadata, $srcUriStr is invalid")
+        val srcPath = AbsolutePathModel.UriStrModel(srcUriStr)
+        val messageType = resolveMessageTypeForRender(srcPath)
+        val fileMetadata = getMetadataOrNullBasedOnMessageType(
+            dependencies.storageRepository,
+            path = srcPath,
+            messageType = messageType
+        ) ?: run {
+            Timber.w(
+                "Failed to get file metadata, $srcUriStr is invalid, " +
+                    "action-msg-type=$messageTypeFromSendAction, render-msg-type=$messageType"
+            )
             return false
         }
         val messageId = try {
@@ -102,7 +125,7 @@ abstract class SendUriUseCaseBase(
             }
 
         dependencies.backgroundTaskRunner.finishSendingFileMessage(
-            FinishFileSendingWorkerPayload(
+            FinishSendingFileWorkerPayload(
                 messageId = messageId,
                 userId = userId,
                 topicId = topicId,
@@ -116,6 +139,7 @@ abstract class SendUriUseCaseBase(
         return true
     }
 }
+
 
 /**
  * Dependencies for send cache file use case
@@ -134,13 +158,7 @@ data class SendCacheFileUseCaseBaseDependencies @Inject constructor(
 
 abstract class SendCacheFileUseCaseBase(
     val dependencies: SendCacheFileUseCaseBaseDependencies,
-) : SendSupportingBackgroundBase(dependencies.backgroundProcessingUseCase) {
-
-    protected abstract val messageType: MessageType
-    protected abstract suspend fun getMetadataOrNull(
-        storageRepository: StorageRepository,
-        cacheFile: StoragePathModel.InternalOnly,
-    ): FileMetadataUnion?
+) : SendUseCaseBase(dependencies.backgroundProcessingUseCase, dependencies.storageRepository) {
 
     suspend operator fun invoke(
         cacheFilename: String,
@@ -151,8 +169,22 @@ abstract class SendCacheFileUseCaseBase(
         val cacheFile = dependencies.storagePathUseCase.buildMessageCacheFileStoragePath(
             userId, cacheFilename
         )
-        val fileMetadata = getMetadataOrNull(dependencies.storageRepository, cacheFile) ?: run {
-            Timber.w("Failed to get ${messageType.value} metadata, <$cacheFilename> => <$cacheFile> is invalid file")
+        val cacheAbsolutePath =
+            dependencies.storageRepository.resolveStoragePathToAbsolutePathsWithoutCreating(
+                cacheFile
+            )
+                .last()
+        val messageType = resolveMessageTypeForRender(cacheAbsolutePath)
+        val fileMetadata = getMetadataOrNullBasedOnMessageType(
+            dependencies.storageRepository,
+            path = cacheAbsolutePath,
+            messageType = messageType
+        ) ?: run {
+            Timber.w(
+                "Failed to get file metadata, %s is invalid, message-type=%s",
+                "[<$cacheFilename> => <$cacheFile> => <$cacheAbsolutePath>]",
+                "[action=$messageTypeFromSendAction, render=$messageType]"
+            )
             return false
         }
         val messageId = try {
@@ -172,7 +204,7 @@ abstract class SendCacheFileUseCaseBase(
             return false
         }
         dependencies.backgroundTaskRunner.finishSendingFileMessage(
-            FinishFileSendingWorkerPayload(
+            FinishSendingFileWorkerPayload(
                 messageId = messageId,
                 userId = userId,
                 topicId = topicId,
@@ -186,3 +218,41 @@ abstract class SendCacheFileUseCaseBase(
         return true
     }
 }
+
+/**
+ * Helper function to map mimetype to MessageType. Mainly for GenericFile
+ */
+private fun fileMimeTypeToMessageType(mimeType: String): MessageType =
+    if (mimeType.startsWith("video")) {
+        MessageType.Video
+    } else if (mimeType.startsWith("audio")) {
+        MessageType.Audio
+    } else if (mimeType.startsWith("image")) {
+        MessageType.Image
+    } else MessageType.GenericFile
+
+/**
+ *
+ */
+private suspend fun getMetadataOrNullBasedOnMessageType(
+    repository: StorageRepository,
+    path: AbsolutePathModel,
+    messageType: MessageType,
+): FileMetadataUnion? =
+    when (messageType) {
+        MessageType.Image -> repository.getImageMetadataOrNull(path)
+            ?.toMetadataUnion()
+
+        MessageType.Video -> repository.getVideoMetadataOrNull(path)
+            ?.toMetadataUnion()
+
+        MessageType.Audio,
+        MessageType.Voice,
+            -> repository.getAudioMetadataOrNull(path)
+            ?.toMetadataUnion()
+
+        MessageType.GenericFile -> repository.getGenericFileMetadataOrNull(path)
+            ?.toMetadataUnion()
+
+        MessageType.Text -> error("Text MessageType shouldn't use this UseCase")
+    }

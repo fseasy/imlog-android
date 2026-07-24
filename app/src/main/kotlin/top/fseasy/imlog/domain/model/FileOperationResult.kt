@@ -13,7 +13,7 @@ sealed interface FileCopyResult {
         // Source related errors
         data class SrcPermissionDenied(override val cause: SecurityException) : Error
         data class SrcNotFound(override val cause: FileNotFoundException) : Error
-        data class SrcOpenUnexpected(override val cause: Exception) : Error
+        data class SrcOpenUnexpected(override val cause: Throwable) : Error
 
         // Target related errors
         data class TgtPermissionDenied(override val cause: SecurityException) : Error

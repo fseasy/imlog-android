@@ -48,13 +48,16 @@ class InitializeUserStorageUseCase @Inject constructor(
     private suspend fun determineSharedStorageRootUri(
         userSelectedUriStr: UriStr,
     ) = runCatching {
-        val dirName = storageRepository.getDisplayNameOrDefault(userSelectedUriStr,)
+        val dirName = storageRepository.getDisplayNameOrDefault(
+            userSelectedUriStr,
+            // Don't know what's user selection. Set this to trigger subdirectory creation.
+            defaultName = "unknown"
+        )
         if (storagePathUseCase.needsSubDirForActualSharedStorageRoot(dirName)) {
             val rootDirName = storagePathUseCase.defaultSharedStorageRootDirName
             val createdUri = storageRepository.mkdirs(
                 StoragePathModel.SharedStorageOnly(
-                    listOf(rootDirName),
-                    root = SharedStorageRootSource.Direct(userSelectedUriStr)
+                    listOf(rootDirName), root = SharedStorageRootSource.Direct(userSelectedUriStr)
                 )
             )
             val effectiveCreatedUri =

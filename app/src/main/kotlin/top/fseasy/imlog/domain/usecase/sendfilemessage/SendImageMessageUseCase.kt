@@ -2,7 +2,7 @@ package top.fseasy.imlog.domain.usecase.sendfilemessage
 
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.FileMetadataUnion
-import top.fseasy.imlog.domain.model.MessageImageProcessingErrorStage
+import top.fseasy.imlog.domain.model.ImageMessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.toMetadataUnion
@@ -15,15 +15,8 @@ import javax.inject.Inject
 class SendImageMessageUseCase @Inject constructor(
     dependencies: SendUriUseCaseBaseDependencies,
 ) : SendUriUseCaseBase(dependencies) {
-    override val messageType: MessageType
-        get() = MessageType.IMAGE
-
-    override suspend fun getMetadataOrNull(
-        storageRepository: StorageRepository,
-        srcUriStr: UriStr,
-    ): FileMetadataUnion? =
-        storageRepository.getImageMetadataOrNull(AbsolutePathModel.UriStrModel(srcUriStr))
-            ?.toMetadataUnion()
+    override val messageTypeFromSendAction: MessageType
+        get() = MessageType.Image
 
     override val failureTypeMapper: ProcessingFailureTypeMapper
         get() = imageProcessingFailureTypeMapper
@@ -32,30 +25,30 @@ class SendImageMessageUseCase @Inject constructor(
 internal val imageProcessingFailureTypeMapper = ProcessingFailureTypeMapper(
     mapCacheCopyFailure = { copyFailureType ->
         when (copyFailureType) {
-            CopyStageFailureType.CopyFile -> MessageImageProcessingErrorStage.CopySrcToInternalCache
-            CopyStageFailureType.SaveFilenameToDb -> MessageImageProcessingErrorStage.SetInternalFilenameToDb
-            CopyStageFailureType.UpdateDbIllegalState -> MessageImageProcessingErrorStage.IllegalState
+            CopyStageFailureType.CopyFile -> ImageMessageProcessingErrorStage.CopySrcToInternalCache
+            CopyStageFailureType.SaveFilenameToDb -> ImageMessageProcessingErrorStage.SetInternalFilenameToDb
+            CopyStageFailureType.UpdateDbIllegalState -> ImageMessageProcessingErrorStage.IllegalState
         }
     },
     mapSharedStorageCopyFailure = { copyFailureType ->
         when (copyFailureType) {
-            CopyStageFailureType.CopyFile -> MessageImageProcessingErrorStage.CopyToSharedStorage
-            CopyStageFailureType.SaveFilenameToDb -> MessageImageProcessingErrorStage.SetRawFilenameToDb
-            CopyStageFailureType.UpdateDbIllegalState -> MessageImageProcessingErrorStage.IllegalState
+            CopyStageFailureType.CopyFile -> ImageMessageProcessingErrorStage.CopyToSharedStorage
+            CopyStageFailureType.SaveFilenameToDb -> ImageMessageProcessingErrorStage.SetRawFilenameToDb
+            CopyStageFailureType.UpdateDbIllegalState -> ImageMessageProcessingErrorStage.IllegalState
         }
     },
     mapThumbnailFailure = { thumbnailFailureType ->
         when (thumbnailFailureType) {
-            GenerateThumbnailStageFailureType.Generate -> MessageImageProcessingErrorStage.GenerateThumbnail
-            GenerateThumbnailStageFailureType.SaveFile -> MessageImageProcessingErrorStage.SaveThumbnailFile
-            GenerateThumbnailStageFailureType.SetFilenameToDb -> MessageImageProcessingErrorStage.SetThumbnailFilenameToDb
-            GenerateThumbnailStageFailureType.UpdateDbIllegalState -> MessageImageProcessingErrorStage.IllegalState
+            GenerateThumbnailStageFailureType.Generate -> ImageMessageProcessingErrorStage.GenerateThumbnail
+            GenerateThumbnailStageFailureType.SaveFile -> ImageMessageProcessingErrorStage.SaveThumbnailFile
+            GenerateThumbnailStageFailureType.SetFilenameToDb -> ImageMessageProcessingErrorStage.SetThumbnailFilenameToDb
+            GenerateThumbnailStageFailureType.UpdateDbIllegalState -> ImageMessageProcessingErrorStage.IllegalState
         }
     },
     mapFinishTaskFailure = { finishFailureType ->
         when (finishFailureType) {
-            FinishProcessingStageFailureType.DeleteCacheFile -> MessageImageProcessingErrorStage.DeleteInternalFileCache
-            FinishProcessingStageFailureType.DeleteTaskStateFromDb -> MessageImageProcessingErrorStage.DeleteTaskStateFromDb
+            FinishProcessingStageFailureType.DeleteCacheFile -> ImageMessageProcessingErrorStage.DeleteInternalFileCache
+            FinishProcessingStageFailureType.DeleteTaskStateFromDb -> ImageMessageProcessingErrorStage.DeleteTaskStateFromDb
         }
     }
 )

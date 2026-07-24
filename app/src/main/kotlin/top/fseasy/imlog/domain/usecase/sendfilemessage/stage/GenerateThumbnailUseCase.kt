@@ -49,8 +49,8 @@ class GenerateThumbnailUseCase @Inject constructor(
     ): GenerateThumbnailStageResult {
 
         val generateFunction = when (messageType) {
-            MessageType.AUDIO -> ::generateImageThumbnail
-            MessageType.VIDEO -> ::generateVideoThumbnail
+            MessageType.Audio -> ::generateImageThumbnail
+            MessageType.Video -> ::generateVideoThumbnail
             else -> return GenerateThumbnailStageResult.Skip
         }
         val thumbnailBytes = try {
