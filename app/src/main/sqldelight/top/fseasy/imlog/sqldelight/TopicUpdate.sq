@@ -30,7 +30,7 @@ AND EXISTS (
 );
 
 updateTopicPersonalBackground:
-UPDATE topic_personal_state
+UPDATE topic_personal_preference
 SET
     background = :newBackground,
     attributes_updated_at = :updatedAt
@@ -38,7 +38,7 @@ WHERE topic_id = :topicId
 AND user_id = :triggerUserId;
 
 updateTopicPersonalArchived:
-UPDATE topic_personal_state
+UPDATE topic_personal_preference
 SET
     archived = :newArchived,
     attributes_updated_at = :updatedAt
@@ -46,7 +46,7 @@ WHERE topic_id = :topicId
 AND user_id = :triggerUserId;
 
 updateTopicPersonalPinned:
-UPDATE topic_personal_state
+UPDATE topic_personal_preference
 SET
     pinned = :newPinned,
     attributes_updated_at = :updatedAt

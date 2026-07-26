@@ -17,14 +17,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.domain.model.TopicWithPersonalState
+import top.fseasy.imlog.domain.model.TopicWithPersonalPreference
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.TopicRepository
 import javax.inject.Inject
 
 data class TopicSettingsUiState(
     val isLoading: Boolean = true,
-    val topicWithPersonalState: TopicWithPersonalState? = null,
+    val topicWithPersonalState: TopicWithPersonalPreference? = null,
 )
 
 @HiltViewModel

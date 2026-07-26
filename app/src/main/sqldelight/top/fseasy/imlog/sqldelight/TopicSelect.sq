@@ -11,7 +11,7 @@ SELECT * FROM topic_members WHERE topic_id = ?;
 
 -- topic_personal_state queries
 getPersonalState:
-SELECT * FROM topic_personal_state WHERE topic_id = :topic_id AND user_id = :user_id;
+SELECT * FROM topic_personal_preference WHERE topic_id = :topic_id AND user_id = :user_id;
 
 --|||||||||||||||||||
 -- Business Select
@@ -23,24 +23,24 @@ SELECT
     t.id,
     t.name,
     t.avatar_model,
-    t.description,
-    -- 个性化状态（可能为 NULL）
     COALESCE(tps.pinned, 0) AS pinned,
-    tps.last_read_at,
-    tlm.last_message_at,
-    tlm.last_message_snippet,
     CASE
-        WHEN tlm.last_message_at IS NULL THEN 0  -- 没有消息，不算未读
-        WHEN tps.last_read_at IS NULL THEN 1  -- 从未读过
-        WHEN tps.last_read_at < tlm.last_message_at THEN 1  -- 有新消息
+        WHEN tms.latest_message_at IS NULL THEN 0  -- 没有消息，不算未读
+        WHEN tms.last_read_at IS NULL THEN 1  -- 从未读过
+        WHEN tms.last_read_at < tms.latest_message_at THEN 1  -- 有新消息
         ELSE 0
     END AS has_unread,
     -- 1. if has message => last_message_at 2. no message => created_at (not updated_at)
-    COALESCE(tlm.last_message_at, t.created_at) AS topic_message_update_at
+    COALESCE(tms.latest_message_at, t.created_at) AS topic_message_update_at,
+    -- Following 3 fields are both for message-preview field
+    tms.draft,
+    tms.latest_message_preview,
+    t.description
 FROM topics t
 INNER JOIN topic_members tm ON t.id = tm.topic_id
-LEFT JOIN topic_personal_state tps ON t.id = tps.topic_id AND tps.user_id = :current_user_id
-LEFT JOIN topic_last_message tlm ON t.id = tlm.topic_id  -- LEFT JOIN 以应对没有消息的新主题
+-- LEFT JOIN 以应对没有消息的新主题
+LEFT JOIN topic_personal_preference tps ON t.id = tps.topic_id AND tps.user_id = :current_user_id
+LEFT JOIN topic_message_state tms ON t.id = tms.topic_id AND tms.user_id = :current_user_id
 WHERE
     tm.user_id = :current_user_id
     -- 过滤掉归档的 Topic
@@ -53,10 +53,10 @@ ORDER BY
     topic_message_update_at DESC,
     has_unread DESC;
 
-getTopicWithPersonalState:
-SELECT t.*, p.archived, p.pinned, p.background, p.last_read_at
+getTopicWithPersonalPreference:
+SELECT t.*, p.archived, p.pinned, p.background
 FROM topics t
-LEFT JOIN topic_personal_state p ON t.id = p.topic_id
+LEFT JOIN topic_personal_preference p ON t.id = p.topic_id
 WHERE
 t.id = :topic_id
 AND p.user_id = :user_id;
@@ -68,3 +68,10 @@ SELECT COUNT(DISTINCT t.id)
 FROM topics t
 INNER JOIN topic_members m ON t.id = m.topic_id
 WHERE m.user_id = :userId;
+
+getMessageDraft:
+SELECT draft
+FROM topic_message_state
+WHERE
+    topic_id = :topicId
+    AND user_id = :userId;

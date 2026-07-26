@@ -41,12 +41,16 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import top.fseasy.imlog.domain.model.VoiceRecordingState
 import top.fseasy.imlog.features.home.ContentUiState
 import top.fseasy.imlog.R
+import top.fseasy.imlog.features.home.MessageComposerViewModel
+import top.fseasy.imlog.features.home.VoiceRecordingUiState
 import java.io.File
 
 sealed interface ComposerAction {
@@ -54,14 +58,48 @@ sealed interface ComposerAction {
     data class SendImage(val uri: Uri) : ComposerAction
     data class SendVideo(val uri: Uri) : ComposerAction
     data class SendAudio(val uri: Uri) : ComposerAction
-    data class SendVoice(val file: File) : ComposerAction
-    data class SetVoiceRecordingState(val state: VoiceRecordingState) : ComposerAction
+    sealed interface VoiceRecorderAction : ComposerAction {
+        data object StartRecording : VoiceRecorderAction
+        data object CancelRecording : VoiceRecorderAction
+        data object StopRecording : VoiceRecorderAction
+    }
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun MessageComposer(
-    uiState: ContentUiState,
+    modifier: Modifier = Modifier,
+    viewModel: MessageComposerViewModel = hiltViewModel(),
+) {
+    val recorderState by viewModel.voiceRecordingUiState.collectAsStateWithLifecycle()
+
+    MessageComposerContent(
+        recorderState = recorderState,
+        onAction = { action: ComposerAction ->
+            when (action) {
+                is ComposerAction.SendText -> viewModel.sendTextMessage(action.content)
+                is ComposerAction.SendImage -> viewModel.sendImageMessage(action.uri)
+                is ComposerAction.SendVideo -> viewModel.sendVideoMessage(action.uri)
+                is ComposerAction.SendAudio -> viewModel.sendAudioMessage(action.uri)
+                is ComposerAction.VoiceRecorderAction.StartRecording ->
+                    viewModel.startVoiceRecording()
+
+                is ComposerAction.VoiceRecorderAction.CancelRecording ->
+                    viewModel.cancelVoiceRecording()
+
+                is ComposerAction.VoiceRecorderAction.StopRecording ->
+                    viewModel.stopVoiceRecordingAndSendVoiceMessage()
+            }
+        },
+        modifier = modifier
+    )
+}
+
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+fun MessageComposerContent(
+    recorderState: VoiceRecordingUiState,
     onAction: (ComposerAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {

@@ -1,8 +1,6 @@
 package top.fseasy.imlog.domain.model
 
-import android.net.Uri
 import kotlinx.serialization.Serializable
-import kotlin.String
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -41,31 +39,31 @@ value class MessageId(val value: String) {
 }
 
 
-data class MessageFileProcessState(
-    val messageId: MessageId,
-    val status: MessageFileProcessingStatus,
-    val processingStage: MessageFileProcessingStage,
-    val errorType: MessageFileProcessingErrorType,
-    val errorUserRetriable: Boolean,
-    val srcUri: UriStr,
-    val internalCachedFilename: String,
+@Serializable
+data class ReplyToMessage(
+    val id: MessageId,
+    val senderId: UserId,
+    val senderNameSnapshot: String,
+    val type: MessageType,
+    val textSnapshot: String,
+    val messageCreatedAt: Long,
+    val thumbnailName: String?,
 )
 
 /**
  * Time/Duration all are in MS.
- * @param fileProcessStatus: null -> no file, or processing succeeded.
  */
 data class Message(
     val id: MessageId,
     val topicId: TopicId,
     val senderId: UserId,
-    val type: MessageType?, // null -> invalid
-    val content: String? = null,
+    val type: MessageType,
+    val replyToMessage: ReplyToMessage? = null,
+    val text: String? = null,
     // == media file fields
-    val originalFileUri: Uri? = null,
-    val fileProcessStatus: MessageFileProcessingStatus? = null,
+    val originalFileUri: UriStr? = null,
     val originalFilename: String? = null,
-    val filename: String? = null,
+    val storedFilename: String? = null,
     val fileSize: Long? = null,
     val mimeType: String? = null,
     val duration: Long? = null, // in MS
@@ -77,22 +75,45 @@ data class Message(
     val attributesUpdatedAt: Long = createdAt,
 )
 
+/**
+ * For message preview
+ */
+@Serializable
+data class MessagePreview(
+    val type: MessageType,
+    val textSnapshot: String? = null,
+    val senderNameSnapshot: String? = null, // If null, = currentUser in business logic
+)
+
+/**
+ * For composer draft
+ */
+@Serializable
+data class MessageDraft(
+    val type: MessageType,
+    val replyToMessage: ReplyToMessage? = null,
+    val text: String? = null,
+    val filePointer: String? = null, // The actual type will be inferred by the type
+)
+
 object MessageFactory {
     fun createText(
         topicId: TopicId,
         senderId: UserId,
-        content: String,
+        text: String,
         timestampMs: Long,
+        replyToMessage: ReplyToMessage? = null,
     ): Message {
-        require(content.isNotBlank()) { "Failed to create empty Text: $topicId, $senderId" }
+        require(text.isNotBlank()) { "Failed to create empty Text: $topicId, $senderId" }
         return Message(
             id = MessageId.random(),
             topicId = topicId,
             senderId = senderId,
             type = MessageType.Text,
-            content = content,
+            text = text,
             createdAt = timestampMs,
-            attributesUpdatedAt = timestampMs
+            attributesUpdatedAt = timestampMs,
+            replyToMessage = replyToMessage,
         )
     }
 }

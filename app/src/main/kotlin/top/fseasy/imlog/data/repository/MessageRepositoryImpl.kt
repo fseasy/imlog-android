@@ -10,6 +10,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import timber.log.Timber
+import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.data.util.retryOnAnyException
 import top.fseasy.imlog.domain.model.FileMetadataUnion
 import top.fseasy.imlog.domain.model.Message
@@ -19,7 +21,6 @@ import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Statistics
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.model.toMessageMediaProcessStatus
 import top.fseasy.imlog.domain.repository.MessageFileSource
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
@@ -46,7 +47,7 @@ class MessageRepositoryImpl @Inject constructor(
     ): Flow<List<Message>> = database.messageQueries.getMessagesByTopic(topicId.value)
         .asFlow()
         .mapToList(dispatcher)
-        .map { rows -> rows.map { it.toDomain(currentUserId) } }
+        .map { rows -> rows.mapNotNull { it.toDomain() } }
 
     override fun observeStatistics(senderId: UserId): Flow<Statistics> =
         database.messageStatQueries.statOneUserUsage(senderId.value)
@@ -187,12 +188,12 @@ class MessageRepositoryImpl @Inject constructor(
         topic_id = topicId.value,
         sender_id = senderId.value,
         type = type.value,
-        content = null,
+        text = null,
         created_at = timestampMs,
         mime_type = srcMetadata.mimeType,
         width = srcMetadata.width?.toLong(),
         height = srcMetadata.height?.toLong(),
-        duration = srcMetadata.duration,
+        duration = srcMetadata.duration?.inWholeMilliseconds,
         file_size = srcMetadata.fileSize,
         original_filename = srcMetadata.displayName,
         raw_filename = null,
@@ -201,18 +202,23 @@ class MessageRepositoryImpl @Inject constructor(
         is_deleted = 0
     )
 
-    private fun GetMessagesByTopicRowEntity.toDomain(currentUserId: UserId): Message {
+    private fun GetMessagesByTopicRowEntity.toDomain(): Message? {
+        val messageType = MessageType.fromValue(type) ?: run {
+            Timber.w("Get invalid message-type: $type from db, failed to parse")
+            return null
+        }
         return Message(
             id = MessageId(id),
             topicId = TopicId(topic_id),
             senderId = UserId(sender_id),
-            type = MessageType.fromValue(type),
-            content = content,
+            type = messageType,
+            replyToMessage = reply_to_message,
+            text = text,
             // media file fields
-            originalFileUri = src_uri?.toUri(),
-            fileProcessStatus = status?.toMessageMediaProcessStatus(),
+            originalFileUri = src_uri?.toUri()
+                ?.toUriStr(),
             originalFilename = original_filename,
-            filename = raw_filename,
+            storedFilename = raw_filename,
             fileSize = file_size,
             mimeType = mime_type,
             duration = duration,
@@ -222,8 +228,7 @@ class MessageRepositoryImpl @Inject constructor(
             // - end of media file fields
             createdAt = created_at,
             attributesUpdatedAt = attributes_updated_at,
-
-            )
+        )
     }
 
     private fun Message.toEntity() = MessageEntity(
@@ -236,8 +241,8 @@ class MessageRepositoryImpl @Inject constructor(
          * 2. Domain -> Entity (set the null type to `__unknown__`)
          */
         type = type?.value ?: "__unknown__",
-        content = content,
-        raw_filename = filename,
+        text = content,
+        raw_filename = storedFilename,
         file_size = fileSize,
         duration = duration,
         thumbnail_filename = thumbnailName,

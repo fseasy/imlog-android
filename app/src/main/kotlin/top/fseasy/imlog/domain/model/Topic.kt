@@ -1,6 +1,5 @@
 package top.fseasy.imlog.domain.model;
 
-import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -41,11 +40,12 @@ data class HomeTopic(
     val id: TopicId,
     val name: String,
     val avatarModel: AvatarModel,
-    val description: String?,
     val isPinned: Boolean,
     val hasUnread: Boolean,
     val messageUpdatedAt: Long,
-    val lastMessageSnippet: String?,
+    val latestMessagePreview: MessagePreview?,
+    val draft: MessageDraft?,
+    val description: String?,
 )
 
 enum class TopicMemberRole(val value: String) {
@@ -54,10 +54,15 @@ enum class TopicMemberRole(val value: String) {
     companion object {
         private val valueMap = entries.associateBy { it.value }
         fun fromValue(value: String): TopicMemberRole? = valueMap[value]
+
+        /**
+         * Default is local logging => admin
+         */
+        val default: TopicMemberRole
+            get() = TopicMemberRole.Admin
     }
 }
 
-@Immutable
 data class TopicMember(
     val topicId: TopicId,
     val userId: UserId,
@@ -68,7 +73,6 @@ data class TopicMember(
     val isDeleted: Boolean,
 )
 
-@Immutable
 data class TopicPersonalState(
     val topicId: TopicId,
     val userId: UserId,
@@ -79,15 +83,14 @@ data class TopicPersonalState(
     val attributesUpdatedAt: Long = lastReadAt,
 )
 
+
 /**
  * A data to represent the join query result of Topic + TopicPersonalState.
  * nb: no default values as it should be init from the entity directly.
  */
-@Immutable
-data class TopicWithPersonalState(
+data class TopicWithPersonalPreference(
     val topic: Topic,
     val isArchived: Boolean,
     val isPinned: Boolean,
     val background: String?,
-    val lastReadAt: Long,
 )

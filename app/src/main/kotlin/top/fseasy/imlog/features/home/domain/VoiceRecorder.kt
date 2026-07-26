@@ -7,19 +7,18 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import timber.log.Timber
-import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.VoiceRecordingState
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * 封装语音录制全流程，提供响应式状态与计时。
  * [coroutineScope] 用于驱动内部计时器，建议传入 ViewModelScope 保证生命周期一致。
  */
-class VoiceRecorder(private val coroutineScope: CoroutineScope) {
+class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable {
 
     private val _state = MutableStateFlow(VoiceRecordingState.Idle)
     val state: StateFlow<VoiceRecordingState> = _state.asStateFlow()
@@ -44,88 +43,110 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) {
     }
 
     /**
-     * 开始录制。允许从 IDLE 或 STOPPED 状态开始。
+     * Support AutoClosable.
+     * It must be sync function!
+     * In most conditions, resource will be released as long as recorder is stopped/canceled.
+     * This is just for the edge condition. Sync cleanup should also be fast enough.
+     */
+    override fun close() = syncCleanup()
+
+    /**
+     * Start recording. do nothing if current state is already recording!
+     *
+     * Run in IO thread.
+     *
+     * @throws Exception
      */
     @OptIn(ExperimentalUuidApi::class)
-    fun start(context: Context, outputFile: File) {
-        // 允许从 IDLE 或 STOPPED 状态重新开始录音
+    suspend fun start(context: Context, outputFile: File) {
         if (_state.value == VoiceRecordingState.Recording) return
+        return withContext(Dispatchers.IO) {
+            // Reset.
+            syncCleanup()
+            currentFile = outputFile
 
-        // 重置状态
-        _elapsedMs.value = 0L
-        currentFile = outputFile
-
-        try {
-            mediaRecorder = createMediaRecorder(context, outputFile).apply {
-                prepare()
-                start()
+            try {
+                mediaRecorder = syncCreateMediaRecorder(context, outputFile).apply {
+                    prepare()
+                    start()
+                }
+                _state.update { VoiceRecordingState.Recording }
+                startTimeMs = System.currentTimeMillis()
+                startTimer()
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to start MediaRecorder")
+                syncCleanup()
+                throw e
             }
-            _state.value = VoiceRecordingState.Recording
-            startTimeMs = System.currentTimeMillis()
-            startTimer()
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to start MediaRecorder")
-            cleanup()
         }
     }
 
     /**
-     * 停止录制并返回音频文件；若录制尚未开始或已取消，返回 null。
+     * Stop recording.
+     *
+     * Run in IO threads.
+     *
+     * @return recording File if success
      */
-    fun stop(): File? {
+    suspend fun stop(): File? {
         if (_state.value != VoiceRecordingState.Recording) return null
-        return finishRecording(cancel = false)
+        return withContext(Dispatchers.IO) {
+            syncStopRecording()
+        }
     }
 
     /**
-     * 取消录制，删除临时文件，返回 null。
+     * Cancel recording.
+     *
+     * Run in IO threads.
      */
-    fun cancel() {
-        if (_state.value == VoiceRecordingState.Idle) return
-        finishRecording(cancel = true)
+    suspend fun cancel() = withContext(Dispatchers.IO) {
+        if (_state.value != VoiceRecordingState.Recording) {
+            syncCleanup()
+            return@withContext
+        }
+        syncCancelRecording()
     }
 
-    private fun finishRecording(cancel: Boolean): File? {
+    private fun syncCancelRecording() {
         stopTimer()
+        syncCleanup()
+    }
 
+    /**
+     * Will always release mediaRecoder!
+     */
+    private fun syncStopRecording(): File? {
+        stopTimer()
         val isStopSuccess = try {
-            mediaRecorder?.apply {
-                stop()
-                release()
-            }
+            mediaRecorder?.stop()
             true
-        } catch (e: RuntimeException) {
-            // 录音时间过短或设备异常时，stop() 可能会抛出异常
-            Timber.w(e, "MediaRecorder stop failed (possibly too short recording)")
-            false
         } catch (e: Exception) {
-            Timber.e(e, "Error releasing MediaRecorder")
+            // Can't throw CancellationException as it's in sync block
+            Timber.e(e, "MediaRecorder stop failed")
             false
-        } finally {
-            mediaRecorder = null
         }
 
-        val file = currentFile // currentFile had already been handled by the mediaRecoder.
-        currentFile = null
-
-        // 如果是取消录音，或者停止时发生异常，则清理文件并返回 null
-        if (cancel || !isStopSuccess) {
-            file?.delete()
-            _state.value = VoiceRecordingState.Idle
-            _elapsedMs.value = 0L
-            return null
+        if (isStopSuccess) {
+            // release mediaRecorder and set state to STOP
+            syncReleaseMediaRecorder()
+            _state.update { VoiceRecordingState.Stopped }
+            val resultFile = currentFile
+            currentFile = null // reset to null to avoid that clean up delete it.
+            return resultFile
         } else {
-            _state.value = VoiceRecordingState.Stopped
-            return file
+            // release all resource and reset state
+            syncCleanup()
+            return null
         }
     }
 
     private fun startTimer() {
-        stopTimer() // 开启前确保上一次的计时任务已关闭
+        stopTimer()
         timerJob = coroutineScope.launch {
             while (isActive) {
-                _elapsedMs.value = System.currentTimeMillis() - startTimeMs
-                delay(60.milliseconds) // 配合标准设备刷新率
+                _elapsedMs.update { System.currentTimeMillis() - startTimeMs }
+                delay(100.milliseconds)
             }
         }
     }
@@ -135,41 +156,47 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) {
         timerJob = null
     }
 
-    private fun createMediaRecorder(context: Context, outputFile: File): MediaRecorder {
+    private fun syncCreateMediaRecorder(context: Context, outputFile: File): MediaRecorder {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             MediaRecorder(context)
         } else {
-            @Suppress("DEPRECATION")
-            MediaRecorder()
+            @Suppress("DEPRECATION") MediaRecorder()
         }.apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(OUTPUT_AUDIO_FORMAT)
             setAudioEncoder(OUTPUT_AUDIO_ENCODER)
-            // 配置音频参数以保证音质和跨设备兼容性
-            setAudioSamplingRate(44100) // 采样率，CD音质
-            setAudioEncodingBitRate(96000) // 比特率，128kbps 是质量和体积的好平衡点
+            setAudioSamplingRate(44100)
+            setAudioEncodingBitRate(96000)
             setOutputFile(outputFile.absolutePath)
         }
     }
 
-    private fun cleanup() {
+    private fun syncCleanup() {
         stopTimer()
+        syncReleaseMediaRecorder()
         try {
-            mediaRecorder?.release()
-        } catch (e: Exception) {
-            Timber.e(e, "Error releasing media recorder during cleanup")
+            val deleted = currentFile?.delete() ?: true
+            if (!deleted) {
+                Timber.w("Failed to delete temp recording file: %s", currentFile?.absolutePath)
+            }
+        } catch (e: SecurityException) {
+            Timber.e(e, "Failed to delete temp recording file")
+        } finally {
+            currentFile = null
         }
-        mediaRecorder = null
-        currentFile?.delete()
-        currentFile = null
-        _state.value = VoiceRecordingState.Idle
+        _state.update { VoiceRecordingState.Idle }
         _elapsedMs.value = 0L
     }
 
-    /**
-     * 释放资源，可在宿主 (如 ViewModel) 的 onCleared 中调用
-     */
-    fun release() {
-        cleanup()
+    private fun syncReleaseMediaRecorder() {
+        try {
+            mediaRecorder?.release()
+        } catch (e: Exception) {
+            Timber.w(e, "MediaRecorder get exception")
+            // here can't throw CancellationException as it's sync block
+        } finally {
+            mediaRecorder = null
+        }
     }
+
 }

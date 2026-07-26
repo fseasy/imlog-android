@@ -43,19 +43,13 @@ sealed interface TimelineAction {
     data class CopyMessage(val message: Message) : TimelineAction
 }
 
-
 @Composable
 fun TimelineScreen(
-    topicId: TopicId,
     onBack: () -> Unit,
     onSettingsClick: (TopicId) -> Unit,
     viewModel: TimelineViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.contentUiState.collectAsState()
-
-    LaunchedEffect(topicId) {
-        viewModel.loadTopic(topicId)
-    }
 
     TimelineContent(
         uiState = uiState, onTimelineAction = { action: TimelineAction ->
@@ -138,26 +132,26 @@ fun TimelineContent(
 }
 
 
-@Composable
-fun FullScreenImage(uri: String) {
-    Dialog(
-        onDismissRequest = { }, properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .clickable { }, contentAlignment = Alignment.Center
-        ) {
-            AsyncImage(
-                model = uri,
-                contentDescription = "Full screen image",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
-        }
-    }
-}
+//@Composable
+//fun FullScreenImage(uri: String) {
+//    Dialog(
+//        onDismissRequest = { }, properties = DialogProperties(usePlatformDefaultWidth = false)
+//    ) {
+//        Box(
+//            modifier = Modifier
+//                .fillMaxSize()
+//                .background(Color.Black)
+//                .clickable { }, contentAlignment = Alignment.Center
+//        ) {
+//            AsyncImage(
+//                model = uri,
+//                contentDescription = "Full screen image",
+//                modifier = Modifier.fillMaxSize(),
+//                contentScale = ContentScale.Fit
+//            )
+//        }
+//    }
+//}
 //
 //class TimelinePreviewParameterProvider : PreviewParameterProvider<TimelineUiState> {
 //    override val values = sequenceOf(

@@ -3,6 +3,7 @@ package top.fseasy.imlog.domain.repository
 import kotlinx.coroutines.flow.Flow
 import top.fseasy.imlog.domain.model.FileMetadataUnion
 import top.fseasy.imlog.domain.model.Message
+import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
@@ -32,8 +33,11 @@ interface MessageRepository {
     fun observeStatistics(senderId: UserId): Flow<Statistics>
 
 
+    suspend fun saveTextMessage(message: Message): Unit
+    suspend fun delete(messageId: MessageId): Boolean
+
     // ==============
-    // SYNC api for upper compose. Don't use directly!
+    // File Message related Apis.
     // ==============
     /***
      * SYNC create an initial file message (without raw-file and thumbnail), insert to db and
@@ -54,13 +58,6 @@ interface MessageRepository {
         fileSource: MessageFileSource,
         taskStartTime: Long,
     )
-
-    // ================
-    // Run in IO threads Apis
-    // ================
-
-    suspend fun saveTextMessage(message: Message): Unit
-    suspend fun delete(messageId: MessageId): Boolean
 
     /**
      * run IN IO.

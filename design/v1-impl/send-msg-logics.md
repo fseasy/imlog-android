@@ -242,3 +242,162 @@ https://developer.android.com/develop/background-work/background-tasks/persisten
 WorkManager 2.7.0 introduced the concept of expedited work. This allows WorkManager to execute important work while giving the system better control over access to resources.
 
 A potential use case for expedited work might be within a chat app when the user wants to send a message or an attached image. Similarly, an app that handles a payment or subscription flow might also want to use expedited work. This is because those tasks are important to the user, execute quickly in the background, need to begin immediately, and should continue to execute even if the user closes the app
+
+## 写消息的时候，内容怎么暂存？
+
+对于 IM（即时通讯）应用，文本框里的消息文本不能当成普通的输入框处理，它本质上是“消息草稿（Draft）”。
+
+1. 基础版（中小项目/快速实现）：**ViewModel + `SavedStateHandle`**
+如果你的 IM 只要求：**聊天时切去别的 App 接个电话，或者应用退后台被系统杀死后返回，文字还在**。
+
+*   **实现方式**：使用 ViewModel + `SavedStateHandle`（绑定当前的 `topicId` 或 `chatId`）。
+*   **优点**：实现简单，自动抗进程死亡。
+*   **缺点**：如果用户**主动点击返回键退出这个聊天界面**，ViewModel 销毁，未发送的草稿就丢失了。
+
+2. 专业版（主流 IM 标准做法）：**ViewModel + 本地持久化 (Room / DataStore / MMKV)**
+真正的 IM 应用（如微信），当你输入到一半**退出聊天界面**回到会话列表时，列表项上会显示标红的 `[草稿] 你好...`。
+
+*   **实现方式**：
+    1. 用户在输入框打字时，ViewModel 监听文本变化（加上 Debounce 防抖，比如用户停止打字 500ms 后）。
+    2. 将文本作为“草稿”异步保存到本地数据库（如 Room）或 MMKV / DataStore 中，以 `topicId` 为 Key。
+    3. 再次进入该聊天框时， ViewModel 从数据库/DataStore 中读取该 `topicId` 的草稿充填输入框。
+    4. 点击发送后，清空本地数据库中的草稿。
+*   **优点**：
+    *   退出聊天界面、甚至主动杀掉 App / 关机重启，草稿都不会丢。
+    *   可以在**会话列表**（Chat List）上展示 `[草稿]` 提示。
+
+
+
+代码实践示范（专业 IM 架构示例）
+
+ViewModel 应该这样写：
+
+```kotlin
+@HiltViewModel
+class TimelineViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val draftRepository: DraftRepository, // 负责本地草稿读写 (Room / DataStore)
+    // ... 其他 UseCase
+) : ViewModel() {
+
+    // 1. 获取当前聊天的 topicId
+    private val route: MainScreen.TopicTimeline = savedStateHandle.toRoute()
+    val topicId: TopicId = route.topicId
+
+    // 2. 消息输入框的状态，优先从 SavedStateHandle 读取
+    val messageInputText: StateFlow<String> = savedStateHandle.getStateFlow("input_text", "")
+
+    init {
+        // 3. 进入页面时，从本地数据库/DataStore 加载历史草稿（如果有）
+        viewModelScope.launch {
+            val savedDraft = draftRepository.getDraft(topicId)
+            if (!savedDraft.isNullOrEmpty() && messageInputText.value.isEmpty()) {
+                savedStateHandle["input_text"] = savedDraft
+            }
+        }
+
+        // 4. 监听文本变化，自动防抖保存草稿到本地数据库
+        messageInputText
+            .debounce(500) // 用户停止打字 500ms 后才落盘，避免频繁 I/O
+            .onEach { text ->
+                draftRepository.saveDraft(topicId, text)
+            }
+            .launchIn(viewModelScope)
+    }
+
+    // UI 调用这个函数更新文本
+    fun onInputTextChanged(newText: String) {
+        savedStateHandle["input_text"] = newText
+    }
+
+    // 点击发送消息
+    fun sendMessage() {
+        val textToSend = messageInputText.value
+        if (textToSend.isBlank()) return
+
+        viewModelScope.launch {
+            // 发送消息...
+            sendMessgeUseCase(topicId, textToSend)
+            
+            // 发送成功后清空输入框，并删除本地草稿
+            savedStateHandle["input_text"] = ""
+            draftRepository.clearDraft(topicId)
+        }
+    }
+}
+```
+
+
+## Topic 的最后一条消息数据，怎么更新
+
+`last_message`（最新消息）本质上是 `messages` 表中**最新一条记录的快照**。它的更新逻辑必须在 **Repository 层（数据仓库层）** 统一管辖。
+
+以下是 **4 个必须更新 `last_message` 的时机**：
+
+1. 收到/发送新消息时（最常见）
+无论收到 WebSocket 推送，还是用户点击发送消息成功：
+* **动作**：将新消息的`时间`和`格式化后的摘要`写进 `topic_last_message` 表。
+
+> 💡 **摘要（Snippet）生成规则**：
+> * 文本消息 $\rightarrow$ 直接截取文本（如 `今天开会`）
+> * 图片消息 $\rightarrow$ 存 `[图片]`
+> * 语音消息 $\rightarrow$ 存 `[语音]` 或 `[语音 15"]`
+> * 撤回消息 $\rightarrow$ 存 `对方撤回了一条消息`
+
+2. 用户撤回/修改消息时
+* 如果被撤回/修改的消息**恰好是最后一条消息**：
+* **动作**：更新 `last_message_snippet` 为 `"[消息已撤回]"` 或更新后的文本。
+
+3. 用户删除消息时（边界坑点！）
+* 如果用户删除了聊天记录中的**最后一条消息**：
+* **动作**：你需要去 `messages` 表里重新 `SELECT * FROM messages WHERE topic_id = :id ORDER BY timestamp DESC LIMIT 1` 查询**倒数第二条消息**，并用它更新 `topic_last_message`！
+* 如果消息全被清空了，把 `last_message_at` 和 `last_message_snippet` 设为 `NULL`。
+
+4. 首次登录/拉取历史漫游消息时
+* 从服务器批量同步完消息后，找到每个 Topic 最新的一条消息，批量更新/插入 `topic_last_message` 表。
+
+---
+
+### 架构层面的代码实现示范 (Repository 层)
+
+在 Android 中，建议在 `MessageRepository` 中写一个私有辅助函数，专门用来同步更新 `topic_last_message`：
+
+```kotlin
+class MessageRepository @Inject constructor(
+    private val messageDao: MessageDao,
+    private val topicLastMessageDao: TopicLastMessageDao
+) {
+    // 无论是收到新消息，还是发送新消息，都调用这个函数
+    suspend fun saveIncomingOrSentMessage(message: Message) {
+        // 1. 存入真实的 messages 表
+        messageDao.insert(message)
+
+        // 2. 自动生成摘要
+        val snippet = when (message.type) {
+            MessageType.TEXT -> message.content
+            MessageType.IMAGE -> "[图片]"
+            MessageType.AUDIO -> "[语音 ${message.duration}\"]"
+            MessageType.FILE -> "[文件] ${message.fileName}"
+        }
+
+        // 3. 同步更新 topic_last_message 表（使用 UPSERT：有就更新，没就插入）
+        topicLastMessageDao.upsertLastMessage(
+            topicId = message.topicId,
+            lastMessageAt = message.timestamp,
+            lastMessageSnippet = snippet
+        )
+    }
+}
+```
+
+总结流程图
+
+```text
+ 用户打字/选图 ──> 防抖(Debounce) ──> 更新 draft_json & draft_snippet
+                                            │
+ 发送消息按钮 ──> 清空草稿(draft=null) ───┼─> 写入 messages 表
+                                            │
+                                            └─> 更新 last_message_snippet 
+                                                （会话列表收到通知，自动刷新列表展示）
+```
+

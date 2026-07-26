@@ -58,7 +58,6 @@ fun NavGraphBuilder.mainGraph(
         composable<MainScreen.TopicTimeline> { backStackEntry ->
             val route: MainScreen.TopicTimeline = backStackEntry.toRoute()
             TimelineScreen(
-                topicId = route.topicId,
                 onBack = { navController.popBackStack() },
                 onSettingsClick = { topicId ->
                     navController.navigate(MainScreen.TopicSettings(topicId))
