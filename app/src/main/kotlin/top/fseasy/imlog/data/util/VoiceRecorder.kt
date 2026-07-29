@@ -1,13 +1,19 @@
-package top.fseasy.imlog.features.home.domain
+package top.fseasy.imlog.data.util
 
 import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.VoiceRecordingState
 import java.io.File
@@ -160,7 +166,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             MediaRecorder(context)
         } else {
-            @Suppress("DEPRECATION") MediaRecorder()
+            @Suppress("DEPRECATION") (MediaRecorder())
         }.apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(OUTPUT_AUDIO_FORMAT)

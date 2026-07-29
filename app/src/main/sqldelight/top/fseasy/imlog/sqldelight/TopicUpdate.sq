@@ -52,3 +52,10 @@ SET
     attributes_updated_at = :updatedAt
 WHERE topic_id = :topicId
 AND user_id = :triggerUserId;
+
+updateTopicMessageDraft:
+UPDATE topic_message_state
+SET
+    draft = :newDraft
+WHERE topic_id = :topicId
+AND user_id = :triggerUserId;

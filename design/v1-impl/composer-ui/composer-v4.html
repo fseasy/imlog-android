@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>零闪烁 IM Composer 方案</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: #f4f5f7;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .preview-card {
+            width: 100%;
+            max-width: 480px;
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        .title {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        /* ================= 首行 Composer 容器 ================= */
+        .composer-row {
+            display: flex;
+            align-items: flex-end; /* 底部对齐 */
+            gap: 8px;
+            width: 100%;
+            position: relative;
+        }
+
+        /* 1. 文本输入框容器（固定左锚点，向右平滑延伸） */
+        .input-container {
+            flex: 1; /* 初始占据剩余空间 */
+            background: #f0f2f5;
+            border-radius: 20px;
+            padding: 9px 14px;
+            display: flex;
+            align-items: center;
+            min-height: 40px;
+            /* 关键：CSS 平滑过渡，消除抖动 */
+            transition: flex 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s;
+        }
+
+        .input-container:focus-within {
+            background: #ffffff;
+            box-shadow: 0 0 0 2px #4A68FF;
+        }
+
+        .text-input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 15px;
+            color: #222;
+            resize: none;
+            height: 22px;
+            max-height: 100px;
+            line-height: 22px;
+            padding: 0;
+            user-select: text;
+        }
+
+        /* 2. 语音大胶囊按钮（位于中间，可平滑淡出隐藏） */
+        .btn-voice-large {
+            width: 30%; /* 约占 1/3 宽度 */
+            height: 40px;
+            background: #4A68FF;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(74, 104, 255, 0.2);
+            
+            /* 平滑隐藏动画 */
+            opacity: 1;
+            transform: scale(1);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-voice-large:active {
+            transform: scale(0.95);
+        }
+
+        /* 输入态时，语音胶囊的隐藏样式 */
+        .btn-voice-large.is-hidden {
+            width: 0;
+            opacity: 0;
+            padding: 0;
+            margin: 0;
+            transform: scale(0.8);
+            pointer-events: none;
+        }
+
+        /* 3. 最右侧槽位（固定 36px 宽，文件与发送按钮在此 1:1 原地替换） */
+        .right-action-slot {
+            width: 36px;
+            height: 40px;
+            position: relative;
+            flex-shrink: 0;
+            display: flex;
+            align-items: flex-end; /* 底部对齐 */
+        }
+
+        /* 最右侧图标通用样式 */
+        .slot-btn {
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: absolute;
+            bottom: 2px; /* 底部对齐微调 */
+            left: 0;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        /* 文件按钮（初始展示） */
+        .btn-file {
+            background: transparent;
+            color: #666;
+            opacity: 1;
+            transform: scale(1);
+        }
+        .btn-file:active { background: #eee; }
+
+        /* 发送按钮（默认隐去） */
+        .btn-send-small {
+            background: #4A68FF;
+            color: white;
+            box-shadow: 0 2px 8px rgba(74, 104, 255, 0.3);
+            opacity: 0;
+            transform: scale(0.6) rotate(-45deg);
+            pointer-events: none;
+        }
+
+        /* 输入态时：文件按钮隐去，发送按钮出现 */
+        .state-typing .btn-file {
+            opacity: 0;
+            transform: scale(0.6);
+            pointer-events: none;
+        }
+
+        .state-typing .btn-send-small {
+            opacity: 1;
+            transform: scale(1) rotate(0deg);
+            pointer-events: auto;
+        }
+
+        /* ================= 模式 2：单点独立录制栏 ================= */
+        .voice-single-bar {
+            display: none;
+            width: 100%;
+            height: 40px;
+            background: #fff0f0;
+            border-radius: 20px;
+            padding: 0 8px 0 14px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .recording-timer {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #ff3b30;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .dot-blink {
+            width: 8px;
+            height: 8px;
+            background-color: #ff3b30;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
+
+        .icon-btn {
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+        }
+
+        .toast {
+            margin-top: 20px;
+            background: #333;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<div class="preview-card">
+    <div class="title">【零闪烁架构】输入框左侧锚定不动 -> 向右延伸 -> 最右侧原地替换</div>
+
+    <!-- 默认模式 / 输入模式 -->
+    <div class="composer-row" id="normalComposer">
+
+        <!-- 1. 文本输入框 (锚定最左侧) -->
+        <div class="input-container">
+            <textarea class="text-input" id="textInput" placeholder="输入内容..." rows="1"></textarea>
+        </div>
+
+        <!-- 2. 语音大胶囊按钮 (位于中间，平滑收缩) -->
+        <button class="btn-voice-large" id="btnVoice">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            <span>语音</span>
+        </button>
+
+        <!-- 3. 最右侧槽位：文件与发送按钮在此 1:1 原地淡入淡出替换 -->
+        <div class="right-action-slot">
+            <button class="slot-btn btn-file" id="btnFile" title="发送文件">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+
+            <button class="slot-btn btn-send-small" id="btnSend" title="发送">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- 模式 2：单点独立录制栏 -->
+    <div class="voice-single-bar" id="voiceSingleBar">
+        <button class="icon-btn" id="btnCancelSingle" style="color:#ff3b30;" title="取消/删除">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+
+        <div class="recording-timer">
+            <div class="dot-blink"></div>
+            <span>00:03</span>
+        </div>
+
+        <div style="display:flex; gap:8px;">
+            <button class="icon-btn" style="color:#ff3b30; width:32px; height:32px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            </button>
+            <button class="icon-btn" id="btnSendVoiceSingle" style="background:#4A68FF; color:white; width:32px; height:32px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast">提示信息</div>
+
+<script>
+    const textInput = document.getElementById('textInput');
+    const btnFile = document.getElementById('btnFile');
+    const btnVoice = document.getElementById('btnVoice');
+    const btnSend = document.getElementById('btnSend');
+    const normalComposer = document.getElementById('normalComposer');
+    const voiceSingleBar = document.getElementById('voiceSingleBar');
+    const toast = document.getElementById('toast');
+
+    let isLongPress = false;
+    let longPressTimer = null;
+
+    function showToast(msg) {
+        toast.innerText = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 1500);
+    }
+
+    // 聚焦 / 打字：触发【输入态】
+    textInput.addEventListener('focus', switchToTextState);
+    textInput.addEventListener('input', () => {
+        textInput.style.height = 'auto';
+        textInput.style.height = Math.min(textInput.scrollHeight, 100) + 'px';
+        switchToTextState();
+    });
+
+    // 失焦：当文本为空时，退回【初始态】
+    textInput.addEventListener('blur', () => {
+        if (textInput.value.trim() === '') {
+            switchToInitialState();
+        }
+    });
+
+    // 切换到【输入态】：中间语音胶囊平滑收缩，最右侧文件图标原地替换为发送图标
+    function switchToTextState() {
+        btnVoice.classList.add('is-hidden');
+        normalComposer.classList.add('state-typing');
+    }
+
+    // 切换到【初始态】：恢复中间语音胶囊，最右侧变回文件图标
+    function switchToInitialState() {
+        btnVoice.classList.remove('is-hidden');
+        normalComposer.classList.remove('state-typing');
+        textInput.style.height = '22px';
+    }
+
+    // 点击小发送按钮
+    btnSend.addEventListener('click', () => {
+        showToast('发送文本：' + textInput.value);
+        textInput.value = '';
+        switchToInitialState();
+    });
+
+    // 语音大按钮：单点 / 长按识别
+    btnVoice.addEventListener('mousedown', startPress);
+    btnVoice.addEventListener('touchstart', startPress);
+    btnVoice.addEventListener('mouseup', endPress);
+    btnVoice.addEventListener('touchend', endPress);
+
+    function startPress(e) {
+        isLongPress = false;
+        longPressTimer = setTimeout(() => {
+            isLongPress = true;
+            showToast('正在长按录音... (松开发送)');
+        }, 300);
+    }
+
+    function endPress(e) {
+        clearTimeout(longPressTimer);
+        if (isLongPress) {
+            showToast('长按结束：已发送语音');
+        } else {
+            // 单点
+            normalComposer.style.display = 'none';
+            voiceSingleBar.style.display = 'flex';
+        }
+    }
+
+    // 单点语音录制面板控制
+    document.getElementById('btnCancelSingle').addEventListener('click', () => {
+        voiceSingleBar.style.display = 'none';
+        normalComposer.style.display = 'flex';
+        showToast('取消录音');
+    });
+
+    document.getElementById('btnSendVoiceSingle').addEventListener('click', () => {
+        voiceSingleBar.style.display = 'none';
+        normalComposer.style.display = 'flex';
+        showToast('发送单点语音');
+    });
+
+    document.getElementById('btnFile').addEventListener('click', () => {
+        showToast('打开文件选择');
+    });
+</script>
+
+</body>
+</html>

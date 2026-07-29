@@ -1,4 +1,4 @@
-import top.fseasy.imlog.domain.model.ReplyToMessage;
+import top.fseasy.imlog.domain.model.QuoteMessage;
 
 
 CREATE TABLE messages (
@@ -12,7 +12,7 @@ CREATE TABLE messages (
     --     1. 减少 reference 开销 2. 保留 id 值，还能显示出 id，有一定区分性
     sender_id TEXT NOT NULL,
     type TEXT NOT NULL, -- message type, audio/video/text, and so on
-    reply_to_message TEXT AS kotlin.Result<ReplyToMessage>,
+    reply_to_message TEXT AS kotlin.Result<ReplyToMessage.QuoteMessage>,
     text TEXT,
     created_at INTEGER NOT NULL,
     -- || Message file fields ||

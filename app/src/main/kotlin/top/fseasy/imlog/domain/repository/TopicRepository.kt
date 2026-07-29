@@ -62,5 +62,5 @@ interface TopicRepository {
     // | Message Drafts
     // =======
     suspend fun getMessageDraft(userId: UserId, topicId: TopicId): MessageDraft?
-
+    suspend fun setMessageDraft(userId: UserId, topicId: TopicId, draft: MessageDraft?): Boolean
 }

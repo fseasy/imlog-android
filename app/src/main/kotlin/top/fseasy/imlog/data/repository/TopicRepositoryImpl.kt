@@ -246,12 +246,26 @@ class TopicRepositoryImpl @Inject constructor(
         }
 
     override suspend fun getMessageDraft(userId: UserId, topicId: TopicId): MessageDraft? =
-        withContext(
-            Dispatchers.IO
-        ) {
+        withContext(dispatcher) {
             database.topicSelectQueries.getMessageDraft(topicId = topicId, userId = userId)
-                .executeAsOneOrNull()?.draft?.getOrNull()
+                .executeAsOneOrNull()?.draft?.getOrNull() // .draft is Result<MessageDraft>
         }
+
+    override suspend fun setMessageDraft(
+        userId: UserId,
+        topicId: TopicId,
+        draft: MessageDraft?,
+    ): Boolean = withContext(dispatcher) {
+        val wrapperValue = when (draft) {
+            null -> null
+            is MessageDraft -> Result.success(draft)
+        }
+        database.topicUpdateQueries.updateTopicMessageDraft(
+            wrapperValue, topicId = topicId,
+            triggerUserId = userId,
+        ).value > 0L
+    }
+
 
     private fun TopicEntity.toDomain() = Topic(
         id = id,

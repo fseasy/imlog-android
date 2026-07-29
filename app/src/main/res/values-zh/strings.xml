@@ -45,4 +45,7 @@
     <string name="welcome_body">记录此刻，串联过往，指引未来</string>
     <string name="btn_start">开始</string>
     <string name="common_ui_unknown_error_and_auto_retry">不好，出了不知道什么问题。正在重试中</string>
+    <string name="composer_attachment_icon_album">相册</string>
+    <string name="composer_attachment_icon_audio_file">音频</string>
+    <string name="composer_attachment_icon_files">文件</string>
 </resources>

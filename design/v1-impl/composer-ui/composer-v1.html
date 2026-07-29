@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IM Composer UI 原型预览</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: #eef1f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* 手机外框模拟 */
+        .phone-container {
+            width: 375px;
+            height: 680px;
+            background-color: #f7f7f9;
+            border-radius: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            border: 8px solid #2d3035;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 顶部状态栏模拟 */
+        .status-bar {
+            height: 44px;
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        /* 聊天区域模拟 */
+        .chat-messages {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message-card {
+            background: #ffffff;
+            padding: 12px 16px;
+            border-radius: 16px;
+            max-width: 80%;
+            font-size: 14px;
+            color: #333;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            line-height: 1.4;
+        }
+
+        .message-card.self {
+            align-self: flex-end;
+            background: #4A68FF;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        /* 底部 Composer 容器 */
+        .composer-wrapper {
+            background: #ffffff;
+            border-top: 1px solid #eaeaea;
+            padding: 8px 12px;
+            position: relative;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.03);
+        }
+
+        /* 首行控件布局 */
+        .composer-row {
+            display: flex;
+            align-items: flex-end; /* 底部对齐核心 */
+            gap: 8px;
+        }
+
+        /* 按钮通用样式 */
+        .icon-btn {
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .icon-btn:active {
+            transform: scale(0.92);
+        }
+
+        /* 1. 文件按钮 (小) */
+        .btn-file {
+            width: 36px;
+            height: 36px;
+            color: #707579;
+        }
+
+        /* 2. 文本输入框容器 */
+        .input-container {
+            flex: 1;
+            background: #f0f2f5;
+            border-radius: 20px;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            min-height: 40px;
+            max-height: 120px;
+            transition: border-color 0.2s;
+        }
+
+        .input-container:focus-within {
+            background: #eaf0ff;
+            border: 1.5px solid #4A68FF;
+        }
+
+        /* 多行自适应 Textarea */
+        .text-input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 15px;
+            color: #222;
+            resize: none;
+            height: 22px;
+            max-height: 100px;
+            line-height: 22px;
+            padding: 0;
+            user-select: text;
+        }
+
+        .text-input::placeholder {
+            color: #999;
+        }
+
+        /* 3. 语音按钮 (初始态：较大，突出) */
+        .btn-voice-main {
+            width: 40px;
+            height: 40px;
+            background: #4A68FF;
+            color: white;
+            box-shadow: 0 4px 10px rgba(74, 104, 255, 0.3);
+            position: relative;
+        }
+
+        /* 4. 发送按钮 (隐藏/显示) */
+        .btn-send {
+            width: 40px;
+            height: 40px;
+            background: #4A68FF;
+            color: white;
+            box-shadow: 0 4px 10px rgba(74, 104, 255, 0.3);
+            display: none; /* 初始隐藏 */
+        }
+
+        /* --- 模式 2：单点语音独立录制栏 --- */
+        .voice-single-bar {
+            display: none; /* 动态切换 */
+            width: 100%;
+            height: 44px;
+            background: #fff0f0;
+            border-radius: 22px;
+            padding: 0 8px 0 16px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .recording-timer {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #ff3b30;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .dot-blink {
+            width: 8px;
+            height: 8px;
+            background-color: #ff3b30;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.2; }
+            100% { opacity: 1; }
+        }
+
+        .voice-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* --- 模式 3：长按手势录制遮罩栏 --- */
+        .voice-hold-bar {
+            display: none;
+            width: 100%;
+            height: 44px;
+            background: #222;
+            color: white;
+            border-radius: 22px;
+            padding: 0 16px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .slide-cancel-text {
+            font-size: 13px;
+            color: #aaa;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* 提示 Toast */
+        .toast {
+            position: absolute;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.75);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+
+    </style>
+</head>
+<body>
+
+<div class="phone-container">
+    <div class="status-bar">
+        <span>9:41</span>
+        <span>5G</span>
+    </div>
+
+    <div class="toast" id="toast">提示信息</div>
+
+    <!-- 模拟消息流 -->
+    <div class="chat-messages" id="chatMessages">
+        <div class="message-card">欢迎体验此 UI 原型！你可以尝试：<br>1. 点击文本框打字/换行<br>2. 点击/长按右侧语音按钮</div>
+    </div>
+
+    <!-- 底部 Composer 容器 -->
+    <div class="composer-wrapper">
+
+        <!-- 默认模式 / 文本模式 -->
+        <div class="composer-row" id="normalComposer">
+            <!-- 1. 发送文件 (小) -->
+            <button class="icon-btn btn-file" id="btnFile" title="发送文件">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+
+            <!-- 2. 文本框 -->
+            <div class="input-container">
+                <textarea class="text-input" id="textInput" placeholder="记录些什么..." rows="1"></textarea>
+            </div>
+
+            <!-- 3. 语音按钮 (初始态展示) -->
+            <button class="icon-btn btn-voice-main" id="btnVoice" title="语音(单点/长按)">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            </button>
+
+            <!-- 4. 发送按钮 (有文本时切换显示，保持底部对齐) -->
+            <button class="icon-btn btn-send" id="btnSend" title="发送">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+        </div>
+
+        <!-- 单点语音：独立录制栏模式 -->
+        <div class="voice-single-bar" id="voiceSingleBar">
+            <button class="icon-btn" id="btnCancelSingleVoice" style="color:#ff3b30;" title="取消/删除">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+
+            <div class="recording-timer">
+                <div class="dot-blink"></div>
+                <span id="singleTimer">00:03</span>
+            </div>
+
+            <div class="voice-controls">
+                <button class="icon-btn" style="color:#ff3b30; width:32px; height:32px;" title="暂停/继续">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                </button>
+                <button class="icon-btn btn-send" id="btnSendSingleVoice" style="display:flex; width:32px; height:32px;" title="发送语音">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 长按语音：即时手势录制模式 -->
+        <div class="voice-hold-bar" id="voiceHoldBar">
+            <div class="recording-timer" style="color:#white;">
+                <div class="dot-blink"></div>
+                <span>00:01</span>
+            </div>
+            <div class="slide-cancel-text">
+                ‹ 向上锁定 / 向左取消
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    const textInput = document.getElementById('textInput');
+    const btnVoice = document.getElementById('btnVoice');
+    const btnSend = document.getElementById('btnSend');
+    const btnFile = document.getElementById('btnFile');
+    const normalComposer = document.getElementById('normalComposer');
+    const voiceSingleBar = document.getElementById('voiceSingleBar');
+    const voiceHoldBar = document.getElementById('voiceHoldBar');
+    const chatMessages = document.getElementById('chatMessages');
+    const toast = document.getElementById('toast');
+
+    let isLongPress = false;
+    let longPressTimer = null;
+
+    // 显示 Toast 提示
+    function showToast(msg) {
+        toast.innerText = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 1500);
+    }
+
+    // --- 交互 1：点击发送文件 ---
+    btnFile.addEventListener('click', () => {
+        showToast('打开文件选择器...');
+    });
+
+    // --- 交互 2：文本框输入与自适应高度 ---
+    textInput.addEventListener('focus', () => {
+        switchToTextState();
+    });
+
+    textInput.addEventListener('input', () => {
+        // 自适应高度（多行）
+        textInput.style.height = 'auto';
+        textInput.style.height = Math.min(textInput.scrollHeight, 100) + 'px';
+        
+        switchToTextState();
+    });
+
+    textInput.addEventListener('blur', () => {
+        // 焦点取消时，只有当内容完全清空时，才退回初始态
+        if (textInput.value.trim() === '') {
+            switchToInitialState();
+        }
+    });
+
+    // 切换到【输入态/有文本态】：隐藏语音，显示发送按钮
+    function switchToTextState() {
+        btnVoice.style.display = 'none';
+        btnSend.style.display = 'flex';
+    }
+
+    // 切换到【初始态】：显示语音，隐藏发送按钮，恢复输入框高度
+    function switchToInitialState() {
+        btnVoice.style.display = 'flex';
+        btnSend.style.display = 'none';
+        textInput.style.height = '22px';
+    }
+
+    // 点击发送按钮
+    btnSend.addEventListener('click', () => {
+        const text = textInput.value.trim();
+        if (text) {
+            appendMessage(text, 'self');
+            textInput.value = '';
+            switchToInitialState();
+        }
+    });
+
+    // --- 交互 3：语音按钮（区分单点与长按） ---
+
+    // 按下判定长按
+    btnVoice.addEventListener('mousedown', startPress);
+    btnVoice.addEventListener('touchstart', startPress);
+
+    // 松开判定单点/长按结束
+    btnVoice.addEventListener('mouseup', endPress);
+    btnVoice.addEventListener('touchend', endPress);
+
+    function startPress(e) {
+        isLongPress = false;
+        longPressTimer = setTimeout(() => {
+            isLongPress = true;
+            // 触发长按即时录制 UI
+            normalComposer.style.display = 'none';
+            voiceHoldBar.style.display = 'flex';
+            showToast('开始长按录音 (向左滑动取消)');
+        }, 300); // 300ms 判定为长按
+    }
+
+    function endPress(e) {
+        clearTimeout(longPressTimer);
+        
+        if (isLongPress) {
+            // 长按抬手：发送语音
+            normalComposer.style.display = 'flex';
+            voiceHoldBar.style.display = 'none';
+            appendMessage('🎤 语音消息 (2秒)', 'self');
+            showToast('语音已发送');
+        } else {
+            // 单点：进入单点独立录制界面
+            normalComposer.style.display = 'none';
+            voiceSingleBar.style.display = 'flex';
+        }
+    }
+
+    // 取消单点录制
+    document.getElementById('btnCancelSingleVoice').addEventListener('click', () => {
+        voiceSingleBar.style.display = 'none';
+        normalComposer.style.display = 'flex';
+        showToast('已取消录音');
+    });
+
+    // 发送单点录制语音
+    document.getElementById('btnSendSingleVoice').addEventListener('click', () => {
+        voiceSingleBar.style.display = 'none';
+        normalComposer.style.display = 'flex';
+        appendMessage('🎤 语音消息 (3秒)', 'self');
+        showToast('语音已发送');
+    });
+
+    // 辅助函数：添加消息到聊天界面
+    function appendMessage(text, type = '') {
+        const msg = document.createElement('div');
+        msg.className = `message-card ${type}`;
+        msg.innerText = text;
+        chatMessages.appendChild(msg);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+</script>
+
+</body>
+</html>

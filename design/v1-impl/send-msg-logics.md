@@ -288,11 +288,13 @@ class TimelineViewModel @Inject constructor(
     val messageInputText: StateFlow<String> = savedStateHandle.getStateFlow("input_text", "")
 
     init {
-        // 3. 进入页面时，从本地数据库/DataStore 加载历史草稿（如果有）
-        viewModelScope.launch {
-            val savedDraft = draftRepository.getDraft(topicId)
-            if (!savedDraft.isNullOrEmpty() && messageInputText.value.isEmpty()) {
-                savedStateHandle["input_text"] = savedDraft
+         if (!savedStateHandle.contains("input_text")) {
+            // 3. 首次初始化：从 DB 加载（若 SSH 中无数据）
+            viewModelScope.launch {
+                val savedDraft = draftRepository.getDraft(topicId)
+                if (!savedDraft.isNullOrEmpty() && messageInputText.value.isEmpty()) {
+                    savedStateHandle["input_text"] = savedDraft
+                }
             }
         }
 
@@ -326,6 +328,60 @@ class TimelineViewModel @Inject constructor(
     }
 }
 ```
+
+### 追问1： 如果我的 App 还有同步功能，且草稿会同步，那这个处理流程是啥呢？这时 savedStateHandle 就不是唯一的真实数据了吧？
+
+
+### 问题 1：如果草稿支持多端同步，流程是怎样的？`SavedStateHandle` 还是 SSOT 吗？
+
+> 数据的单源真理（SSOT）分层结构
+
+当加入“多端同步”后，**`SavedStateHandle` 确实不再是全局的 SSOT，它退化为“当前本地 UI 会话的独占状态”**。
+
+在支持同步的系统中，SSOT 是**分层**的：
+* **全局 SSOT**：云端数据库（Server DB）
+* **本地设备 SSOT**：本地数据库（Room / DataStore）
+* **UI 临时会话状态**：`SavedStateHandle` / `ViewModel` 内存
+
+处理草稿同步的关键在于 **“区分用户当前是否正在该设备上输入”**，避免远端草稿覆写了用户正在敲字的内容。
+
+```text
+[远端 Server] ──(推送/轮询)──> [本地 Room DB]
+                                   │
+                         (冲突检测: 用户是否在打字?)
+                                   │
+                       ┌───────────┴───────────┐
+                   【正在打字】               【处于静止/初次进入】
+                       │                       │
+               忽略远端推送(或弹 Toast 提示)   更新 SavedStateHandle & UI
+```
+
+> 状态流转规则：
+
+1. **用户本地打字（Local -> Remote）**：
+   * 用户打字 -> 立即更新 `SavedStateHandle`。
+   * 防抖 500ms 后 -> 写入本地 Room DB。
+   * 本地 DB 触发 SyncWorker（或网络请求）-> 同步给云端 Server。
+2. **远端草稿更新（Remote -> Local）**：
+   * 收到 Web 端/手机 B 端推来的新草稿 -> 写入本地 Room DB。
+   * **冲突解决（Conflict Resolution）**：
+     * **场景 A（用户未在该页面 / 未焦点）**：本地 DB 改变 -> 更新 `SavedStateHandle` -> UI 自动显示远端最新草稿。
+     * **场景 B（用户正在该页面打字，1 秒内有输入动作）**：**本地用户输入优先（Local Wins）**。丢弃远端推送（或在界面顶部提示：“检测到其他设备更新了草稿，[点击查看]”），绝不强制覆盖用户当前正在敲的字！
+
+### 追问 2：另外，怎么确保 viewModel 销毁的时候，draft 数据（inputText）完整保存到了 db 了呢？这个 debounce 可能导致数据不全吧？
+
+
+要解决这个问题，我们需要针对两种不同的销毁场景分别处理：
+
+> 场景 A：正常退出页面（ViewModel.onCleared 被触发）
+当用户主动点击返回键、划走页面时， ViewModel 的 `onCleared()` 会被调用。但此时 `viewModelScope` 已经失效，不能直接在里面发协程。
+
+**正确做法**：注入一个 **`ApplicationScope`（全局应用生命周期的 CoroutineScope）**，在 `onCleared()` 中使用 `NonCancellable` 上下文进行**强制冲刷落盘（Flush）**。
+
+> 场景 B：后台进程被杀（Process Death）
+进程被杀时，`onCleared()` **根本不会被执行**，`viewModelScope` 也会瞬间死亡。
+**但完全不用担心！** 因为你在打字时，`onInputTextChanged` 已经**同步**写入了 `SavedStateHandle`。
+当用户重新打开 App 恢复会话时，`SavedStateHandle` 会直接恢复出最新的字符串，甚至比 DB 还新！
 
 
 ## Topic 的最后一条消息数据，怎么更新
@@ -401,3 +457,466 @@ class MessageRepository @Inject constructor(
                                                 （会话列表收到通知，自动刷新列表展示）
 ```
 
+## UI 设计
+
+核心想法：记录页面操作一定要简单，不然为啥不用 Notion/Flomo 呢？
+
+
+首行元素
+
+1. 发送文件 
+2. 语音
+3. 文本
+4. 发送按钮
+
+引用栏：微信里，引用功能是一个独立于输入的功能—任何输入（文本、语音、图片），都可以附带这个引用
+
+整体布局：
+
+｜--- 引用栏 ---      ｜
+｜ 功能选择栏 / 输入栏 / 语音录制栏  ｜
+｜ 扩展面板栏（输入法栏）｜
+
+
+初始态：更多+（小）、文本框、语音
+
+点击文件：
+    - 顶栏不变 （其他 app 都这样，同时这样操作后，也不用记住它的状态！）
+    - 扩展面板展开，显示 + 支持的类型（图片、视频、音频；拍照、摄像）
+
+点击文本框：输入框变大，右边出现「发送」按钮，下面出现 IME；
+    - 多行时，高度增加，「发送」保持在底部对齐
+    - 焦点取消时，IME 消失（和微信一样），但是整体还是「输入框+发送」的展示，不会出现初始态
+    - 删除完文本，才回到初始态
+点击语音：
+  - 单点：区域变成录制界面
+  - 长按：区域变成即时发送的形式
+    - 页面渲染动作：向左取消，向上锁定（类似 whatsapp）
+
+
+## 编辑器工作时，「返回键」的逻辑
+
+目前我根据 whatsapp + 微信逻辑 梳理的如下：
+- 如果是在文本编辑状态（text mode, 键盘打开时）：
+  - 如果文本框有字，就关闭键盘
+  - 如果没字，就回到初始状态
+- 如果在 text mode, 但键盘关闭，就返回到前一个页面（navigation pop up）
+- 如果是 voice mode,
+  - 正在录音：录音暂停、震动、返回到前一个页面
+  - 录音已经暂停： 返回前一个页面
+- 如果是附件打开状态：关闭附件展开面板，回到初始状态
+
+逻辑怎么写：
+
+**决策交给 ViewModel，执行留在 Page（UI层）**
+
+* **为什么不全部写在 Page？**
+  因为 `是否有字`、`录音状态`、`附件面板状态` 都是 ViewModel 持有的状态。如果全在 Page 层写一堆 `if-else`，会导致 View 代码臃肿且无法进行单元测试。
+* **为什么不全部写在 ViewModel？**
+  因为 `Navigation (popBackStack)`、`HideKeyboard (键盘)`、`Vibration (震动)` 属于 Android 系统级/UI 级的服务，ViewModel **不应该直接持有 NavController 或 Context/Vibrator**。
+
+**最佳实践：** 
+1. UI 层（Page）通过 `BackHandler` 拦截返回键，将**当前键盘状态**传给 ViewModel。
+2. ViewModel 根据当前状态进行**逻辑判断**，通过 **`SideEffect (一次性事件)`** 发出命令（如 `HideKeyboard`、`Vibrate`、`PopBackStack`）。
+3. UI 层监听该事件，执行具体的系统操作。
+
+
+
+1. 定义 UI 事件 (Side Effect) 与 State
+
+```kotlin
+// ViewModel 发给 UI 层的指令
+sealed interface ComposerUiEffect {
+    object HideKeyboard : ComposerUiEffect
+    object PopBackStack : ComposerUiEffect
+    object Vibrate : ComposerUiEffect
+}
+
+// 录音状态
+enum class RecordingStatus {
+    RECORDING, PAUSED, IDLE
+}
+
+// 统一的 UI 状态
+data class ComposerUiState(
+    val text: String = "",
+    val composerMode: ComposerMode = ComposerMode.NORMAL, // NORMAL 或 RECORDING
+    val currentPanel: InputSelector = InputSelector.NONE, // 附件/表情面板
+    val recordingStatus: RecordingStatus = RecordingStatus.IDLE
+)
+```
+
+2. ViewModel 中的决策逻辑 (`ComposerViewModel.kt`)
+
+把你的 4 条规则原封不动翻译成 ViewModel 的决策代码：
+
+```kotlin
+@HiltViewModel
+class ComposerViewModel @Inject constructor(
+    private val repository: UserPreferencesRepository
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(ComposerUiState())
+    val uiState: StateFlow<ComposerUiState> = _uiState.asStateFlow()
+
+    // 发送给 UI 的一次性事件通道
+    private val _uiEffect = Channel<ComposerUiEffect>()
+    val uiEffect = _uiEffect.receiveAsFlow()
+
+    /**
+     * 响应返回键点击
+     * @param isKeyboardVisible 当前键盘是否处于打开状态（由 UI 层传入）
+     */
+    fun handleBackPress(isKeyboardVisible: Boolean) {
+        viewModelScope.launch {
+            val state = _uiState.value
+
+            when {
+                // 规则 4: 如果附件/表情面板处于打开状态 -> 关闭面板，恢复初始态
+                state.currentPanel != InputSelector.NONE -> {
+                    _uiState.update { it.copy(currentPanel = InputSelector.NONE) }
+                }
+
+                // 规则 3: 如果处于语音录制模式 (voice mode)
+                state.composerMode == ComposerMode.RECORDING -> {
+                    if (state.recordingStatus == RecordingStatus.RECORDING) {
+                        // 正在录音：暂停录音、触发震动、返回上一页
+                        pauseRecordingInternal()
+                        _uiEffect.send(ComposerUiEffect.Vibrate)
+                    }
+                    // 录音已暂停或处理完毕 -> 返回上一页
+                    _uiEffect.send(ComposerUiEffect.PopBackStack)
+                }
+
+                // 规则 1: 文本编辑状态 + 键盘处于打开状态
+                isKeyboardVisible -> {
+                    _uiEffect.send(ComposerUiEffect.HideKeyboard)
+                    
+                    if (state.text.isBlank()) {
+                        // 文本框没字 -> 回到初始状态 (失焦、恢复语音胶囊)
+                        _uiState.update { 
+                            it.copy(
+                                composerMode = ComposerMode.NORMAL,
+                                currentPanel = InputSelector.NONE
+                            ) 
+                        }
+                    }
+                    // 如果有字，只需 HideKeyboard，保持 TextMode 不变
+                }
+
+                // 规则 2: Text mode 但键盘关闭 (或初始状态) -> 返回上一页
+                else -> {
+                    _uiEffect.send(ComposerUiEffect.PopBackStack)
+                }
+            }
+        }
+    }
+
+    private fun pauseRecordingInternal() {
+        // 执行暂停录音的业务逻辑...
+        _uiState.update { it.copy(recordingStatus = RecordingStatus.PAUSED) }
+    }
+}
+```
+
+3. 页面层拦截与执行 (`ChatScreen.kt`)
+
+UI 层使用 Compose 提供的 `BackHandler` 拦截物理返回键/手势，并通过 `LaunchedEffect` 响应 ViewModel 的指令：
+
+```kotlin
+@Composable
+fun ChatScreen(
+    navController: NavController,
+    viewModel: ComposerViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    
+    // UI 系统服务
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val hapticFeedback = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    
+    // 1. 实时获取当前键盘是否开启
+    val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0
+
+    // 2. 监听 ViewModel 发出的 UI 指令
+    LaunchedEffect(Unit) {
+        viewModel.uiEffect.collect { effect ->
+            when (effect) {
+                is ComposerUiEffect.HideKeyboard -> {
+                    keyboardController?.hide()
+                }
+                is ComposerUiEffect.Vibrate -> {
+                    // 触发系统震动反馈
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+                is ComposerUiEffect.PopBackStack -> {
+                    // 离开页面前，确保键盘收起
+                    keyboardController?.hide()
+                    navController.popBackStack()
+                }
+            }
+        }
+    }
+
+    // 3. 拦截系统返回键/侧滑返回手势
+    BackHandler(enabled = true) {
+        viewModel.handleBackPress(isKeyboardVisible = isKeyboardVisible)
+    }
+
+    // 4. 渲染你的 IM Composer 组件
+    Scaffold { paddingValues ->
+        // ... 聊天消息列表与 UserInput ...
+    }
+}
+```
+
+## 如何让输入框里的展开面板高度，和 IME 的高度一致，防止切换时闪烁
+
+关键：记住 IME 的高度(区分 横竖屏); 正确配置及写好配合的 UI
+具体做法：在 UI 层上报 ime 高度给 viewModel，viewModel 记录到 datastore, 然后暴露 state 给 ui 层
+
+记住
+
+ViewModel 层 (ComposerViewModel.kt)
+
+```
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+@HiltViewModel
+class ComposerViewModel @Inject constructor(
+    private val repository: UserPreferencesRepository
+) : ViewModel() {
+
+    // 当前面板应该使用的高度（UI 直接监听此 State）
+    private val _panelHeight = MutableStateFlow(280.dp)
+    val panelHeight: StateFlow<Dp> = _panelHeight.asStateFlow()
+
+    private var lastIsLandscape: Boolean? = null
+
+    /**
+     * 当横竖屏切换时调用，从 Repository 初始化/切换当前高度
+     */
+    fun onOrientationChanged(isLandscape: Boolean) {
+        if (lastIsLandscape == isLandscape) return
+        lastIsLandscape = isLandscape
+
+        // 从磁盘读取对应方向的历史高度
+        val savedDpValue = repository.getImeHeight(isLandscape)
+        val defaultDp = if (isLandscape) 140.dp else 280.dp
+
+        _panelHeight.value = if (savedDpValue > 0f) savedDpValue.dp else defaultDp
+    }
+
+    /**
+     * 当 UI 层测量到真实的键盘高度时回调
+     */
+    fun onImeHeightMeasured(isLandscape: Boolean, measuredHeight: Dp) {
+        // 键盘未弹出(<=0) 或 高度未发生改变时，不处理
+        if (measuredHeight <= 0.dp || measuredHeight == _panelHeight.value) return
+
+        // 1. 更新当前 UI 状态
+        _panelHeight.value = measuredHeight
+
+        // 2. 异步持久化到磁盘
+        viewModelScope.launch {
+            repository.saveImeHeight(isLandscape, measuredHeight.value)
+        }
+    }
+}
+```
+
+
+UI 层变得极其纯粹，只做两件事：
+- 测量系统 WindowInsets.ime 并通知 ViewModel；
+- 收集 viewModel.panelHeight 并传给扩展面板。
+
+```
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import android.content.res.Configuration
+
+@Composable
+fun UserInput(
+    onMessageSent: (String) -> Unit,
+    viewModel: ComposerViewModel = hiltViewModel()
+) {
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // 1. 感知横竖屏变化，通知 ViewModel 加载对应的历史高度
+    LaunchedEffect(isLandscape) {
+        viewModel.onOrientationChanged(isLandscape)
+    }
+
+    // 2. 实时测量系统的 IME 键盘高度
+    val currentImeHeight = with(density) { WindowInsets.ime.getBottom(this).toDp() }
+
+    // 3. 当键盘高度发生变化且大于 0 时，作为 Event 提交给 ViewModel 处理
+    LaunchedEffect(currentImeHeight, isLandscape) {
+        if (currentImeHeight > 0.dp) {
+            viewModel.onImeHeightMeasured(isLandscape, currentImeHeight)
+        }
+    }
+
+    // 4. 从 ViewModel 收集最终的面板高度 State
+    val panelHeight by viewModel.panelHeight.collectAsState()
+
+    // 5. 渲染 UI，传给 SelectorExpanded
+    Column {
+        // ... 输入框和按钮 ...
+
+        SelectorExpanded(
+            currentSelector = currentInputSelector,
+            panelHeight = panelHeight, // 使用 ViewModel 算好的高度
+            onCloseRequested = { /* ... */ }
+        )
+    }
+}
+```
+
+
+
+防止抖动的关键配置（重要细节）
+
+如果在切换时依然感到画面有闪烁，请检查以下两点：
+
+1. AndroidManifest.xml 的 WindowSoftInputMode
+确保 Activity 配置了 `adjustResize`，这样 Compose 才能准确感知并响应 `WindowInsets.ime` 的变化：
+```xml
+<activity
+    android:name=".MainActivity"
+    android:windowSoftInputMode="adjustResize" />
+```
+
+2. 在 Activity 中开启 Edge-To-Edge (边到边)
+在 `MainActivity.kt` 的 `onCreate` 中开启 `enableEdgeToEdge()`，确保 Compose 能无障碍地读取到最底层的 WindowInsets：
+```kotlin
+override fun onCreate(savedInstanceState: Bundle?) {
+    enableEdgeToEdge() // Android 15+ 默认开启，旧版本需加上
+    super.onCreate(savedInstanceState)
+    setContent {
+        // ...
+    }
+}
+```
+
+示例：
+
+1. 修改扩展面板容器组件
+
+将面板高度设置为动态传入的 `panelHeight`（即 `imeHeight`）：
+
+```kotlin
+@Composable
+fun SelectorExpanded(
+    currentSelector: InputSelector,
+    panelHeight: Dp, // <--- 关键：传入 savedImeHeight
+    onCloseRequested: () -> Unit,
+    onTextAdded: (String) -> Unit
+) {
+    if (currentSelector == InputSelector.NONE) return
+
+    Surface(
+        tonalElevation = 8.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(panelHeight) // <--- 强制面板高度与键盘高度 1:1 完全一致！
+    ) {
+        when (currentSelector) {
+            InputSelector.EMOJI -> EmojiSelector(onTextAdded)
+            InputSelector.PICTURE -> PictureSelectorPanel()
+            // ...其他面板
+            else -> Unit
+        }
+    }
+}
+```
+
+2. 整合到 `UserInput` 主逻辑中
+
+```kotlin
+@Composable
+fun UserInput(
+    onMessageSent: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var currentInputSelector by rememberSaveable { mutableStateOf(InputSelector.NONE) }
+    
+    // 1. 获取记忆的 IME 高度
+    val imeHeight = rememberImeHeightOrDefault(defaultHeight = 280.dp)
+    
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusRequester = remember { FocusRequester() }
+
+    // 监听返回键关闭面板
+    if (currentInputSelector != InputSelector.NONE) {
+        BackHandler { currentInputSelector = InputSelector.NONE }
+    }
+
+    Surface(tonalElevation = 2.dp) {
+        Column(modifier = modifier) {
+            // 输入框
+            UserInputText(
+                // ...
+                onTextFieldFocused = { focused ->
+                    if (focused) {
+                        // 输入框获取焦点时，自动关闭扩展面板
+                        currentInputSelector = InputSelector.NONE
+                    }
+                }
+            )
+
+            // 底部选择按钮栏（表情、图片等）
+            UserInputSelector(
+                currentInputSelector = currentInputSelector,
+                onSelectorChange = { selector ->
+                    if (currentInputSelector == selector) {
+                        // 重复点击，切换回键盘
+                        currentInputSelector = InputSelector.NONE
+                        focusRequester.requestFocus()
+                        keyboardController?.show()
+                    } else {
+                        // 切换到面板：收起键盘，展开面板
+                        currentInputSelector = selector
+                        keyboardController?.hide() // 先收键盘，面板在下方以相同高度展开，顶栏就不会跳动
+                    }
+                }
+            )
+
+            // 扩展面板（与键盘同高）
+            SelectorExpanded(
+                currentSelector = currentInputSelector,
+                panelHeight = imeHeight, // <--- 注入高度
+                onCloseRequested = { currentInputSelector = InputSelector.NONE },
+                onTextAdded = { /* ... */ }
+            )
+        }
+    }
+}
+```
+
+
+---
+
+总结微信/WhatsApp 的零闪烁秘密：
+
+| 切换方向        | 交互顺序                                                       | 结果                                        |
+| :-------------- | :------------------------------------------------------------- | :------------------------------------------ |
+| **键盘 ➔ 面板** | 1. 记录键盘高度 $H$<br>2. 展开 $H$ 高度的面板<br>3. 隐藏软键盘 | 界面总高度不变，**完全无闪烁/无跳动**       |
+| **面板 ➔ 键盘** | 1. 请求 TextField 焦点拉起键盘<br>2. 键盘弹出的同时关闭面板    | 键盘接管 $H$ 高度的空间，**顶栏稳定无抖动** |

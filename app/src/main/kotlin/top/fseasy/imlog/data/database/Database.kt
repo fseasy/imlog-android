@@ -31,7 +31,7 @@ fun createSqlDelightDb(context: Context): SqlDelightDb {
     return SqlDelightDb(
         driver = driver,
         messagesAdapter = MessageAdapter(
-            reply_to_messageAdapter = replyToMessageAdapter,
+            reply_to_messageAdapter = quoteMessageAdapter,
         ),
         topic_message_stateAdapter = TopicMessageStateAdapter(
             latest_message_previewAdapter = messagePreviewAdapter,

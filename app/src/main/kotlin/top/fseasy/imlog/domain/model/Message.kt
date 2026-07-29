@@ -6,11 +6,7 @@ import kotlin.uuid.Uuid
 
 
 enum class MessageType(val value: String) {
-    Text("text"),
-    Image("image"),
-    Video("video"),
-    Audio("audio"), Voice("voice"),
-    GenericFile("generic_file"),
+    Text("text"), Image("image"), Video("video"), Audio("audio"), Voice("voice"), GenericFile("generic_file"),
     ;
 
     companion object {
@@ -38,16 +34,20 @@ value class MessageId(val value: String) {
     }
 }
 
+@Serializable
+data class QuoteMessageThumbnailFileBuildingArgs(
+    val messageCreatedAt: Long,
+    val name: String,
+)
 
 @Serializable
-data class ReplyToMessage(
+data class QuoteMessage(
     val id: MessageId,
     val senderId: UserId,
     val senderNameSnapshot: String,
-    val type: MessageType,
-    val textSnapshot: String,
-    val messageCreatedAt: Long,
-    val thumbnailName: String?,
+    val messageType: MessageType,
+    val text: String,
+    val thumbnail: QuoteMessageThumbnailFileBuildingArgs?,
 )
 
 /**
@@ -58,7 +58,7 @@ data class Message(
     val topicId: TopicId,
     val senderId: UserId,
     val type: MessageType,
-    val replyToMessage: ReplyToMessage? = null,
+    val quoteMessage: QuoteMessage? = null,
     val text: String? = null,
     // == media file fields
     val originalFileUri: UriStr? = null,
@@ -85,15 +85,19 @@ data class MessagePreview(
     val senderNameSnapshot: String? = null, // If null, = currentUser in business logic
 )
 
+@Serializable
+enum class MessageInputMode(val value: String) {
+    Text("text"), Voice("voice"), Attachment("Attachment")
+}
+
 /**
  * For composer draft
  */
 @Serializable
 data class MessageDraft(
-    val type: MessageType,
-    val replyToMessage: ReplyToMessage? = null,
-    val text: String? = null,
-    val filePointer: String? = null, // The actual type will be inferred by the type
+    val inputMode: MessageInputMode? = null,
+    val quoteMessage: QuoteMessage? = null,
+    val text: String = "",
 )
 
 object MessageFactory {
@@ -102,7 +106,7 @@ object MessageFactory {
         senderId: UserId,
         text: String,
         timestampMs: Long,
-        replyToMessage: ReplyToMessage? = null,
+        quoteMessage: QuoteMessage? = null,
     ): Message {
         require(text.isNotBlank()) { "Failed to create empty Text: $topicId, $senderId" }
         return Message(
@@ -113,7 +117,7 @@ object MessageFactory {
             text = text,
             createdAt = timestampMs,
             attributesUpdatedAt = timestampMs,
-            replyToMessage = replyToMessage,
+            quoteMessage = quoteMessage,
         )
     }
 }

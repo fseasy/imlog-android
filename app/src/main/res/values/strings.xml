@@ -10,11 +10,12 @@
     <string name="btn_signin">Sign In</string>
     <string name="btn_signup">Sign Up</string>
     <string name="btn_close">Close</string>
+    <string name="btn_continue">Continue</string>
+    <string name="btn_choose_storage">Choose Storage Location</string>
+    <string name="btn_retry">Retry</string>
     <string name="signinup_create_account_intro">Now will create an account for you</string>
     <string name="signinup_create_user_sample_success_tip">You can change it later</string>
-    <string name="btn_continue">Continue</string>
     <string name="internal_error_head">Internal Error</string>
-    <string name="btn_retry">Retry</string>
     <string name="signinup_signin_intro_line1">Then, sailors dropped logs to mark their journeys and the unknown</string>
     <string name="signinup_signin_intro_line2">now, you send a message to mark this moment and the world.</string>
     <string name="signinup_goto_create_user">Create a new user</string>
@@ -36,7 +37,6 @@
     <string name="signinup_signup_select_account">Please select account</string>
     <string name="select_storage_slogan">Your data, your rules.</string>
     <string name="select_storage_select_tip">Choose where your log data is stored. You can directly back them up and even view them using other apps.</string>
-    <string name="btn_choose_storage">Choose Storage Location</string>
     <string name="error_unknown">Unknown Error</string>
     <string name="select_storage_btn_content_success">Set Done</string>
     <string name="select_storage_all_set">All Set</string>
@@ -46,4 +46,7 @@
     <string name="welcome_body">Record the moment, Connect the dots, Shape the future</string>
     <string name="btn_start">Start</string>
     <string name="common_ui_unknown_error_and_auto_retry">Oops! Something broke. Retrying</string>
+    <string name="composer_attachment_icon_album">Album</string>
+    <string name="composer_attachment_icon_audio_file">Audio</string>
+    <string name="composer_attachment_icon_files">File</string>
 </resources>

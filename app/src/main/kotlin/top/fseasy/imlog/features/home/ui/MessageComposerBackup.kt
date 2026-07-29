@@ -47,11 +47,9 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import top.fseasy.imlog.domain.model.VoiceRecordingState
-import top.fseasy.imlog.features.home.ContentUiState
 import top.fseasy.imlog.R
 import top.fseasy.imlog.features.home.MessageComposerViewModel
 import top.fseasy.imlog.features.home.VoiceRecordingUiState
-import java.io.File
 
 sealed interface ComposerAction {
     data class SendText(val content: String) : ComposerAction

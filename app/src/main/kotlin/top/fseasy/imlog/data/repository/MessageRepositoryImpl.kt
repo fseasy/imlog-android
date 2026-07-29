@@ -212,7 +212,7 @@ class MessageRepositoryImpl @Inject constructor(
             topicId = TopicId(topic_id),
             senderId = UserId(sender_id),
             type = messageType,
-            replyToMessage = reply_to_message,
+            quoteMessage = reply_to_message,
             text = text,
             // media file fields
             originalFileUri = src_uri?.toUri()

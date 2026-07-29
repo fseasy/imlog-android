@@ -162,20 +162,20 @@ fun AppTextButton(
 @Composable
 fun AppIconButton(
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    buttonModifier: Modifier = Modifier,
     enabled: Boolean = true,
     icon: ImageVector,
     contentDescription: String? = null,
-    iconSize: Dp = 24.dp,
+    iconModifier: Modifier = Modifier.size(24.dp),
     tint: Color? = null,
 ) {
     IconButton(
-        onClick = onClick, enabled = enabled, modifier = modifier
+        onClick = onClick, enabled = enabled, modifier = buttonModifier
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            modifier = Modifier.size(iconSize),
+            modifier = iconModifier,
             tint = tint ?: MaterialTheme.colorScheme.onSurface
         )
     }
@@ -190,7 +190,7 @@ fun AppBackIconButton(
 ) {
     AppIconButton(
         onClick = onClick,
-        modifier = modifier,
+        buttonModifier = modifier,
         enabled = enabled,
         icon = Icons.AutoMirrored.Filled.ArrowBack,
         contentDescription = stringResource(R.string.btn_back)
