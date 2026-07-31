@@ -1,4 +1,4 @@
-package top.fseasy.imlog.domain.usecase.sendfilemessage.stage
+package top.fseasy.imlog.domain.usecase.sendattachment.stage
 
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
@@ -83,7 +83,7 @@ class GenerateThumbnailUseCase @Inject constructor(
             )
         }
         val isSetSuccess = try {
-            messageRepository.setFileMessageThumbnailFilename(
+            messageRepository.setAttachmentMessageThumbnailFilename(
                 filename = thumbnailFilename, messageId = messageId
             )
         } catch (e: CancellationException) {

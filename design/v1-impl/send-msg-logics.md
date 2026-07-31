@@ -920,3 +920,92 @@ fun UserInput(
 | :-------------- | :------------------------------------------------------------- | :------------------------------------------ |
 | **键盘 ➔ 面板** | 1. 记录键盘高度 $H$<br>2. 展开 $H$ 高度的面板<br>3. 隐藏软键盘 | 界面总高度不变，**完全无闪烁/无跳动**       |
 | **面板 ➔ 键盘** | 1. 请求 TextField 焦点拉起键盘<br>2. 键盘弹出的同时关闭面板    | 键盘接管 $H$ 高度的空间，**顶栏稳定无抖动** |
+
+
+## 如何处理在 composer 外的点击、滚动事件？需要在此时清理掉 composer 的焦点、键盘等
+
+这是一个非常具有工程深度的问题。答案是：**`isScrollInProgress` 确实无法区分手动和自动，而在 IM 业务场景下，你必须将它们区分开。**
+
+如果混淆了这两者，会直接导致一个体验灾难级的 Bug。
+
+---
+
+ 一、 为什么必须要区分手动和自动？
+
+假设你不做区分，直接使用 `LaunchedEffect(listState.isScrollInProgress)`：
+
+1. 用户在输入框打字，此时键盘处于弹起状态。
+2. 用户点击右侧“发送”按钮。
+3. 你的代码逻辑：发送消息 $\rightarrow$ 将新消息追加到列表末尾 $\rightarrow$ 调用 `listState.animateScrollToItem(lastIndex)` **自动滚动到最新消息**。
+4. **Bug 触发**：由于自动滚动触发了 `isScrollInProgress = true`，`LaunchedEffect` 瞬间响应，执行了 `focusManager.clearFocus()`。
+5. **结果**：**用户每发送一条消息，键盘就会被强行收回一次**。这在 IM 应用里是无法接受的（微信、飞书、QQ 发送消息后，键盘都会保持弹起，以便用户连续输入）。
+
+因此，我们必须**只在用户手动拖拽（Manual Drag）列表时收起键盘**，而在系统由于发送消息、加载历史消息等原因引发自动滚动（Programmatic Scroll）时，保持键盘状态不变。
+
+---
+
+ 二、 如何区分手动和自动滚动？
+
+Jetpack Compose 提供了一个专用于追踪用户交互的接口：`InteractionSource`。我们可以通过扩展函数 `collectIsDraggedAsState()` 来**精准捕捉用户的手指拖拽行为**。
+
+* **手动滚动（手指按住并拖拽）**：`isDragged` 为 `true`。
+* **自动/程序滚动（如 `animateScrollToItem`）**：`isDragged` 始终为 `false`。
+
+💡 工程级最优解法：
+
+我们将监听条件从 `isScrollInProgress` 替换为 `isDragged`：
+
+```kotlin
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+
+@Composable
+fun ChatScreen(
+    viewModel: ComposerViewModel = viewModel()
+) {
+    val listState = rememberLazyListState()
+    val focusManager = LocalFocusManager.current
+
+    // 关键：利用 interactionSource 收集用户是否“正在手动拖拽”列表
+    val isDragged by listState.interactionSource.collectIsDraggedAsState()
+
+    // 仅监听用户的手指拖拽行为
+    LaunchedEffect(isDragged) {
+        if (isDragged) {
+            // 只要用户手指在屏幕上开始拖拽聊天历史：
+            focusManager.clearFocus()        // 收起键盘
+            viewModel.onInputModeChange(null) // 隐藏附件面板
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        focusManager.clearFocus()
+                        viewModel.onInputModeChange(null)
+                    }
+                }
+        ) {
+            MessageList(
+                state = listState, // 绑定列表状态
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        UserInput(...)
+    }
+}
+```
+
+---
+
+ 三、 为什么说这是完美的交互体验？
+
+1. **响应极其灵敏**：
+   当用户的手指刚刚触碰屏幕并向下拖拽了仅几个像素时，`isDragged` 就会立刻变为 `true`。键盘会在拖拽刚开始的瞬间“丝滑”地收起，没有任何迟滞感。
+2. **避开了惯性滑动（Fling）的干扰**：
+   当用户快速滑一下屏幕然后松开手，列表会继续惯性滑动。在松手后，`isDragged` 会立刻变回 `false`（即使列表还在滚动）。因为我们在拖拽刚开始时就已经收起了键盘，所以随后的惯性滑动不会引发任何重复执行，保证了性能和稳定性。
+3. **完美兼容发消息自动置底**：
+   当你点击发送消息，调用 `animateScrollToItem` 滚动列表时，`isDragged` 保持为 `false`，键盘能够稳稳地留在屏幕上，用户可以非常舒服地连续输入。

@@ -1,6 +1,5 @@
 package top.fseasy.imlog.domain.usecase
 
-import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.ResourceProvider
@@ -39,7 +38,7 @@ class WelcomeUseCase @Inject constructor(
         val avatar = AvatarModel.TopicPreset(TopicPresetAvatar.random())
         return runCatching {
             // 1. create new topic 2. mark first topic created
-            dbRunner.runInTransaction(retry = RetryModel.OnAnyException) {
+            dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
                 topicRepository.syncCreateNewTopic(
                     creatorId = userId, name = name, avatarModel = avatar, description = description
                 )

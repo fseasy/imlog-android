@@ -41,7 +41,7 @@ CREATE INDEX idx_messages_sender_created ON messages(sender_id, created_at);
 
 -- A table used to support Message Showup during processing media of the message
 -- the row will be deleted once media was processed done.
-CREATE TABLE message_file_processing_task_states (
+CREATE TABLE message_attachment_processing_task_states (
    message_id TEXT NOT NULL PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
    -- || processing intermediate results ||  used for ui rendering, failed task retry
    --    used to show before thumnail and internal-raw data are prepared.
@@ -59,7 +59,7 @@ getMessagesByTopic:
 -- need join the media-processing table
 SELECT m.*, p.src_uri, p.error_stage, p.error_user_retryable
 FROM messages m
-LEFT JOIN message_file_processing_task_states p ON m.id = p.message_id
+LEFT JOIN message_attachment_processing_task_states p ON m.id = p.message_id
 WHERE m.topic_id = :topic_id
 AND m.is_deleted = 0
 ORDER BY m.created_at ASC;

@@ -1,10 +1,10 @@
-package top.fseasy.imlog.domain.usecase.sendfilemessage
+package top.fseasy.imlog.domain.usecase.sendattachment
 
 import top.fseasy.imlog.domain.model.GenericFileMessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.CopyStageFailureType
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.FinishProcessingStageFailureType
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.GenerateThumbnailStageFailureType
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageFailureType
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingStageFailureType
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailStageFailureType
 import javax.inject.Inject
 
 class SendGenericFileMessageUseCase @Inject constructor(

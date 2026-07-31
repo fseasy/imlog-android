@@ -10,21 +10,13 @@ import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.QuoteMessage
 import top.fseasy.imlog.domain.model.QuoteMessageThumbnailFileBuildingArgs
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.usecase.sendfilemessage.SendAudioMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.SendGenericFileMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.SendImageMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.SendVideoMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.SendVoiceMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.SendAudioMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.SendGenericFileMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.SendImageMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.SendVideoMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
 import javax.inject.Inject
 
-
-class SendFileMessageUseCases @Inject constructor(
-    val sendAudio: SendAudioMessageUseCase,
-    val sendVoice: SendVoiceMessageUseCase,
-    val sendVideo: SendVideoMessageUseCase,
-    val sendImage: SendImageMessageUseCase,
-    val sendGenericFile: SendGenericFileMessageUseCase,
-)
 
 /**
  * Currently we
@@ -95,7 +87,20 @@ sealed interface ComposerDraftMeta : Parcelable {
 }
 
 sealed interface ComposerUiEffect {
-    object HideKeyboard : ComposerUiEffect
+    //    object HideKeyboard : ComposerUiEffect
     object PopBackStack : ComposerUiEffect
     object Vibrate : ComposerUiEffect
 }
+
+enum class VoiceButtonState {
+    Capsule, Circle, Hidden
+}
+
+/**
+ * Action group for input-mode trigger
+ */
+class InputModeSetActions(
+    val onTextInputFocusChange: (Boolean) -> Unit,
+    val onVoiceInputSingleClick: () -> Unit,
+    val onAttachmentClick: () -> Unit,
+)

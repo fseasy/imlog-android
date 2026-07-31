@@ -11,7 +11,7 @@ interface DbRunner {
      * 3. retry block (depends on the RetryModel)
      * @param block it should be a serials of sync operations (no suspend allowed!)
      */
-    suspend fun <T> runInTransaction(retry: RetryModel = RetryModel.None, block: () -> T): T
+    suspend fun <T> runTransactionInIOThread(retry: RetryModel = RetryModel.None, block: () -> T): T
 
     /**
      * It will wrap all the db operation (within the block param) to a

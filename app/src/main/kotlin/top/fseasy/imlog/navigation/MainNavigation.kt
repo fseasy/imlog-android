@@ -5,7 +5,6 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
 import androidx.navigation.toRoute
-import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.home.ui.TimelineScreen
@@ -58,7 +57,7 @@ fun NavGraphBuilder.mainGraph(
         composable<MainScreen.TopicTimeline> { backStackEntry ->
             val route: MainScreen.TopicTimeline = backStackEntry.toRoute()
             TimelineScreen(
-                onBack = { navController.popBackStack() },
+                onNavigateBack = { navController.popBackStack() },
                 onSettingsClick = { topicId ->
                     navController.navigate(MainScreen.TopicSettings(topicId))
                 })

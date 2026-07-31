@@ -11,48 +11,63 @@ import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapMerge
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import top.fseasy.imlog.data.mapper.toFileWithCreatingDirectories
 import top.fseasy.imlog.data.mapper.toUriStr
+import top.fseasy.imlog.data.util.MimeTypeUtils
+import top.fseasy.imlog.data.util.VoiceRecorder
 import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.MessageFactory
+import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.model.VoiceRecordingState
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
-import top.fseasy.imlog.data.util.VoiceRecorder
-import top.fseasy.imlog.domain.model.MessageType
-import top.fseasy.imlog.domain.model.VoiceRecordingState
-import top.fseasy.imlog.features.home.model.ComposerDraftMeta
+import top.fseasy.imlog.domain.usecase.sendattachment.ResolveMetadataResult
+import top.fseasy.imlog.domain.usecase.sendattachment.SendUriUseCaseBase
+import top.fseasy.imlog.domain.usecase.sendattachment.SendUriUseCaseFactory
+import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.fileMimeTypeToMessageType
 import top.fseasy.imlog.features.home.model.ComposerUiEffect
 import top.fseasy.imlog.features.home.model.MessageInputModeParcelable
-import top.fseasy.imlog.features.home.model.SendFileMessageUseCases
 import top.fseasy.imlog.features.home.model.toDomain
 import top.fseasy.imlog.features.home.model.toParcelable
-
 import top.fseasy.imlog.navigation.MainScreen
 import java.io.File
 import javax.inject.Inject
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 
 
 private const val MESSAGE_INPUT_MODE_UI_STATE = "message_input_mode"
 private const val MESSAGE_INPUT_TEXT_UI_STATE = "message_input_text"
 
+// SQLite writing is single thread, so it is useless that set it higher
+private const val ATTACHMENT_RESOLVE_METADATA_CONCURRENCY = 6
+private const val ATTACHMENT_COPY_CONCURRENCY = 3
 
 @OptIn(FlowPreview::class)
 @HiltViewModel
@@ -61,8 +76,8 @@ class MessageComposerViewModel @Inject constructor(
     userRepository: UserRepository,
     private val messageRepository: MessageRepository,
     private val topicRepository: TopicRepository,
-    private val storagePathUseCase: StoragePathUseCase,
-    private val sendFileMessageUseCase: SendFileMessageUseCases,
+    private val sendUriUseCaseFactory: SendUriUseCaseFactory,
+    val voiceRecorderStateHolder: VoiceRecorderStateHolder,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -71,18 +86,6 @@ class MessageComposerViewModel @Inject constructor(
         .stateIn(
             viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null
         )
-
-    private val voiceRecorder = VoiceRecorder(viewModelScope).also(::addCloseable)
-
-    val voiceRecordingUiState: StateFlow<VoiceRecordingUiState> = combine(
-        voiceRecorder.state, voiceRecorder.elapsedMs
-    ) { state, elapsedMs ->
-        VoiceRecordingUiState(state, elapsedMs)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = VoiceRecordingUiState()
-    )
 
     // Bind to SavedStateHandle to remember it while app in background/killed-restore state
     val inputTextUiState: StateFlow<String> =
@@ -93,6 +96,7 @@ class MessageComposerViewModel @Inject constructor(
     )
 
     private val _uiEffect = Channel<ComposerUiEffect>()
+    val uiEffect = _uiEffect.receiveAsFlow()
 
     init {
         if (!savedStateHandle.contains(MESSAGE_INPUT_MODE_UI_STATE)) {
@@ -128,22 +132,29 @@ class MessageComposerViewModel @Inject constructor(
         savedStateHandle[MESSAGE_INPUT_MODE_UI_STATE] = null
     }
 
+    fun updateInputMode(newInputMode: MessageInputModeParcelable?) {
+        savedStateHandle[MESSAGE_INPUT_MODE_UI_STATE] = newInputMode
+    }
+
     /**
      * After press Back button, change draftMetaUiState and send _uiEffect to trigger page action.
      */
-    fun handleBackPress(isKeyboardVisible: Boolean) {
+    fun handleBackPress() {
         viewModelScope.launch {
             val inputMode = inputModeUiState.value
 
             when (inputMode) {
                 null -> _uiEffect.send(ComposerUiEffect.PopBackStack)
 
-                MessageInputModeParcelable.Attachment -> {
-                    clearInputMode() // reset to null mode
-                }
+                // just clear inputMode, the UI will then update
+                MessageInputModeParcelable.Attachment,
+                MessageInputModeParcelable.Text,
+                    -> clearInputMode() // reset to null mode
 
+                // TODO: should trigger pause and keep the state so that the state can be saved to draft db.
+                // HERE we just stop the recorder and sending message, and pop back.
                 MessageInputModeParcelable.Voice -> {
-                    val recorderState = voiceRecordingUiState.value
+                    val recorderState = voiceRecorderStateHolder.voiceRecordingUiState.value
                     if (recorderState.voiceRecordingState == VoiceRecordingState.Recording) {
                         // TODO: support recording pause logic! issue #6
                         stopVoiceRecordingAndSendVoiceMessage()
@@ -153,25 +164,6 @@ class MessageComposerViewModel @Inject constructor(
                     _uiEffect.send(ComposerUiEffect.PopBackStack)
                     // Here we don't need to change inputMode.
                 }
-
-                MessageInputModeParcelable.Text -> {
-                    when (isKeyboardVisible) {
-                        // keyboard shown
-                        true -> {
-                            _uiEffect.send(ComposerUiEffect.HideKeyboard)
-
-                            if (isInputTextEmpty()) {
-                                // reset to null
-                                clearInputMode()
-                            }
-                            // if not empty, keep it to text mode.
-                        }
-                        // keyboard not shown. pop back
-                        else -> {
-                            _uiEffect.send(ComposerUiEffect.PopBackStack)
-                        }
-                    }
-                }
             }
         }
     }
@@ -179,34 +171,104 @@ class MessageComposerViewModel @Inject constructor(
 
     fun startVoiceRecording() {
         launchWithTopicUserId { _, userId ->
-            val outputFile = generateVoiceRecordingOutputFileInMessageCacheRule(userId = userId)
-            voiceRecorder.start(context, outputFile)
+            voiceRecorderStateHolder.startVoiceRecording(userId)
         }
     }
 
     fun cancelVoiceRecording() {
         viewModelScope.launch {
-            voiceRecorder.cancel()
+            voiceRecorderStateHolder.cancelVoiceRecording()
         }
     }
 
     fun stopVoiceRecordingAndSendVoiceMessage() {
         launchWithTopicUserId(useLocalScope = false) { topicId, userId ->
-            voiceRecorder.stop()
-                ?.let {
-                    // It follows the message cache file generating rule, so only filename is necessary
-                    sendFileMessageUseCase.sendVoice(
-                        it.name,
-                        userId = userId,
-                        topicId = topicId,
-                        messageTimestampMs = System.currentTimeMillis(),
-                    )
-                }
+            voiceRecorderStateHolder.stopVoiceRecordingAndSendVoiceMessage(
+                topicId = topicId, userId = userId
+            )
         }
     }
 
-    fun sendMultipleAttachments(uris: List<Uri>, uniformMessageType: MessageType?) {
-        // TODO: split the db operation out, then first insert db concurrently, finally do the rests.
+    /**
+     * @param unifiedMessageType if it has the same messageType, set it to avoid get-metadata logic,
+     *                           else leave it null
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun sendMultipleAttachments(uris: List<Uri>, unifiedMessageType: MessageType? = null) {
+        /**
+         * @return the usecase instance is used for further processing.
+         *         because the usecase is decided by the inputMessageType, while
+         *         it's not available in the ResolveMetadataResult, so it's necessary to return it
+         */
+        suspend fun resolveMetadata(
+            uri: Uri,
+            userId: UserId,
+            topicId: TopicId,
+            instant: Instant,
+        ): Pair<SendUriUseCaseBase, ResolveMetadataResult?> {
+            val inputMessageType = unifiedMessageType ?: fileMimeTypeToMessageType(
+                MimeTypeUtils.getMimeType(
+                    context, uri = uri
+                )
+            )
+            val usecase = sendUriUseCaseFactory.get(inputMessageType)
+            val result = usecase.resolveMetadata(
+                srcUriStr = uri.toUriStr(), userId = userId, topicId = topicId,
+                messageTimestampMs = instant.toEpochMilliseconds(),
+            )
+            return usecase to result
+        }
+
+        launchWithTopicUserId(useLocalScope = false) { topicId, userId ->
+            val now = Clock.System.now()
+            // make a dummy ASC timestamps for each uri, step = 10ms
+            val ascTimestamps = List(uris.size) { now + (it * 10).milliseconds }
+            // 1. resolve metadata parallel
+            // - because it's pair, so it's very hard to elimit the null from ResolveMetadataResult?
+            val usecaseToMetadataResults = uris.zip(ascTimestamps)
+                .asFlow()
+                .flatMapMerge(ATTACHMENT_RESOLVE_METADATA_CONCURRENCY) { (uri, instant) ->
+                    flow {
+                        val pairResult = resolveMetadata(
+                            uri = uri, userId = userId, topicId = topicId, instant = instant
+                        )
+                        emit(pairResult)
+                    }
+                }
+                .toList()
+                .sortedBy { it.second?.messageTimestampMs ?: 0 }
+            // 2. insert to db in sequence
+            val insertDbResult = usecaseToMetadataResults.mapNotNull { (usecase, metadataResult) ->
+                metadataResult?.let { nonnullMetadata ->
+                    usecase.insertInitialMessage(nonnullMetadata)
+                        ?.let { messageId ->
+                            Triple(usecase, nonnullMetadata, messageId)
+                        }
+                }
+            }
+            // 3. copy & start background
+            val successCount = insertDbResult.asFlow()
+                .flatMapMerge(ATTACHMENT_COPY_CONCURRENCY) { (usecase, metadataResult, messageId) ->
+                    flow {
+                        val isSuccess =
+                            usecase.copyToInternalAndStartBackgroundTask(metadataResult, messageId)
+                        emit(isSuccess)
+                    }
+                }
+                .toList()
+                .count { it }
+            if (successCount < uris.size) {
+                Timber.w(
+                    "sendMultipleAttachments failed on some cases: input=%d, resolveMetadata=%d, insertDb=%d, final=%s",
+                    uris.size,
+                    usecaseToMetadataResults.count { it.second != null },
+                    insertDbResult.size,
+                    successCount
+                )
+            } else {
+                Timber.d("sendMultipleAttachments success on all %d cases", successCount)
+            }
+        }
     }
 
     fun sendTextMessage(content: String) {
@@ -217,41 +279,6 @@ class MessageComposerViewModel @Inject constructor(
             messageRepository.saveTextMessage(textMsg)
         }
     }
-
-    fun sendImageMessage(uri: Uri) {
-        launchWithTopicUserId { topicId, userId ->
-            sendFileMessageUseCase.sendImage(
-                srcUriStr = uri.toUriStr(),
-                userId = userId,
-                topicId = topicId,
-                messageTimestampMs = System.currentTimeMillis()
-            )
-        }
-    }
-
-    fun sendVideoMessage(uri: Uri) {
-        launchWithTopicUserId { topicId, userId ->
-            sendFileMessageUseCase.sendVideo(
-                srcUriStr = uri.toUriStr(),
-                userId = userId,
-                topicId = topicId,
-                messageTimestampMs = System.currentTimeMillis()
-            )
-        }
-    }
-
-    fun sendAudioMessage(uri: Uri) {
-        launchWithTopicUserId { tid, uid ->
-            sendFileMessageUseCase.sendAudio(
-                uri.toUriStr(),
-                userId = uid,
-                topicId = tid,
-                messageTimestampMs = System.currentTimeMillis(),
-            )
-        }
-    }
-
-    private fun isInputTextEmpty() = inputTextUiState.value == ""
 
     private fun saveDraftToDb() {
         val inputMode = inputModeUiState.value?.toDomain()
@@ -272,21 +299,6 @@ class MessageComposerViewModel @Inject constructor(
         }
     }
 
-
-    private suspend fun generateVoiceRecordingOutputFileInMessageCacheRule(
-        userId: UserId,
-        now: Long = System.currentTimeMillis(),
-    ): File {
-        val filename = storagePathUseCase.buildTimestampedFilename(
-            now, originalFilename = VoiceRecorder.generateOutputAudioDefaultFilename("voice")
-        )
-        val outputFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(
-            userId = userId, filename = filename
-        )
-        val outputFile = outputFilePath.toFileWithCreatingDirectories(context)
-        return outputFile
-    }
-
     private fun launchWithTopicUserId(
         useLocalScope: Boolean = true,
         block: suspend (topicId: TopicId, userId: UserId) -> Unit,
@@ -296,7 +308,7 @@ class MessageComposerViewModel @Inject constructor(
         val scope =
             if (useLocalScope) viewModelScope else ProcessLifecycleOwner.get().lifecycleScope
 
-        scope.launch(Dispatchers.IO) {
+        scope.launch {
             block(topicId, userId)
         }
     }

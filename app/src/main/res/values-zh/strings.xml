@@ -48,4 +48,11 @@
     <string name="composer_attachment_icon_album">相册</string>
     <string name="composer_attachment_icon_audio_file">音频</string>
     <string name="composer_attachment_icon_files">文件</string>
+    <string name="composer_mic_icon_desc">麦克风</string>
+    <string name="composer_voice_button_text">语音输入</string>
+    <string name="composer_text_input_placeholder">文本输入</string>
+    <string name="composer_send_btn_desc">发送消息</string>
+    <string name="composer_attachment_icon_desc">发送附件</string>
+    <string name="composer_send_voice_btn_desc">发送语音</string>
+    <string name="btn_setting">设置</string>
 </resources>

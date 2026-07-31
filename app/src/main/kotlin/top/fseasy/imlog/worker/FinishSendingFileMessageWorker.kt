@@ -8,10 +8,10 @@ import dagger.assisted.AssistedInject
 import kotlinx.serialization.KSerializer
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
-import top.fseasy.imlog.domain.usecase.sendfilemessage.SendAudioMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.SendImageMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.SendVideoMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.SendVoiceMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.SendAudioMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.SendImageMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.SendVideoMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
 import top.fseasy.imlog.domain.util.defaultJson
 
 /**

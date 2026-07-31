@@ -1,4 +1,4 @@
-package top.fseasy.imlog.domain.usecase.sendfilemessage.stage
+package top.fseasy.imlog.domain.usecase.sendattachment.stage
 
 import top.fseasy.imlog.domain.model.FileMetadataUnion
 import top.fseasy.imlog.domain.model.MessageId
@@ -8,11 +8,11 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.DbRunner
-import top.fseasy.imlog.domain.repository.MessageFileSource
+import top.fseasy.imlog.domain.repository.MessageAttachmentSource
 import top.fseasy.imlog.domain.repository.MessageRepository
 import javax.inject.Inject
 
-class InitializeFileMessageUseCase @Inject constructor(
+class InitializeAttachmentMessageUseCase @Inject constructor(
     private val messageRepository: MessageRepository,
     private val dbRunner: DbRunner,
 ) {
@@ -27,17 +27,17 @@ class InitializeFileMessageUseCase @Inject constructor(
         messageTimestampMs: Long,
         messageType: MessageType,
         fileMetadata: FileMetadataUnion,
-    ): MessageId = dbRunner.runInTransaction(retry = RetryModel.OnAnyException) {
-        val messageId = messageRepository.syncInsertInitialFileMessage(
+    ): MessageId = dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
+        val messageId = messageRepository.syncInsertInitialAttachmentMessage(
             topicId = topicId,
             senderId = senderId,
             type = messageType,
             timestampMs = messageTimestampMs,
             fileMetadata = fileMetadata
         )
-        messageRepository.syncInsertInitialFileProcessingTaskState(
+        messageRepository.syncInsertInitialAttachmentProcessingTaskState(
             messageId = messageId,
-            fileSource = MessageFileSource.FromUriStr(srcUriStr),
+            fileSource = MessageAttachmentSource.FromUriStr(srcUriStr),
             taskStartTime = messageTimestampMs
         )
         messageId
@@ -54,17 +54,17 @@ class InitializeFileMessageUseCase @Inject constructor(
         messageTimestampMs: Long,
         messageType: MessageType,
         fileMetadata: FileMetadataUnion,
-    ): MessageId = dbRunner.runInTransaction(retry = RetryModel.OnAnyException) {
-        val messageId = messageRepository.syncInsertInitialFileMessage(
+    ): MessageId = dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
+        val messageId = messageRepository.syncInsertInitialAttachmentMessage(
             topicId = topicId,
             senderId = senderId,
             type = messageType,
             timestampMs = messageTimestampMs,
             fileMetadata = fileMetadata
         )
-        messageRepository.syncInsertInitialFileProcessingTaskState(
+        messageRepository.syncInsertInitialAttachmentProcessingTaskState(
             messageId = messageId,
-            fileSource = MessageFileSource.FromMessageCacheFile(cacheFilename),
+            fileSource = MessageAttachmentSource.FromMessageCache(cacheFilename),
             taskStartTime = messageTimestampMs
         )
         messageId

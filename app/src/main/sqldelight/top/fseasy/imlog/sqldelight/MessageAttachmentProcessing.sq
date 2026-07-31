@@ -1,0 +1,20 @@
+
+insertAttachmentProcessingState:
+INSERT INTO message_attachment_processing_task_states
+VALUES ?;
+
+deleteAttachmentProcessingState:
+DELETE FROM message_attachment_processing_task_states
+WHERE message_id = :message_id;
+
+setInternalCacheFilename:
+UPDATE message_attachment_processing_task_states
+SET internal_cached_filename = :internalCachedFilename
+WHERE message_id = :messageId;
+
+updateProcessingError:
+UPDATE message_attachment_processing_task_states
+SET
+    error_stage = :errorStage,
+    error_user_retryable = :errorUserRetryable
+WHERE message_id = :messageId;

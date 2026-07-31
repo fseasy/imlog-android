@@ -21,13 +21,13 @@ import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Statistics
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.repository.MessageFileSource
+import top.fseasy.imlog.domain.repository.MessageAttachmentSource
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import javax.inject.Inject
 import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.GetMessagesByTopic as GetMessagesByTopicRowEntity
-import top.fseasy.imlog.sqldelight.Message_file_processing_task_states as FileProcessingTaskStateEntity
+import top.fseasy.imlog.sqldelight.Message_attachment_processing_task_states as FileProcessingTaskStateEntity
 import top.fseasy.imlog.sqldelight.Messages as MessageEntity
 
 @Singleton
@@ -39,15 +39,12 @@ class MessageRepositoryImpl @Inject constructor(
 
     /**
      * To render the timeline message list.
-     * @param currentUserId: used to generate the full path of media resources
      */
-    override fun observeTopicMessages(
-        topicId: TopicId,
-        currentUserId: UserId,
-    ): Flow<List<Message>> = database.messageQueries.getMessagesByTopic(topicId.value)
-        .asFlow()
-        .mapToList(dispatcher)
-        .map { rows -> rows.mapNotNull { it.toDomain() } }
+    override fun observeTopicMessages(topicId: TopicId): Flow<List<Message>> =
+        database.messageQueries.getMessagesByTopic(topicId.value)
+            .asFlow()
+            .mapToList(dispatcher)
+            .map { rows -> rows.mapNotNull { it.toDomain() } }
 
     override fun observeStatistics(senderId: UserId): Flow<Statistics> =
         database.messageStatQueries.statOneUserUsage(senderId.value)
@@ -55,14 +52,14 @@ class MessageRepositoryImpl @Inject constructor(
             .mapToOne(dispatcher)
             .map { Statistics(totalDays = it.total_days, totalMessages = it.total_messages) }
 
-    override fun syncInsertInitialFileMessage(
+    override fun syncInsertInitialAttachmentMessage(
         topicId: TopicId,
         senderId: UserId,
         type: MessageType,
         timestampMs: Long,
         fileMetadata: FileMetadataUnion,
     ): MessageId {
-        val initialMessage = createInitialFileMessageEntity(
+        val initialMessage = createInitialAttachmentMessageEntity(
             topicId = topicId,
             senderId = senderId,
             type = type,
@@ -73,18 +70,18 @@ class MessageRepositoryImpl @Inject constructor(
         return MessageId(initialMessage.id)
     }
 
-    override fun syncInsertInitialFileProcessingTaskState(
+    override fun syncInsertInitialAttachmentProcessingTaskState(
         messageId: MessageId,
-        fileSource: MessageFileSource,
+        fileSource: MessageAttachmentSource,
         taskStartTime: Long,
     ) {
-        val initialStateEntity = createInitialFileProcessingTaskStateEntity(
+        val initialStateEntity = createInitialAttachmentProcessingTaskStateEntity(
             messageId = messageId,
             fileSource = fileSource,
             taskStartTime = taskStartTime
         )
 
-        database.messageFileProcessingQueries.insertMessageFileProcessingState(
+        database.messageAttachmentProcessingQueries.insertAttachmentProcessingState(
             initialStateEntity
         )
     }
@@ -101,18 +98,18 @@ class MessageRepositoryImpl @Inject constructor(
         database.messageQueries.deleteMessageLogical(id = messageId.value).value > 0L
     }
 
-    override suspend fun setFileProcessingInternalCacheFilename(
+    override suspend fun setAttachmentProcessingInternalCacheFilename(
         messageId: MessageId,
         filename: String?,
     ): Boolean = withContext(dispatcher) {
         retryOnAnyException {
-            database.messageFileProcessingQueries.setMessageFileInternalCacheFilename(
+            database.messageAttachmentProcessingQueries.setInternalCacheFilename(
                 internalCachedFilename = filename, messageId = messageId.value
             ).value > 0L
         }
     }
 
-    override suspend fun setFileMessageRawFilename(
+    override suspend fun setAttachmentMessageRawFilename(
         messageId: MessageId,
         filename: String?,
     ): Boolean = withContext(dispatcher) {
@@ -123,7 +120,7 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun setFileMessageThumbnailFilename(
+    override suspend fun setAttachmentMessageThumbnailFilename(
         messageId: MessageId,
         filename: String?,
     ): Boolean = withContext(dispatcher) {
@@ -135,13 +132,13 @@ class MessageRepositoryImpl @Inject constructor(
     }
 
 
-    override suspend fun setFileProcessingTaskFail(
+    override suspend fun setAttachmentProcessingTaskFail(
         messageId: MessageId,
         stage: MessageProcessingErrorStage,
         errorUserRetryable: Boolean,
     ) = withContext(dispatcher) {
         retryOnAnyException {
-            database.messageFileProcessingQueries.updateMessageFileProcessingError(
+            database.messageAttachmentProcessingQueries.updateProcessingError(
                 errorStage = stage.value,
                 errorUserRetryable = if (errorUserRetryable) 1L else 0L,
                 messageId = messageId.value
@@ -149,23 +146,23 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun deleteFileProcessingTaskState(
+    override suspend fun deleteAttachmentProcessingTaskState(
         messageId: MessageId,
     ) = withContext(dispatcher) {
         retryOnAnyException {
-            database.messageFileProcessingQueries.deleteMessageFileProcessingState(messageId.value).value > 0L
+            database.messageAttachmentProcessingQueries.deleteAttachmentProcessingState(messageId.value).value > 0L
         }
     }
 
 
-    private fun createInitialFileProcessingTaskStateEntity(
+    private fun createInitialAttachmentProcessingTaskStateEntity(
         messageId: MessageId,
-        fileSource: MessageFileSource,
+        fileSource: MessageAttachmentSource,
         taskStartTime: Long,
     ): FileProcessingTaskStateEntity {
         val (srcUriDbStr, internalCacheFilename) = when (fileSource) {
-            is MessageFileSource.FromUriStr -> fileSource.uriStr.value to null
-            is MessageFileSource.FromMessageCacheFile -> null to fileSource.filename
+            is MessageAttachmentSource.FromUriStr -> fileSource.uriStr.value to null
+            is MessageAttachmentSource.FromMessageCache -> null to fileSource.filename
         }
         return FileProcessingTaskStateEntity(
             message_id = messageId.value,
@@ -177,7 +174,7 @@ class MessageRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun createInitialFileMessageEntity(
+    private fun createInitialAttachmentMessageEntity(
         topicId: TopicId,
         senderId: UserId,
         type: MessageType,

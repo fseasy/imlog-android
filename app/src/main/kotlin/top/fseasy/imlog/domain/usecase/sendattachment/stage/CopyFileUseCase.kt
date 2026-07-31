@@ -1,4 +1,4 @@
-package top.fseasy.imlog.domain.usecase.sendfilemessage.stage
+package top.fseasy.imlog.domain.usecase.sendattachment.stage
 
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
@@ -46,7 +46,7 @@ class CopyFileUseCase @Inject constructor(
             is FileCopyResult.Success -> result
         }
         val isSetSuccess = try {
-            messageRepository.setFileProcessingInternalCacheFilename(
+            messageRepository.setAttachmentProcessingInternalCacheFilename(
                 filename = cacheFilename, messageId = messageId
             )
         } catch (e: CancellationException) {
@@ -101,7 +101,7 @@ class CopyFileUseCase @Inject constructor(
             is FileCopyResult.Success -> result
         }
         val isSetSuccess = try {
-            messageRepository.setFileMessageRawFilename(
+            messageRepository.setAttachmentMessageRawFilename(
                 filename = rawFilename, messageId = messageId
             )
         } catch (e: CancellationException) {

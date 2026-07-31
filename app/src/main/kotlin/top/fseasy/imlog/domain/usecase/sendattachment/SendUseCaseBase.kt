@@ -1,12 +1,12 @@
-package top.fseasy.imlog.domain.usecase.sendfilemessage
+package top.fseasy.imlog.domain.usecase.sendattachment
 
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.FileMetadataUnion
 import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
+import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageType
-import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
@@ -14,10 +14,10 @@ import top.fseasy.imlog.domain.model.toMetadataUnion
 import top.fseasy.imlog.domain.repository.BackgroundTaskRunner
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.CopyFileUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.CopyStageResult
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.FinishProcessingUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.InitializeFileMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyFileUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageResult
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.InitializeAttachmentMessageUseCase
 import javax.inject.Inject
 
 abstract class SendUseCaseBase(
@@ -57,22 +57,44 @@ data class SendUriUseCaseBaseDependencies @Inject constructor(
     val backgroundProcessingUseCase: BackgroundProcessingUseCase,
     val storageRepository: StorageRepository,
     val backgroundTaskRunner: BackgroundTaskRunner,
-    val initializeFileMessageUseCase: InitializeFileMessageUseCase,
+    val initializeAttachmentMessageUseCase: InitializeAttachmentMessageUseCase,
     val copyFileUseCase: CopyFileUseCase,
     val finishProcessingUseCase: FinishProcessingUseCase,
 )
 
+data class ResolveMetadataResult(
+    val srcUriStr: UriStr,
+    val userId: UserId,
+    val topicId: TopicId,
+    val messageTimestampMs: Long,
+    val messageType: MessageType,
+    val fileMetadata: FileMetadataUnion,
+)
+
+/**
+ * Split the full process to 3 steps, to suite the UI requirements that sending multiple files ASAP
+ *
+ * 1. resolve metadata: fast, decide rendering messageType, resolve file metadata [can be parallel]
+ * 2. insert initial message to db: fast. [in sequence to avoid ui jump]
+ * 3. copy uri to internal, start background task. slower. [can be parallel]
+ */
 abstract class SendUriUseCaseBase(
     internal val dependencies: SendUriUseCaseBaseDependencies,
 ) : SendUseCaseBase(dependencies.backgroundProcessingUseCase, dependencies.storageRepository) {
 
-    suspend operator fun invoke(
+    /**
+     * get metadata, decide the rendering-message-type
+     *
+     * Run in IO threads for specific time-consuming parts. It's safe to run it in UI thread.
+     *
+     * @return null when failed
+     */
+    suspend fun resolveMetadata(
         srcUriStr: UriStr,
         userId: UserId,
         topicId: TopicId,
         messageTimestampMs: Long,
-    ): Boolean {
-        // 1. initialize the file message record to db
+    ): ResolveMetadataResult? {
         val srcPath = AbsolutePathModel.UriStrModel(srcUriStr)
         val messageType = resolveMessageTypeForRender(srcPath)
         val fileMetadata = getMetadataOrNullBasedOnMessageType(
@@ -84,33 +106,61 @@ abstract class SendUriUseCaseBase(
                 "Failed to get file metadata, $srcUriStr is invalid, " +
                     "action-msg-type=$messageTypeFromSendAction, render-msg-type=$messageType"
             )
-            return false
+            return null
         }
+        return ResolveMetadataResult(
+            srcUriStr = srcUriStr,
+            userId = userId,
+            topicId = topicId,
+            messageTimestampMs = messageTimestampMs,
+            messageType = messageType,
+            fileMetadata = fileMetadata,
+        )
+    }
+
+    /**
+     * insert to db
+     *
+     * Run in IO threads for specific time-consuming parts. It's safe to run it in UI thread.
+     *
+     * @return null when failed.
+     */
+    suspend fun insertInitialMessage(
+        resolveMetadataResult: ResolveMetadataResult,
+    ): MessageId? {
         val messageId = try {
-            dependencies.initializeFileMessageUseCase.forUriSource(
-                srcUriStr = srcUriStr,
-                senderId = userId,
-                topicId = topicId,
-                messageTimestampMs = messageTimestampMs,
-                messageType = messageType,
-                fileMetadata = fileMetadata
+            dependencies.initializeAttachmentMessageUseCase.forUriSource(
+                srcUriStr = resolveMetadataResult.srcUriStr,
+                senderId = resolveMetadataResult.userId,
+                topicId = resolveMetadataResult.topicId,
+                messageTimestampMs = resolveMetadataResult.messageTimestampMs,
+                messageType = resolveMetadataResult.messageType,
+                fileMetadata = resolveMetadataResult.fileMetadata
             )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Timber.e(e, "Failed to initialize file message, can't do anything")
             // can't do anything, just return...
-            return false
+            return null
         }
+        return messageId
+    }
 
-        // 2. copy src file to internal cache, then update status
+    /**
+     * Runs in IO threads for each necessary statements.
+     */
+    suspend fun copyToInternalAndStartBackgroundTask(
+        resolveMetadataResult: ResolveMetadataResult,
+        messageId: MessageId,
+    ): Boolean {
         val copyInternalSuccessResult =
             when (val result = dependencies.copyFileUseCase.copySrcToInternalCacheAndUpdateState(
                 messageId = messageId,
-                userId = userId,
-                srcUriStr = srcUriStr,
-                messageTimestampMs = messageTimestampMs,
-                originalDisplayName = fileMetadata.displayName,
+                userId = resolveMetadataResult.userId,
+                srcUriStr = resolveMetadataResult.srcUriStr,
+                messageTimestampMs = resolveMetadataResult.messageTimestampMs,
+                originalDisplayName = resolveMetadataResult.fileMetadata.displayName,
             )) {
                 is CopyStageResult.Failure -> {
                     dependencies.finishProcessingUseCase.onFailure(
@@ -127,16 +177,33 @@ abstract class SendUriUseCaseBase(
         dependencies.backgroundTaskRunner.finishSendingFileMessage(
             FinishSendingFileWorkerPayload(
                 messageId = messageId,
-                userId = userId,
-                topicId = topicId,
-                messageTimestampMs = messageTimestampMs,
-                fileMetadata = fileMetadata,
+                userId = resolveMetadataResult.userId,
+                topicId = resolveMetadataResult.topicId,
+                messageTimestampMs = resolveMetadataResult.messageTimestampMs,
+                fileMetadata = resolveMetadataResult.fileMetadata,
                 cacheFilename = copyInternalSuccessResult.resultFilename,
-                messageType = messageType,
-                srcUriStr = srcUriStr
+                messageType = resolveMetadataResult.messageType,
+                srcUriStr = resolveMetadataResult.srcUriStr
             )
         )
         return true
+    }
+
+    suspend operator fun invoke(
+        srcUriStr: UriStr,
+        userId: UserId,
+        topicId: TopicId,
+        messageTimestampMs: Long,
+    ): Boolean {
+        val result = resolveMetadata(
+            srcUriStr = srcUriStr,
+            userId = userId,
+            topicId = topicId,
+            messageTimestampMs = messageTimestampMs
+        ) ?: return false
+        val messageId = insertInitialMessage(result) ?: return false
+
+        return copyToInternalAndStartBackgroundTask(result, messageId)
     }
 }
 
@@ -151,7 +218,7 @@ data class SendCacheFileUseCaseBaseDependencies @Inject constructor(
     val storagePathUseCase: StoragePathUseCase,
     val storageRepository: StorageRepository,
     val backgroundTaskRunner: BackgroundTaskRunner,
-    val initializeFileMessageUseCase: InitializeFileMessageUseCase,
+    val initializeAttachmentMessageUseCase: InitializeAttachmentMessageUseCase,
     val copyFileUseCase: CopyFileUseCase,
     val finishProcessingUseCase: FinishProcessingUseCase,
 )
@@ -188,7 +255,7 @@ abstract class SendCacheFileUseCaseBase(
             return false
         }
         val messageId = try {
-            dependencies.initializeFileMessageUseCase.forCacheFileSource(
+            dependencies.initializeAttachmentMessageUseCase.forCacheFileSource(
                 cacheFilename = cacheFilename,
                 senderId = userId,
                 topicId = topicId,
@@ -218,18 +285,6 @@ abstract class SendCacheFileUseCaseBase(
         return true
     }
 }
-
-/**
- * Helper function to map mimetype to MessageType. Mainly for GenericFile
- */
-private fun fileMimeTypeToMessageType(mimeType: String): MessageType =
-    if (mimeType.startsWith("video")) {
-        MessageType.Video
-    } else if (mimeType.startsWith("audio")) {
-        MessageType.Audio
-    } else if (mimeType.startsWith("image")) {
-        MessageType.Image
-    } else MessageType.GenericFile
 
 /**
  *

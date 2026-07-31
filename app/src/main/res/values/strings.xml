@@ -49,4 +49,12 @@
     <string name="composer_attachment_icon_album">Album</string>
     <string name="composer_attachment_icon_audio_file">Audio</string>
     <string name="composer_attachment_icon_files">File</string>
+    <string name="composer_mic_icon_desc">Microphone</string>
+    <string name="composer_voice_button_text">Voice Input</string>
+    <string name="composer_text_input_placeholder">Text Input</string>
+    <string name="composer_send_btn_desc">Send Message</string>
+    <string name="composer_attachment_icon_desc">Send Attachments</string>
+    <string name="composer_send_voice_btn_desc">Send Voice</string>
+    <string name="common_ui_text_loading_dots" translatable="false">...</string>
+    <string name="btn_setting">Setting</string>
 </resources>

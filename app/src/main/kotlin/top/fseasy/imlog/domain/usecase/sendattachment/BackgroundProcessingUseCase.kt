@@ -1,14 +1,14 @@
-package top.fseasy.imlog.domain.usecase.sendfilemessage
+package top.fseasy.imlog.domain.usecase.sendattachment
 
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.CopyFileUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.CopyStageResult
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.FinishProcessingUseCase
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.FinishProcessingStageResult
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.GenerateThumbnailStageResult
-import top.fseasy.imlog.domain.usecase.sendfilemessage.stage.GenerateThumbnailUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyFileUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageResult
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingStageResult
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailStageResult
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailUseCase
 import javax.inject.Inject
 
 class BackgroundProcessingUseCase @Inject constructor(

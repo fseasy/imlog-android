@@ -13,7 +13,7 @@ class SqlDelightRunner @Inject constructor(
     private val database: SqlDelightDb,
     private val ioDispatcher: CoroutineDispatcher,
 ) : DbRunner {
-    override suspend fun <T> runInTransaction(
+    override suspend fun <T> runTransactionInIOThread(
         retry: RetryModel,
         block: () -> T,
     ): T = runInIoThread(retry, block = {

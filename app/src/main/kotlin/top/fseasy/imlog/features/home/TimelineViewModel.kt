@@ -14,42 +14,29 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.model.VoiceRecordingState
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.navigation.MainScreen
 import javax.inject.Inject
 
-data class MessageUiState(
-    val message: Message,
-    val thumbnailModel: ResourceModel?,
-)
+sealed interface ContextState {
+    object Loading : ContextState
 
-sealed interface ContentUiState {
-    object Loading : ContentUiState
-
-    data class Error(val reason: String) : ContentUiState
+    data class Error(val reason: String) : ContextState
 
     data class Success(
         val topic: Topic,
         val currentUserId: UserId,
-        val messages: List<MessageUiState> = emptyList(),
-    ) : ContentUiState
+    ) : ContextState
 }
-
-data class VoiceRecordingUiState(
-    val voiceRecordingState: VoiceRecordingState = VoiceRecordingState.Idle,
-    val elapsedMs: Long = 0,
-)
 
 
 @HiltViewModel
@@ -64,48 +51,35 @@ class TimelineViewModel @Inject constructor(
     val topicId: TopicId = savedStateHandle.toRoute<MainScreen.TopicTimeline>().topicId
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val contentUiState: StateFlow<ContentUiState> = userRepository.observeCurrentUserIdOrNull()
-        .filterNotNull()
-        .distinctUntilChanged()
-        .flatMapLatest { uid ->
-            combine(
-                topicRepository.observeTopic(topicId),
-                messageRepository.observeTopicMessages(topicId, uid),
-            ) { topic, messages ->
-                when (topic) {
-                    null -> ContentUiState.Error("Failed to load Topic for id: $topicId")
-                    else -> ContentUiState.Success(
-                        currentUserId = uid,
-                        topic = topic,
-                        messages = messages.map { m ->
-                            MessageUiState(
-                                message = m, thumbnailModel = buildThumbnailModel(m, uid)
-                            )
-                        },
-                    )
-                }
-            }
+    val contextStateFlow: StateFlow<ContextState> = combine(
+        userRepository.observeCurrentUserIdOrNull()
+            .filterNotNull(),
+        topicRepository.observeTopic(topicId),
+    ) { uid, topic ->
+        when (topic) {
+            null -> ContextState.Error("Failed to load Topic for id: $topicId")
+            else -> ContextState.Success(
+                currentUserId = uid,
+                topic = topic,
+            )
         }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ContentUiState.Loading
-        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ContextState.Loading
+    )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val messagesStateFlow: StateFlow<List<Message>> =
+        messageRepository.observeTopicMessages(topicId)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
 
     fun copyMessage(message: Message) {
         // TODO: 实现剪贴板复制
     }
-
-
-    private fun buildThumbnailModel(
-        message: Message,
-        userId: UserId,
-    ): ResourceModel? {
-        if (message.type != MessageType.Image && message.type != MessageType.Video) {
-            return null
-        }
-        return null
-    }
-
 
 }

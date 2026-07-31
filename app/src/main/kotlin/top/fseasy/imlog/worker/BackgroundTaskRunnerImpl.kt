@@ -32,7 +32,7 @@ class BackgroundTaskRunnerImpl @Inject constructor(
                 serializedPayload
             )
 
-            MessageType.Video -> enqueueFinishFileSendingWorker<FinishSendingImageMessageWorker>(
+            MessageType.Video -> enqueueFinishFileSendingWorker<FinishSendingVideoMessageWorker>(
                 serializedPayload
             )
 

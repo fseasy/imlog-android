@@ -1,4 +1,4 @@
-package top.fseasy.imlog.domain.usecase.sendfilemessage.stage
+package top.fseasy.imlog.domain.usecase.sendattachment.stage
 
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
@@ -34,7 +34,7 @@ class FinishProcessingUseCase @Inject constructor(
         }
 
         try {
-            messageRepository.deleteFileProcessingTaskState(messageId)
+            messageRepository.deleteAttachmentProcessingTaskState(messageId)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -55,7 +55,7 @@ class FinishProcessingUseCase @Inject constructor(
         errorUserRetryable: Boolean,
     ) {
         try {
-            messageRepository.setFileProcessingTaskFail(
+            messageRepository.setAttachmentProcessingTaskFail(
                 messageId = messageId,
                 stage = stage,
                 errorUserRetryable = errorUserRetryable,
