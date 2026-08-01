@@ -32,7 +32,7 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.ui.components.AppOutlinedButton
 import top.fseasy.imlog.ui.components.HighlightConfig
 import top.fseasy.imlog.ui.components.HighlightedText
-import top.fseasy.imlog.ui.components.InternalErrorContent
+import top.fseasy.imlog.ui.components.AppInternalErrorContent
 
 @Composable
 fun SharedStorageSelectScreen(
@@ -128,7 +128,7 @@ fun SharedStorageSelectContent(
             }
 
             is UriSelectState.Failure -> {
-                InternalErrorContent(state.cause.message ?: stringResource(R.string.error_unknown))
+                AppInternalErrorContent(state.cause.message ?: stringResource(R.string.error_unknown))
                 AppOutlinedButton(
                     onClick = { folderPickerLauncher.launch(null) },
                     text = stringResource(R.string.btn_retry),

@@ -73,24 +73,10 @@ data class TopicMember(
     val isDeleted: Boolean,
 )
 
-data class TopicPersonalState(
+data class TopicPreference(
     val topicId: TopicId,
     val userId: UserId,
     val isArchived: Boolean = false,
     val isPinned: Boolean = false,
     val background: String? = null,
-    val lastReadAt: Long = System.currentTimeMillis(),
-    val attributesUpdatedAt: Long = lastReadAt,
-)
-
-
-/**
- * A data to represent the join query result of Topic + TopicPersonalState.
- * nb: no default values as it should be init from the entity directly.
- */
-data class TopicWithPersonalPreference(
-    val topic: Topic,
-    val isArchived: Boolean,
-    val isPinned: Boolean,
-    val background: String?,
 )

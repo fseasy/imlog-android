@@ -1,19 +1,12 @@
-package top.fseasy.imlog.features.home.ui
+package top.fseasy.imlog.features.home.topiclog
 
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
@@ -24,21 +17,19 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.features.home.ContextState
-import top.fseasy.imlog.features.home.MessageComposerViewModel
-import top.fseasy.imlog.features.home.TimelineViewModel
-import top.fseasy.imlog.features.home.ui.composer.MessageComposer
+import top.fseasy.imlog.features.home.topiclog.timeline.ContextState
+import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
+import top.fseasy.imlog.features.home.topiclog.timeline.TimelineViewModel
+import top.fseasy.imlog.features.home.topiclog.composer.MessageComposer
+import top.fseasy.imlog.features.home.topiclog.timeline.TimelineScreen
 
 
 @Composable
@@ -70,7 +61,10 @@ fun TopicLogScreen(
             )
         },
         composerSection = {
-            // TODO
+            MessageComposer(
+                onNavigateBack = onNavigateBack,
+                viewModel = composerViewModel,
+            )
         },
         handleComposerDismiss = handleComposerDismiss
     )

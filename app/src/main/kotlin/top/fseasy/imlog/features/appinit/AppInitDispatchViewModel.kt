@@ -2,7 +2,6 @@ package top.fseasy.imlog.features.appinit
 
 import android.content.Context
 import androidx.compose.runtime.Immutable
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,7 +12,6 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import top.fseasy.imlog.domain.model.AppInitData
-import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.ui.util.toDisplayMessage
 import javax.inject.Inject
@@ -60,7 +58,7 @@ class AppInitDispatchViewModel @Inject constructor(
     private fun determineInitStep(initData: AppInitData?): AppInitStep = when {
         initData == null -> AppInitStep.Auth
         !initData.storageUriSelected -> AppInitStep.SelectMediaStorageUri(initData.userId)
-        !initData.WelcomeShown -> AppInitStep.Welcome(
+        !initData.welcomeShown -> AppInitStep.Welcome(
             userId = initData.userId, needCreateFirstTopic = !initData.firstTopicCreated
         )
 

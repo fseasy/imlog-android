@@ -28,7 +28,10 @@ sealed interface MessageAttachmentSource {
 }
 
 interface MessageRepository {
-    fun observeTopicMessages(topicId: TopicId): Flow<List<Message>>
+    /***
+     * If exception, return flow<null>
+     */
+    fun observeTopicMessagesOrNull(topicId: TopicId): Flow<List<Message>?>
     fun observeStatistics(senderId: UserId): Flow<Statistics>
 
 

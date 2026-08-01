@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.model
+package top.fseasy.imlog.features.home.topiclog.composer
 
 import android.os.Parcelable
 import kotlinx.parcelize.DataClass
@@ -10,17 +10,8 @@ import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.QuoteMessage
 import top.fseasy.imlog.domain.model.QuoteMessageThumbnailFileBuildingArgs
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.usecase.sendattachment.SendAudioMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.SendGenericFileMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.SendImageMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.SendVideoMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
-import javax.inject.Inject
 
 
-/**
- * Currently we
- */
 @Parcelize
 enum class MessageInputModeParcelable : Parcelable {
     Text, Voice, Attachment
@@ -32,13 +23,11 @@ fun MessageInputMode.toParcelable(): MessageInputModeParcelable = when (this) {
     MessageInputMode.Attachment -> MessageInputModeParcelable.Attachment
 }
 
-
 fun MessageInputModeParcelable.toDomain(): MessageInputMode = when (this) {
     MessageInputModeParcelable.Text -> MessageInputMode.Text
     MessageInputModeParcelable.Voice -> MessageInputMode.Voice
     MessageInputModeParcelable.Attachment -> MessageInputMode.Attachment
 }
-
 
 @Parcelize
 data class QuoteMessageParcelable @OptIn(Experimental::class) constructor(

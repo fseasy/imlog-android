@@ -1,46 +1,40 @@
-package top.fseasy.imlog.features.home
+package top.fseasy.imlog.features.home.topiclog.composer
 
 import android.content.Context
 import android.net.Uri
-import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asFlow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import top.fseasy.imlog.data.mapper.toFileWithCreatingDirectories
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.data.util.MimeTypeUtils
-import top.fseasy.imlog.data.util.VoiceRecorder
+import top.fseasy.imlog.data.util.VoiceRecorderState
+import top.fseasy.imlog.di.ApplicationIoScope
+import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.MessageFactory
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.model.VoiceRecordingState
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
@@ -50,12 +44,7 @@ import top.fseasy.imlog.domain.usecase.sendattachment.SendUriUseCaseBase
 import top.fseasy.imlog.domain.usecase.sendattachment.SendUriUseCaseFactory
 import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.fileMimeTypeToMessageType
-import top.fseasy.imlog.features.home.model.ComposerUiEffect
-import top.fseasy.imlog.features.home.model.MessageInputModeParcelable
-import top.fseasy.imlog.features.home.model.toDomain
-import top.fseasy.imlog.features.home.model.toParcelable
 import top.fseasy.imlog.navigation.MainScreen
-import java.io.File
 import javax.inject.Inject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
@@ -72,20 +61,25 @@ private const val ATTACHMENT_COPY_CONCURRENCY = 3
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class MessageComposerViewModel @Inject constructor(
-    private val savedStateHandle: SavedStateHandle,
+    storagePathUseCase: StoragePathUseCase,
+    sendVoiceMessageUseCase: SendVoiceMessageUseCase,
     userRepository: UserRepository,
+    private val savedStateHandle: SavedStateHandle,
     private val messageRepository: MessageRepository,
     private val topicRepository: TopicRepository,
     private val sendUriUseCaseFactory: SendUriUseCaseFactory,
-    val voiceRecorderStateHolder: VoiceRecorderStateHolder,
     @param:ApplicationContext private val context: Context,
+    @ApplicationIoScope private val applicationIoScope: CoroutineScope,
 ) : ViewModel() {
-
     private val topicId = savedStateHandle.toRoute<MainScreen.TopicTimeline>().topicId
-    private val userId = userRepository.observeCurrentUserIdOrNull()
-        .stateIn(
-            viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null
-        )
+    private val authState = userRepository.authState
+
+    val voiceRecorderStateHolder = VoiceRecorderStateHolder(
+        coroutineScope = viewModelScope,
+        storagePathUseCase = storagePathUseCase,
+        sendVoiceMessageUseCase = sendVoiceMessageUseCase,
+        context = context
+    ).also(::addCloseable)
 
     // Bind to SavedStateHandle to remember it while app in background/killed-restore state
     val inputTextUiState: StateFlow<String> =
@@ -155,7 +149,7 @@ class MessageComposerViewModel @Inject constructor(
                 // HERE we just stop the recorder and sending message, and pop back.
                 MessageInputModeParcelable.Voice -> {
                     val recorderState = voiceRecorderStateHolder.voiceRecordingUiState.value
-                    if (recorderState.voiceRecordingState == VoiceRecordingState.Recording) {
+                    if (recorderState.recorderState == VoiceRecorderState.Recording) {
                         // TODO: support recording pause logic! issue #6
                         stopVoiceRecordingAndSendVoiceMessage()
                         _uiEffect.send(ComposerUiEffect.Vibrate)
@@ -303,10 +297,9 @@ class MessageComposerViewModel @Inject constructor(
         useLocalScope: Boolean = true,
         block: suspend (topicId: TopicId, userId: UserId) -> Unit,
     ) {
-        val userId = userId.value ?: return
+        val userId = (authState.value as? AuthState.Authenticated)?.userId ?: return
 
-        val scope =
-            if (useLocalScope) viewModelScope else ProcessLifecycleOwner.get().lifecycleScope
+        val scope = if (useLocalScope) viewModelScope else applicationIoScope
 
         scope.launch {
             block(topicId, userId)

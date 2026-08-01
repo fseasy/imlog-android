@@ -6,18 +6,18 @@ import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.domain.model.TopicPersonalState
-import top.fseasy.imlog.domain.model.TopicWithPersonalPreference
+import top.fseasy.imlog.domain.model.TopicPreference
 import top.fseasy.imlog.domain.model.UserId
 
 interface TopicRepository {
-    fun observeTopic(topicId: TopicId): Flow<Topic?>
-    fun observeTopicPersonalPreference(userId: UserId, topicId: TopicId): Flow<TopicPersonalState?>
+    /**
+     * Get Topic Flow, catch exception and return null.
+     *
+     * Run in IO.
+     */
+    fun observeTopicOrNull(topicId: TopicId): Flow<Topic?>
+    fun observeTopicPreferenceOrNull(userId: UserId, topicId: TopicId): Flow<TopicPreference?>
     fun observeHomeTopics(userId: UserId): Flow<List<HomeTopic>>
-    fun observeTopicWithPersonalState(
-        topicId: TopicId,
-        userId: UserId,
-    ): Flow<TopicWithPersonalPreference?>
 
     /**
      * Use this if you need some extra operation after/before create topic In Transaction guarantee.

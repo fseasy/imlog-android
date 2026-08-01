@@ -1,13 +1,19 @@
 package top.fseasy.imlog.domain.repository
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import top.fseasy.imlog.domain.model.AppInitData
+import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.User
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.UserPreference
 
 interface UserRepository {
+    /**
+     * App Level StateFlow for authState. So that any ViewModel can read it without transforming.
+     */
+    val authState: StateFlow<AuthState>
     fun observeCurrentUserIdOrNull(): Flow<UserId?>
     fun observeUserOrNull(): Flow<User?>
 

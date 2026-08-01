@@ -4,35 +4,29 @@ import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import timber.log.Timber
-import top.fseasy.imlog.domain.model.HomeTopic
-import top.fseasy.imlog.domain.model.Topic
-import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.domain.model.TopicPersonalState
-import top.fseasy.imlog.domain.model.TopicMemberRole
-import top.fseasy.imlog.domain.model.TopicWithPersonalPreference
-import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.repository.TopicRepository
-import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
 import top.fseasy.imlog.domain.model.AvatarModel
+import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.MessageDraft
+import top.fseasy.imlog.domain.model.Topic
+import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.domain.model.TopicMemberRole
+import top.fseasy.imlog.domain.model.TopicPreference
+import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.defaultTopicPresetAvatar
 import top.fseasy.imlog.domain.model.serialize
 import top.fseasy.imlog.domain.model.toAvatarModelOrNull
+import top.fseasy.imlog.domain.repository.TopicRepository
+import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.Topic_message_state
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.time.Clock
 import top.fseasy.imlog.sqldelight.GetCurrentUserHomeScreenTopics as HomeTopicEntity
-import top.fseasy.imlog.sqldelight.GetTopicWithPersonalPreference as GetTopicWithPersonalPreferenceEntity
-import top.fseasy.imlog.sqldelight.Topic_personal_preference as PersonalStatePreference
 import top.fseasy.imlog.sqldelight.Topic_members as TopicMemberEntity
+import top.fseasy.imlog.sqldelight.Topic_preference as TopicPreferenceEntity
 import top.fseasy.imlog.sqldelight.Topics as TopicEntity
 
 @Singleton
@@ -41,44 +35,24 @@ class TopicRepositoryImpl @Inject constructor(
     private val dispatcher: CoroutineDispatcher,
 ) : TopicRepository {
 
-    override fun observeTopic(topicId: TopicId): Flow<Topic?> =
-        database.topicSelectQueries.getTopicById(topicId)
-            .asFlow()
-            .mapToOneOrNull(dispatcher)
-            .map { it?.toDomain() }
-            .catch { e ->
-                Timber.w(e, "No Topic found for id=${topicId}, emit null")
-                emit(null)
-            }
-
-    override fun observeTopicPersonalPreference(
-        userId: UserId,
-        topicId: TopicId,
-    ): Flow<TopicPersonalState?> = database.topicSelectQueries.getPersonalState(
-        topic_id = topicId, user_id = userId
-    )
-        .asFlow()
-        .mapToOneOrNull(dispatcher)
-        .map { it?.toDomain() }
-        .catch { e ->
-            Timber.i(e, "Observe TopicPersonalState failed on id=${topicId}, emit null")
-            emit(null)
+    override fun observeTopicOrNull(topicId: TopicId): Flow<Topic?> =
+        safeObserveFlowOrNull({ "No Topic found for id=${topicId}" }) {
+            database.topicSelectQueries.getTopicById(topicId)
+                .asFlow()
+                .mapToOneOrNull(dispatcher)
+                .map { it?.toDomain() }
         }
 
-    override fun observeTopicWithPersonalState(
-        topicId: TopicId,
+    override fun observeTopicPreferenceOrNull(
         userId: UserId,
-    ): Flow<TopicWithPersonalPreference?> =
-        database.topicSelectQueries.getTopicWithPersonalPreference(
-            topic_id = topicId, user_id = userId
-        )
-            .asFlow()
-            .mapToOneOrNull(dispatcher)
-            .map { it?.toDomain() }
-            .catch { e ->
-                Timber.i(e, "Observer TopicWithPersonalState failed on id=$topicId")
-                emit(null)
-            }
+        topicId: TopicId,
+    ): Flow<TopicPreference?> =
+        safeObserveFlowOrNull({ "Observe TopicPersonalState failed on id=${topicId}" }) {
+            database.topicSelectQueries.getPreference(topic_id = topicId, user_id = userId)
+                .asFlow()
+                .mapToOneOrNull(dispatcher)
+                .map { it?.toDomain() }
+        }
 
     /**
      * Used for Log Screen Topics lists (home screen)
@@ -123,7 +97,7 @@ class TopicRepositoryImpl @Inject constructor(
             )
         )
         database.topicQueries.insertPersonalPreference(
-            PersonalStatePreference(
+            TopicPreferenceEntity(
                 topic_id = topicId,
                 user_id = creatorId,
                 archived = false,
@@ -266,7 +240,6 @@ class TopicRepositoryImpl @Inject constructor(
         ).value > 0L
     }
 
-
     private fun TopicEntity.toDomain() = Topic(
         id = id,
         name = name,
@@ -277,13 +250,12 @@ class TopicRepositoryImpl @Inject constructor(
         attributesUpdatedAt = attributes_updated_at,
     )
 
-    private fun PersonalStatePreference.toDomain() = TopicPersonalState(
+    private fun TopicPreferenceEntity.toDomain() = TopicPreference(
         topicId = topic_id,
         userId = user_id,
         isArchived = archived,
         isPinned = pinned,
         background = background,
-        attributesUpdatedAt = attributes_updated_at
     )
 
     private fun HomeTopicEntity.toDomain() = HomeTopic(
@@ -296,22 +268,5 @@ class TopicRepositoryImpl @Inject constructor(
         messageUpdatedAt = topic_message_update_at,
         latestMessagePreview = latest_message_preview?.getOrNull(),
         draft = draft?.getOrNull()
-    )
-
-    private fun GetTopicWithPersonalPreferenceEntity.toTopicEntity() = TopicEntity(
-        id = id,
-        name = name,
-        avatar_model = avatar_model,
-        description = description,
-        creator_id = creator_id,
-        created_at = created_at,
-        attributes_updated_at = attributes_updated_at,
-    )
-
-    private fun GetTopicWithPersonalPreferenceEntity.toDomain() = TopicWithPersonalPreference(
-        topic = toTopicEntity().toDomain(),
-        isArchived = archived ?: false,
-        isPinned = pinned ?: false,
-        background = background,
     )
 }

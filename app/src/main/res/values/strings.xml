@@ -57,4 +57,24 @@
     <string name="composer_send_voice_btn_desc">Send Voice</string>
     <string name="common_ui_text_loading_dots" translatable="false">...</string>
     <string name="btn_setting">Setting</string>
+    <string name="composer_delete_voice_btn_desc">Delete Recording</string>
+    <string name="topic_settings_error_load_data_failure">Failed to load topic data</string>
+    <string name="topic_settings_title">Topic Settings</string>
+    <string name="topic_settings_edit_name">Edit Topic Name</string>
+    <string name="topic_settings_pin_topic">Pin Topic</string>
+    <string name="topic_settings_pinned_status">Pinned</string>
+    <string name="topic_settings_unpinned_status">Unpinned</string>
+    <string name="topic_settings_btn_unpin">Unpin</string>
+    <string name="topic_settings_btn_pin">Pin</string>
+    <string name="topic_settings_archived_status">Archived</string>
+    <string name="topic_settings_btn_unarchive">Unarchive</string>
+    <string name="topic_settings_unarchived_status">Unarchived</string>
+    <string name="topic_settings_btn_archive">Archive</string>
+    <string name="topic_settings_archive_topic">Archive Topic</string>
+    <string name="topic_settings_delete_topic">Delete Topic</string>
+    <string name="topic_settings_name_input_field_label">New Name</string>
+    <string name="btn_delete">Delete</string>
+    <string name="topic_settings_delete_confirm_title">Delete Topic?</string>
+    <string name="topic_settings_delete_confirm_desc">This action cannot be undone. All messages in this topic will be deleted.</string>
+    <string name="topic_list_empty_text">No topics yet.</string>
 </resources>

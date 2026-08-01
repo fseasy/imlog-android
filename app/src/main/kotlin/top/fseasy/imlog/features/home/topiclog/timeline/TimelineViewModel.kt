@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home
+package top.fseasy.imlog.features.home.topiclog.timeline
 
 import android.content.Context
 import androidx.lifecycle.SavedStateHandle
@@ -11,13 +11,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import top.fseasy.imlog.domain.model.Message
-import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
@@ -54,7 +50,7 @@ class TimelineViewModel @Inject constructor(
     val contextStateFlow: StateFlow<ContextState> = combine(
         userRepository.observeCurrentUserIdOrNull()
             .filterNotNull(),
-        topicRepository.observeTopic(topicId),
+        topicRepository.observeTopicOrNull(topicId),
     ) { uid, topic ->
         when (topic) {
             null -> ContextState.Error("Failed to load Topic for id: $topicId")
@@ -70,8 +66,8 @@ class TimelineViewModel @Inject constructor(
     )
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val messagesStateFlow: StateFlow<List<Message>> =
-        messageRepository.observeTopicMessages(topicId)
+    val messagesStateFlow: StateFlow<List<Message>?> =
+        messageRepository.observeTopicMessagesOrNull(topicId)
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),

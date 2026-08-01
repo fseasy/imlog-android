@@ -26,7 +26,7 @@ import top.fseasy.imlog.features.auth.SignInUpCreateUserUiState
 import top.fseasy.imlog.features.auth.SignInUpCreateUserViewModel
 import top.fseasy.imlog.ui.components.AnimatedTextLineConfig
 import top.fseasy.imlog.ui.components.HighlightConfig
-import top.fseasy.imlog.ui.components.InternalErrorContent
+import top.fseasy.imlog.ui.components.AppInternalErrorContent
 import top.fseasy.imlog.ui.components.StackedAnimatedText
 import top.fseasy.imlog.ui.components.StackedAnimationTiming
 import top.fseasy.imlog.ui.model.TaskExecuteState
@@ -106,7 +106,7 @@ private fun SignInIntroContent(
                     initialDelay = 300, lineGap = 500, overlap = false
                 ), modifier = modifier.fillMaxWidth()
             )
-            if (uiState.createUserState is TaskExecuteState.Failure) InternalErrorContent(
+            if (uiState.createUserState is TaskExecuteState.Failure) AppInternalErrorContent(
                 stringResource(R.string.common_ui_unknown_error_and_auto_retry)
             )
         }

@@ -22,3 +22,26 @@ class SendUriUseCaseFactory @Inject constructor(
         }
     }
 }
+
+/**
+ * For common api: runBackground
+ */
+@ViewModelScoped
+class SendRunBackgroundUseCaseFactory @Inject constructor(
+    private val sendAudioMessageUseCase: Lazy<SendAudioMessageUseCase>,
+    private val sendImageMessageUseCase: Lazy<SendImageMessageUseCase>,
+    private val sendVideoMessageUseCase: Lazy<SendVideoMessageUseCase>,
+    private val sendGenericFileMessageUseCase: Lazy<SendGenericFileMessageUseCase>,
+    private val sendVoiceMessageUseCase: Lazy<SendVoiceMessageUseCase>,
+) {
+    fun get(type: MessageType): SendUseCaseBase {
+        return when (type) {
+            MessageType.Audio -> sendAudioMessageUseCase.get()
+            MessageType.Image -> sendImageMessageUseCase.get()
+            MessageType.Video -> sendVideoMessageUseCase.get()
+            MessageType.GenericFile -> sendGenericFileMessageUseCase.get()
+            MessageType.Voice -> sendVoiceMessageUseCase.get()
+            else -> error("MessageType $type doesn't have SendUriUseCase")
+        }
+    }
+}

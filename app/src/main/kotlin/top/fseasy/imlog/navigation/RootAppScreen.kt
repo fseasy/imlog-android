@@ -1,6 +1,5 @@
 package top.fseasy.imlog.navigation
 
-
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons

@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.ui.composer
+package top.fseasy.imlog.features.home.topiclog.composer
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import timber.log.Timber
 import top.fseasy.imlog.R
-import top.fseasy.imlog.features.home.model.VoiceButtonState
 
 /**
  * Input + Voice Component

@@ -40,11 +40,13 @@ class MessageRepositoryImpl @Inject constructor(
     /**
      * To render the timeline message list.
      */
-    override fun observeTopicMessages(topicId: TopicId): Flow<List<Message>> =
-        database.messageQueries.getMessagesByTopic(topicId.value)
-            .asFlow()
-            .mapToList(dispatcher)
-            .map { rows -> rows.mapNotNull { it.toDomain() } }
+    override fun observeTopicMessagesOrNull(topicId: TopicId): Flow<List<Message>?> =
+        safeObserveFlowOrNull({ "Failed to observe messages for topic: $topicId" }) {
+            database.messageQueries.getMessagesByTopic(topicId.value)
+                .asFlow()
+                .mapToList(dispatcher)
+                .map { rows -> rows.mapNotNull { it.toDomain() } }
+        }
 
     override fun observeStatistics(senderId: UserId): Flow<Statistics> =
         database.messageStatQueries.statOneUserUsage(senderId.value)
@@ -76,9 +78,7 @@ class MessageRepositoryImpl @Inject constructor(
         taskStartTime: Long,
     ) {
         val initialStateEntity = createInitialAttachmentProcessingTaskStateEntity(
-            messageId = messageId,
-            fileSource = fileSource,
-            taskStartTime = taskStartTime
+            messageId = messageId, fileSource = fileSource, taskStartTime = taskStartTime
         )
 
         database.messageAttachmentProcessingQueries.insertAttachmentProcessingState(
@@ -196,7 +196,8 @@ class MessageRepositoryImpl @Inject constructor(
         raw_filename = null,
         thumbnail_filename = null,
         attributes_updated_at = timestampMs,
-        is_deleted = 0
+        is_deleted = 0,
+        quote_message = null // TODO: This should be passed in
     )
 
     private fun GetMessagesByTopicRowEntity.toDomain(): Message? {
@@ -209,7 +210,7 @@ class MessageRepositoryImpl @Inject constructor(
             topicId = TopicId(topic_id),
             senderId = UserId(sender_id),
             type = messageType,
-            quoteMessage = reply_to_message,
+            quoteMessage = quote_message?.getOrNull(),
             text = text,
             // media file fields
             originalFileUri = src_uri?.toUri()
@@ -237,8 +238,8 @@ class MessageRepositoryImpl @Inject constructor(
          * 1. Entity -> Domain (get invalid type, type = null)
          * 2. Domain -> Entity (set the null type to `__unknown__`)
          */
-        type = type?.value ?: "__unknown__",
-        text = content,
+        type = type.value,
+        text = text,
         raw_filename = storedFilename,
         file_size = fileSize,
         duration = duration,
@@ -249,6 +250,7 @@ class MessageRepositoryImpl @Inject constructor(
         original_filename = originalFilename,
         mime_type = mimeType,
         width = width?.toLong(),
-        height = height?.toLong()
+        height = height?.toLong(),
+        quote_message = quoteMessage?.let { Result.success(it) },
     )
 }

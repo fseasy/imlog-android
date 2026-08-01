@@ -1,40 +1,48 @@
-package top.fseasy.imlog.features.home
+package top.fseasy.imlog.features.home.topiclog.composer
 
 import android.content.Context
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import top.fseasy.imlog.data.mapper.toFileWithCreatingDirectories
 import top.fseasy.imlog.data.util.VoiceRecorder
+import top.fseasy.imlog.data.util.VoiceRecorderState
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
 import java.io.File
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
-@HiltViewModel
-class VoiceRecorderStateHolder @Inject constructor(
+class VoiceRecordingUiState(
+    val recorderState: VoiceRecorderState = VoiceRecorderState.Idle,
+    val elapsed: Duration = 0.milliseconds,
+)
+
+/**
+ * State Holder
+ *
+ * @param coroutineScope should be bound viewModelScope
+ */
+class VoiceRecorderStateHolder(
+    coroutineScope: CoroutineScope,
     private val storagePathUseCase: StoragePathUseCase,
     private val sendVoiceMessageUseCase: SendVoiceMessageUseCase,
-    @param:ApplicationContext private val context: Context,
-) : ViewModel() {
+    private val context: Context,
+) : AutoCloseable {
 
-    val voiceRecorder = VoiceRecorder(viewModelScope).also(::addCloseable)
+    val voiceRecorder = VoiceRecorder(coroutineScope)
 
     val voiceRecordingUiState: StateFlow<VoiceRecordingUiState> = combine(
         voiceRecorder.state, voiceRecorder.elapsedMs
     ) { state, elapsedMs ->
-        VoiceRecordingUiState(state, elapsedMs)
+        VoiceRecordingUiState(state, elapsedMs.milliseconds)
     }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        scope = coroutineScope,
+        started = SharingStarted.WhileSubscribed(5_000),
         initialValue = VoiceRecordingUiState()
     )
 
@@ -72,5 +80,9 @@ class VoiceRecorderStateHolder @Inject constructor(
         )
         val outputFile = outputFilePath.toFileWithCreatingDirectories(context)
         return outputFile
+    }
+
+    override fun close() {
+        voiceRecorder.close()
     }
 }

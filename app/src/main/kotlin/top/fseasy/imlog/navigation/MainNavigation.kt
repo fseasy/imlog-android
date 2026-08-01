@@ -4,12 +4,11 @@ import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
-import androidx.navigation.toRoute
 import kotlinx.serialization.Serializable
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.features.home.ui.TimelineScreen
-import top.fseasy.imlog.features.home.ui.TopicSettingsSheet
-import top.fseasy.imlog.features.home.ui.HomeScreen
+import top.fseasy.imlog.features.home.main.HomeScreen
+import top.fseasy.imlog.features.home.topiclog.TopicLogScreen
+import top.fseasy.imlog.features.home.topicsettings.TopicSettingsSheet
 import top.fseasy.imlog.features.settings.AboutScreen
 import top.fseasy.imlog.features.settings.FeedbackScreen
 import top.fseasy.imlog.features.view.ViewScreen
@@ -54,9 +53,8 @@ fun NavGraphBuilder.mainGraph(
                 navController.navigate(MainScreen.TopicTimeline(topicId))
             }, onSettingsClick = onOpenDrawer)
         }
-        composable<MainScreen.TopicTimeline> { backStackEntry ->
-            val route: MainScreen.TopicTimeline = backStackEntry.toRoute()
-            TimelineScreen(
+        composable<MainScreen.TopicTimeline> {
+            TopicLogScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onSettingsClick = { topicId ->
                     navController.navigate(MainScreen.TopicSettings(topicId))
@@ -66,12 +64,10 @@ fun NavGraphBuilder.mainGraph(
         composable<MainScreen.Dashboard> {
             ViewScreen()
         }
-        composable<MainScreen.TopicSettings> { backStackEntry ->
-            val route: MainScreen.TopicSettings = backStackEntry.toRoute()
+        composable<MainScreen.TopicSettings> {
             TopicSettingsSheet(
-                topicId = route.topicId,
                 onBack = { navController.popBackStack() },
-                onDelete = {
+                afterDeleteNavigate = {
                     navController.popBackStack(MainScreen.Home, inclusive = false)
                 })
         }

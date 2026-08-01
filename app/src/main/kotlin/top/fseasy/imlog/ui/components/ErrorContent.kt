@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.dp
 import top.fseasy.imlog.R
 
 @Composable
-fun InternalErrorContent(
+fun AppInternalErrorContent(
     errorMessage: String,
     modifier: Modifier = Modifier,
     onRetry: (() -> Unit)? = null,

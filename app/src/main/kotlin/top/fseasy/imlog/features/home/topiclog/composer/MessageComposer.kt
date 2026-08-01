@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.ui.composer
+package top.fseasy.imlog.features.home.topiclog.composer
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
@@ -8,7 +8,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import top.fseasy.imlog.features.home.MessageComposerViewModel
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -17,9 +16,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import top.fseasy.imlog.domain.model.MessageType
-import top.fseasy.imlog.features.home.model.ComposerUiEffect
-import top.fseasy.imlog.features.home.model.InputModeSetActions
-import top.fseasy.imlog.features.home.model.MessageInputModeParcelable
 
 @Composable
 fun MessageComposer(

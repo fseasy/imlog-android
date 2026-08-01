@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.ui.composer
+package top.fseasy.imlog.features.home.topiclog.composer
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -38,8 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import top.fseasy.imlog.R
-import top.fseasy.imlog.domain.util.secondsToMinutesSeconds
-import top.fseasy.imlog.features.home.VoiceRecordingUiState
+import top.fseasy.imlog.domain.util.toMmSsFormat
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
@@ -88,7 +87,7 @@ fun VoiceRecodingContent(
         IconButton(onClick = onCancel) {
             Icon(
                 imageVector = Icons.Default.Delete,
-                contentDescription = "删除录音",
+                contentDescription = stringResource(R.string.composer_delete_voice_btn_desc),
                 tint = Color(0xFFFF3B30)
             )
         }
@@ -102,7 +101,7 @@ fun VoiceRecodingContent(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = (voiceRecordingUiState.elapsedMs / 1000).secondsToMinutesSeconds(),
+                text = (voiceRecordingUiState.elapsed.toMmSsFormat()),
                 color = Color(0xFFFF3B30),
                 fontSize = 14.sp,
                 style = MaterialTheme.typography.bodyMedium

@@ -14,7 +14,7 @@ class CrashReportingTree : Timber.Tree() {
                 Log.e(tag ?: "CrashReporting", message, t)
             } else {
                 // TODO
-                // FirebaseCrashlytics.getInstance().log("[$tag] $message")
+                // FirebaseCrashlytics.getInstance().topiclog("[$tag] $message")
                 Log.println(priority, tag ?: "CrashReporting", message)
             }
         }

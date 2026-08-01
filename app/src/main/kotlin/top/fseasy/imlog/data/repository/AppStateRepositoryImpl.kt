@@ -26,18 +26,15 @@ class AppStateRepositoryImpl @Inject constructor(
      * proxy by UserRepo
      */
     @ApiStatus.Internal
-    override fun observeCurrentUserIdOrNull(): Flow<UserId?> {
-        return database.appStateQueries
-            .getByKey(StateKey.CURRENT_USER_ID.rawKey)
-            .asFlow()
-            .mapToOneOrNull(dispatcher)
-            .map { it?.value_?.let(::UserId) }
-            .distinctUntilChanged()
-            .catch { e ->
-                Timber.e(e, "Observer current user id failed")
-                emit(null)
-            }
-    }
+    override fun observeCurrentUserIdOrNull(): Flow<UserId?> =
+        safeObserveFlowOrNull({ "Observer current user id failed" }) {
+            database.appStateQueries
+                .getByKey(StateKey.CURRENT_USER_ID.rawKey)
+                .asFlow()
+                .mapToOneOrNull(dispatcher)
+                .map { it?.value_?.let(::UserId) }
+                .distinctUntilChanged()
+        }
 
     @ApiStatus.Internal
     override suspend fun setCurrentId(userId: UserId) = withContext(dispatcher) {

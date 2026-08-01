@@ -21,10 +21,9 @@ import top.fseasy.imlog.ui.model.TaskExecuteState
 import top.fseasy.imlog.features.appinit.WelcomeUiState
 import top.fseasy.imlog.features.appinit.WelcomeViewModel
 import top.fseasy.imlog.ui.components.AppPrimaryButton
-import top.fseasy.imlog.ui.components.AppTextButton
 import top.fseasy.imlog.ui.components.HighlightConfig
 import top.fseasy.imlog.ui.components.HighlightedText
-import top.fseasy.imlog.ui.components.InternalErrorContent
+import top.fseasy.imlog.ui.components.AppInternalErrorContent
 
 
 @Composable
@@ -77,7 +76,7 @@ fun WelcomeEntry(
                 is TaskExecuteState.Idle -> Text("Preparing to Create the first topic for you")
                 is TaskExecuteState.Executing -> Text("Creating the first topic")
                 is TaskExecuteState.Success -> WelcomeContent(uiState, onStartClick)
-                is TaskExecuteState.Failure -> InternalErrorContent(
+                is TaskExecuteState.Failure -> AppInternalErrorContent(
                     state.reason, onRetry = onCreateTopicRetryClick
                 )
             }
@@ -109,7 +108,7 @@ fun WelcomeContent(
         )
 
         is TaskExecuteState.Failure -> {
-            InternalErrorContent(state.reason, onRetry = onStartClick)
+            AppInternalErrorContent(state.reason, onRetry = onStartClick)
         }
     }
 }

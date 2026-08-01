@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.ui.composer
+package top.fseasy.imlog.features.home.topiclog.composer
 
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,8 +10,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import top.fseasy.imlog.features.home.model.InputModeSetActions
-import top.fseasy.imlog.features.home.model.VoiceButtonState
 
 /**
  * default Row (Left: TextField+VoiceButton | Right:Attachment/SendButton 1:1 slot)

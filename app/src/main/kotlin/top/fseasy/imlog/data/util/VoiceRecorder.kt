@@ -15,10 +15,14 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import top.fseasy.imlog.domain.model.VoiceRecordingState
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
+
+
+enum class VoiceRecorderState {
+    Idle, Recording, Stopped
+}
 
 /**
  * 封装语音录制全流程，提供响应式状态与计时。
@@ -26,8 +30,8 @@ import kotlin.uuid.ExperimentalUuidApi
  */
 class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable {
 
-    private val _state = MutableStateFlow(VoiceRecordingState.Idle)
-    val state: StateFlow<VoiceRecordingState> = _state.asStateFlow()
+    private val _state = MutableStateFlow(VoiceRecorderState.Idle)
+    val state: StateFlow<VoiceRecorderState> = _state.asStateFlow()
 
     private val _elapsedMs = MutableStateFlow(0L)
     val elapsedMs: StateFlow<Long> = _elapsedMs.asStateFlow()
@@ -65,7 +69,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
      */
     @OptIn(ExperimentalUuidApi::class)
     suspend fun start(context: Context, outputFile: File) {
-        if (_state.value == VoiceRecordingState.Recording) return
+        if (_state.value == VoiceRecorderState.Recording) return
         return withContext(Dispatchers.IO) {
             // Reset.
             syncCleanup()
@@ -76,7 +80,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
                     prepare()
                     start()
                 }
-                _state.update { VoiceRecordingState.Recording }
+                _state.update { VoiceRecorderState.Recording }
                 startTimeMs = System.currentTimeMillis()
                 startTimer()
             } catch (e: Exception) {
@@ -95,7 +99,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
      * @return recording File if success
      */
     suspend fun stop(): File? {
-        if (_state.value != VoiceRecordingState.Recording) return null
+        if (_state.value != VoiceRecorderState.Recording) return null
         return withContext(Dispatchers.IO) {
             syncStopRecording()
         }
@@ -107,7 +111,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
      * Run in IO threads.
      */
     suspend fun cancel() = withContext(Dispatchers.IO) {
-        if (_state.value != VoiceRecordingState.Recording) {
+        if (_state.value != VoiceRecorderState.Recording) {
             syncCleanup()
             return@withContext
         }
@@ -136,7 +140,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
         if (isStopSuccess) {
             // release mediaRecorder and set state to STOP
             syncReleaseMediaRecorder()
-            _state.update { VoiceRecordingState.Stopped }
+            _state.update { VoiceRecorderState.Stopped }
             val resultFile = currentFile
             currentFile = null // reset to null to avoid that clean up delete it.
             return resultFile
@@ -152,7 +156,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
         timerJob = coroutineScope.launch {
             while (isActive) {
                 _elapsedMs.update { System.currentTimeMillis() - startTimeMs }
-                delay(100.milliseconds)
+                delay(400.milliseconds)
             }
         }
     }
@@ -190,7 +194,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
         } finally {
             currentFile = null
         }
-        _state.update { VoiceRecordingState.Idle }
+        _state.update { VoiceRecorderState.Idle }
         _elapsedMs.value = 0L
     }
 

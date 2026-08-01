@@ -19,38 +19,17 @@ class BackgroundTaskRunnerImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
 ) : BackgroundTaskRunner {
 
-    override suspend fun finishSendingFileMessage(payload: FinishSendingFileWorkerPayload) {
+    override suspend fun finishSendingAttachmentMessage(payload: FinishSendingFileWorkerPayload) {
         val serializedPayload = defaultJson.encodeToString(payload)
-        when (payload.messageType) {
-            MessageType.Audio,
-            MessageType.Voice,
-                -> enqueueFinishFileSendingWorker<FinishSendingAudioMessageWorker>(
-                serializedPayload
+        val workerRequest =
+            OneTimeWorkRequestBuilder<FinishSendingFileMessageWorker>().setInputData(
+                workDataOf(KEY_INPUT_PAYLOAD to serializedPayload)
             )
-
-            MessageType.Image -> enqueueFinishFileSendingWorker<FinishSendingImageMessageWorker>(
-                serializedPayload
-            )
-
-            MessageType.Video -> enqueueFinishFileSendingWorker<FinishSendingVideoMessageWorker>(
-                serializedPayload
-            )
-
-            else -> error("Unsupported message type in sending background task")
-        }
-    }
-
-    private inline fun <reified W : ListenableWorker> enqueueFinishFileSendingWorker(
-        serializedPayload: String,
-    ) {
-        val workerRequest = OneTimeWorkRequestBuilder<W>().setInputData(
-            workDataOf(KEY_INPUT_PAYLOAD to serializedPayload)
-        )
-            .setBackoffCriteria(
-                BackoffPolicy.EXPONENTIAL, Duration.ofMinutes(1)
-            )
-            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST) // Expedited work
-            .build()
+                .setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL, Duration.ofMinutes(1)
+                )
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST) // Expedited work
+                .build()
         WorkManager.getInstance(context)
             .enqueue(workerRequest)
     }

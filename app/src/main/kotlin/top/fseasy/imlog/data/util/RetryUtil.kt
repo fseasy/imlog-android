@@ -51,7 +51,7 @@ suspend fun <T> retry(
                 )
                 throw e
             }
-            // retry continue, log here and increase counter
+            // retry continue, topiclog here and increase counter
             Timber.w(
                 e,
                 "%s attempt %d/%d failed, retrying in %d ms...",

@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.ui
+package top.fseasy.imlog.features.home.topiclog.timeline
 
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,10 +20,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.domain.model.Message
-import top.fseasy.imlog.features.home.ContextState
-import top.fseasy.imlog.features.home.TimelineViewModel
 
 
+/**
+ * TODO: add paging
+ */
 @Composable
 fun TimelineScreen(
     onTapOutside: () -> Unit,
@@ -34,7 +34,7 @@ fun TimelineScreen(
 ) {
     val messages by timelineViewModel.messagesStateFlow.collectAsStateWithLifecycle()
     TimelineContent(
-        messages = messages,
+        messages = messages?:emptyList(), // TODO: show error when null.
         onTapOutside = onTapOutside,
         onDragList = onDragList,
         modifier = modifier

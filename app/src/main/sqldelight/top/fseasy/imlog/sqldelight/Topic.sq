@@ -45,7 +45,7 @@ CREATE TABLE topic_members (
 
 -- //  Private Datas. Bind to users. //
 -- no sharing
-CREATE TABLE topic_personal_preference (
+CREATE TABLE topic_preference (
     -- 删除了 user / topic, 关联的个性化设置全部删掉！
     topic_id TEXT AS TopicId NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
     user_id TEXT AS UserId NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -76,7 +76,7 @@ INTO topic_members
 VALUES :topicMemberEntity;
 
 insertPersonalPreference:
-INSERT INTO topic_personal_preference
+INSERT INTO topic_preference
 VALUES :personalPreferenceEntity;
 
 insertMessageState:

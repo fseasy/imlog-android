@@ -55,4 +55,13 @@
     <string name="composer_attachment_icon_desc">发送附件</string>
     <string name="composer_send_voice_btn_desc">发送语音</string>
     <string name="btn_setting">设置</string>
+    <string name="composer_delete_voice_btn_desc">删除录音</string>
+    <string name="topic_settings_error_load_data_failure">加载主题数据失败</string>
+    <string name="topic_settings_title">主题设置</string>
+    <string name="topic_settings_edit_name">编辑主题名称</string>
+    <string name="topic_settings_pin_topic">置顶主题</string>
+    <string name="topic_settings_pinned_status">已置顶</string>
+    <string name="topic_settings_unpinned_status">未置顶</string>
+    <string name="topic_settings_btn_unpin">取消置顶</string>
+    <string name="topic_settings_btn_pin">置顶</string>
 </resources>

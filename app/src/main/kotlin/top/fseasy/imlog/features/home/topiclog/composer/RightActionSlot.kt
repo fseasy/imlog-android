@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.ui.composer
+package top.fseasy.imlog.features.home.topiclog.composer
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn

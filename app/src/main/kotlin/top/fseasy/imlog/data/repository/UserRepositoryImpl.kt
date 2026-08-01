@@ -4,13 +4,17 @@ import androidx.core.net.toUri
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.AppInitData
@@ -23,6 +27,8 @@ import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
+import top.fseasy.imlog.di.ApplicationIoScope
+import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.defaultUserPresetAvatar
 import top.fseasy.imlog.domain.model.toAvatarModelOrNull
 import javax.inject.Inject
@@ -36,7 +42,19 @@ class UserRepositoryImpl @Inject constructor(
     private val database: SqlDelightDb,
     private val appStateRepository: AppStateRepository,
     private val dispatcher: CoroutineDispatcher,
+    @ApplicationIoScope private val applicationIoScope: CoroutineScope,
 ) : UserRepository {
+
+    override val authState: StateFlow<AuthState> = observeCurrentUserIdOrNull().map { uid ->
+        if (uid == null) AuthState.Unauthenticated else AuthState.Authenticated(
+            userId = uid
+        )
+    }
+        .stateIn(
+            scope = applicationIoScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = AuthState.Loading
+        )
 
     override fun observeCurrentUserIdOrNull(): Flow<UserId?> =
         appStateRepository.observeCurrentUserIdOrNull()
@@ -45,30 +63,28 @@ class UserRepositoryImpl @Inject constructor(
      * no exception will throw
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    override fun observeUserOrNull(): Flow<User?> = appStateRepository.observeCurrentUserIdOrNull()
-        .flatMapLatest { userId ->
-            val id = userId?.value ?: return@flatMapLatest flowOf(null)
-            database.userQueries.getUserById(id)
-                .asFlow()
-                .mapToOneOrNull(dispatcher)
-                .map { it?.toDomain() }
-                .catch { e ->
-                    Timber.w(e, "Observe User Get exception")
-                    emit(null)
+    override fun observeUserOrNull(): Flow<User?> =
+        safeObserveFlowOrNull({ "Observe User Get exception" }) {
+            appStateRepository.observeCurrentUserIdOrNull()
+                .flatMapLatest { userId ->
+                    val id = userId?.value ?: return@flatMapLatest flowOf(null)
+                    database.userQueries.getUserById(id)
+                        .asFlow()
+                        .mapToOneOrNull(dispatcher)
+                        .map { it?.toDomain() }
                 }
         }
 
-    override fun observeUserAppInitDataOrNull(userId: UserId): Flow<AppInitData?> {
-        return database.appInitDataQueries.selectByUserId(userId.value)
-            .asFlow()
-            .mapToOneOrNull(dispatcher)
-            .map { row -> row?.toDomain() }
-            .catch { e ->
-                Timber.e(e, "Failed to observe AppInit data, just emit null")
-                emit(null)
-            }
-            .distinctUntilChanged()
-    }
+
+    override fun observeUserAppInitDataOrNull(userId: UserId): Flow<AppInitData?> =
+        safeObserveFlowOrNull({"Failed to observe AppInit data"}) {
+
+            database.appInitDataQueries.selectByUserId(userId.value)
+                .asFlow()
+                .mapToOneOrNull(dispatcher)
+                .map { row -> row?.toDomain() }
+                .distinctUntilChanged()
+        }
 
     /**
      * SYNC fun. expected to be used in withContext(IO)
@@ -143,7 +159,7 @@ class UserRepositoryImpl @Inject constructor(
             userId = UserId(user_id),
             storageUriSelected = storage_uri_selected == 1L,
             firstTopicCreated = first_topic_created == 1L,
-            WelcomeShown = welcome_shown == 1L,
+            welcomeShown = welcome_shown == 1L,
         )
     }
 

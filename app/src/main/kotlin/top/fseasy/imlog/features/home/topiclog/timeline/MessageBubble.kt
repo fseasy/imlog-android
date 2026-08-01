@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.ui
+package top.fseasy.imlog.features.home.topiclog.timeline
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,7 +43,7 @@ import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.ResourceModel
 import top.fseasy.imlog.features.home.MessageUiState
-import top.fseasy.imlog.domain.util.secondsToMinutesSeconds
+import top.fseasy.imlog.domain.util.secondsToMmSsFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -175,7 +175,7 @@ fun VideoPlayer(
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = duration.secondsToMinutesSeconds(), style = MaterialTheme.typography.labelSmall
+            text = duration.secondsToMmSsFormat(), style = MaterialTheme.typography.labelSmall
         )
         Slider(
             value = currentPosition,
@@ -236,11 +236,11 @@ fun AudioPlayer(
                 ) {
                     Text(
                         text = (currentPosition * duration).toLong()
-                            .secondsToMinutesSeconds(),
+                            .secondsToMmSsFormat(),
                         style = MaterialTheme.typography.labelSmall
                     )
                     Text(
-                        text = duration.secondsToMinutesSeconds(),
+                        text = duration.secondsToMmSsFormat(),
                         style = MaterialTheme.typography.labelSmall
                     )
                 }

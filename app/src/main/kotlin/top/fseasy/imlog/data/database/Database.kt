@@ -7,7 +7,7 @@ import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.Messages.Adapter as MessageAdapter
 import top.fseasy.imlog.sqldelight.Topic_members.Adapter as TopicMembersAdapter
 import top.fseasy.imlog.sqldelight.Topic_message_state.Adapter as TopicMessageStateAdapter
-import top.fseasy.imlog.sqldelight.Topic_personal_preference.Adapter as TopicPersonalPreferenceAdapter
+import top.fseasy.imlog.sqldelight.Topic_preference.Adapter as TopicPreferenceAdapter
 import top.fseasy.imlog.sqldelight.Topics.Adapter as TopicsAdapter
 
 
@@ -31,7 +31,7 @@ fun createSqlDelightDb(context: Context): SqlDelightDb {
     return SqlDelightDb(
         driver = driver,
         messagesAdapter = MessageAdapter(
-            reply_to_messageAdapter = quoteMessageAdapter,
+            quote_messageAdapter = quoteMessageAdapter,
         ),
         topic_message_stateAdapter = TopicMessageStateAdapter(
             latest_message_previewAdapter = messagePreviewAdapter,
@@ -44,7 +44,7 @@ fun createSqlDelightDb(context: Context): SqlDelightDb {
             user_idAdapter = userIdAdapter,
             roleAdapter = topicMemberRoleAdapter
         ),
-        topic_personal_preferenceAdapter = TopicPersonalPreferenceAdapter(
+        topic_preferenceAdapter = TopicPreferenceAdapter(
             topic_idAdapter = topicIdAdapter,
             user_idAdapter = userIdAdapter
         ),

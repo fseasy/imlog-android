@@ -174,7 +174,7 @@ abstract class SendUriUseCaseBase(
                 is CopyStageResult.Success -> result
             }
 
-        dependencies.backgroundTaskRunner.finishSendingFileMessage(
+        dependencies.backgroundTaskRunner.finishSendingAttachmentMessage(
             FinishSendingFileWorkerPayload(
                 messageId = messageId,
                 userId = resolveMetadataResult.userId,
@@ -270,7 +270,7 @@ abstract class SendCacheFileUseCaseBase(
             // can't do anything, just return...
             return false
         }
-        dependencies.backgroundTaskRunner.finishSendingFileMessage(
+        dependencies.backgroundTaskRunner.finishSendingAttachmentMessage(
             FinishSendingFileWorkerPayload(
                 messageId = messageId,
                 userId = userId,

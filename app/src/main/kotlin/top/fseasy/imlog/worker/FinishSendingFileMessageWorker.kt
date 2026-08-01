@@ -5,40 +5,29 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.serialization.KSerializer
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
-import top.fseasy.imlog.domain.usecase.sendattachment.SendAudioMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.SendImageMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.SendVideoMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.SendRunBackgroundUseCaseFactory
 import top.fseasy.imlog.domain.util.defaultJson
 
-/**
- * Why define a generic T: for future payload expansion on different file type
- */
-abstract class FinishSendingFileMessageWorkerBase(
-    context: Context,
-    workerParams: WorkerParameters,
+
+class FinishSendingFileMessageWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val sendRunBackgroundUseCase: SendRunBackgroundUseCaseFactory,
 ) : CoroutineWorker(appContext = context, workerParams) {
 
-    /**
-     * Actual logic
-     */
-    protected abstract suspend fun executeUseCase(payload: FinishSendingFileWorkerPayload)
-
-    /**
-     * Used to deserialize the payload
-     */
-    private val payloadSerializer: KSerializer<FinishSendingFileWorkerPayload>
-        get() = FinishSendingFileWorkerPayload.serializer()
+    suspend fun executeUseCase(payload: FinishSendingFileWorkerPayload) {
+        sendRunBackgroundUseCase.get(payload.messageType)
+            .runBackground(payload)
+    }
 
     override suspend fun doWork(): Result {
         val serializedPayload = inputData.getString(KEY_INPUT_PAYLOAD)
             ?: return failureWithLog("InputData: no payload found")
-        val payload =
+        val payload: FinishSendingFileWorkerPayload =
             try {
-                defaultJson.decodeFromString(payloadSerializer, serializedPayload)
+                defaultJson.decodeFromString(serializedPayload)
             } catch (e: Exception) {
                 return failureWithLog(
                     "Failed to deserialize payload: $serializedPayload",
@@ -58,50 +47,5 @@ abstract class FinishSendingFileMessageWorkerBase(
                 Result.retry()
             }
         }
-    }
-}
-
-class FinishSendingAudioMessageWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
-    private val sendAudioMessageUseCase: SendAudioMessageUseCase,
-) : FinishSendingFileMessageWorkerBase(context, workerParams) {
-
-    override suspend fun executeUseCase(payload: FinishSendingFileWorkerPayload) {
-        sendAudioMessageUseCase.runBackground(payload)
-    }
-}
-
-
-class FinishSendingImageMessageWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
-    private val sendImageMessageUseCase: SendImageMessageUseCase,
-) : FinishSendingFileMessageWorkerBase(context, workerParams) {
-
-    override suspend fun executeUseCase(payload: FinishSendingFileWorkerPayload) {
-        sendImageMessageUseCase.runBackground(payload)
-    }
-}
-
-class FinishSendingVideoMessageWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
-    private val sendVideoMessageUseCase: SendVideoMessageUseCase,
-) : FinishSendingFileMessageWorkerBase(context, workerParams) {
-
-    override suspend fun executeUseCase(payload: FinishSendingFileWorkerPayload) {
-        sendVideoMessageUseCase.runBackground(payload)
-    }
-}
-
-class FinishSendingVoiceMessageWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
-    private val sendVoiceMessageUseCase: SendVoiceMessageUseCase,
-) : FinishSendingFileMessageWorkerBase(context, workerParams) {
-
-    override suspend fun executeUseCase(payload: FinishSendingFileWorkerPayload) {
-        sendVoiceMessageUseCase.runBackground(payload)
     }
 }

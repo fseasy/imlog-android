@@ -8,9 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import top.fseasy.imlog.navigation.MainNavHost
-import top.fseasy.imlog.ui.theme.ImlogTheme
 import dagger.hilt.android.AndroidEntryPoint
+import top.fseasy.imlog.navigation.RootAppScreen
+import top.fseasy.imlog.ui.theme.ImlogTheme
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainNavHost()
+                    RootAppScreen()
                 }
             }
         }
