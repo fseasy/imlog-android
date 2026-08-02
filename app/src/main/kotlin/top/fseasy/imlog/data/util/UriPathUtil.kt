@@ -10,7 +10,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.FileDeleteResult
-import top.fseasy.imlog.domain.util.deleteFile
 import java.io.File
 
 sealed interface FindOrCreateFileUriResult {
@@ -59,8 +58,7 @@ object UriPathUtil {
                         // process `file://` schema
                         val path = uri.path
                         if (path != null) {
-                            val file = File(path)
-                            deleteFile(file)
+                            syncDeleteFile(File(path))
                         } else {
                             FileDeleteResult.Error(IllegalStateException("Uri [$uri] is invalid, no path found"))
                         }

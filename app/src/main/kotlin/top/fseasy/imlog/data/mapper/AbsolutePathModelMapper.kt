@@ -2,11 +2,8 @@ package top.fseasy.imlog.data.mapper
 
 import android.content.Context
 import android.net.Uri
-import top.fseasy.imlog.data.repository.StorageRepositoryImpl
-import top.fseasy.imlog.data.util.MimeTypeUtils
 import top.fseasy.imlog.data.util.toFileProviderUri
 import top.fseasy.imlog.domain.model.AbsolutePathModel
-import top.fseasy.imlog.domain.model.StoragePathModel
 
 /**
  * Transform the AbsolutePathModel to Uri.
@@ -16,16 +13,20 @@ import top.fseasy.imlog.domain.model.StoragePathModel
  *
  */
 fun AbsolutePathModel.toUri(context: Context): Uri = when (this) {
-    is AbsolutePathModel.FileModel -> this.value.toFileProviderUri(context)
+    is AbsolutePathModel.AppPathModel -> this.value.toFile()
+        .toFileProviderUri(context)
+
     is AbsolutePathModel.UriStrModel -> this.value.toUriOrThrow()
 }
 
 /**
  * Get the actual value.
+ *
  * Used in condition that supports Any inputs (like coil)
+ *
  * @throws Exception if invalid uri
  */
-fun AbsolutePathModel.toActualFileOrUri(context: Context): Any = when (this) {
-    is AbsolutePathModel.FileModel -> this.value
+fun AbsolutePathModel.toActualFileOrUri(): Any = when (this) {
+    is AbsolutePathModel.AppPathModel -> this.value.toFile()
     is AbsolutePathModel.UriStrModel -> this.value.toUriOrThrow()
 }

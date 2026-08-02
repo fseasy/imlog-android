@@ -2,19 +2,17 @@ package top.fseasy.imlog.data.mapper
 
 import android.content.Context
 import android.net.Uri
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import top.fseasy.imlog.data.repository.StorageRepositoryImpl
 import top.fseasy.imlog.data.util.FindOrCreateFileUriResult
 import top.fseasy.imlog.data.util.UriPathUtil
+import top.fseasy.imlog.data.util.resolve
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.InternalLocation
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.util.resolveSubPaths
 import java.io.File
 import java.io.FileNotFoundException
+import java.nio.file.Path
 
 fun InternalLocation.toFile(context: Context): File {
     return when (this) {
@@ -24,44 +22,12 @@ fun InternalLocation.toFile(context: Context): File {
 }
 
 /**
- * run in IO
- * @throws SecurityException if permission issue
+ * pure cpu operations.
  */
-suspend fun StoragePathModel.InternalOnly.toFileWithCreatingDirectories(context: Context): File =
-    withContext(Dispatchers.IO) {
-        val rootFile = this@toFileWithCreatingDirectories.internalLocation.toFile(context)
-        rootFile.resolveSubPaths(
-            this@toFileWithCreatingDirectories.fullRelativePath,
-            createDir = true,
-            lastPathIsFile = true
-        )
-    }
-
-/**
- * run in IO. No exception will be thrown.
- */
-suspend fun StoragePathModel.InternalOnly.toFileWithoutCreatingDirectories(context: Context): File =
-    withContext(Dispatchers.IO) {
-        val rootFile = this@toFileWithoutCreatingDirectories.internalLocation.toFile(context)
-        rootFile.resolveSubPaths(
-            this@toFileWithoutCreatingDirectories.fullRelativePath,
-            createDir = false,
-            lastPathIsFile = true
-        )
-    }
-
-/**
- * run in IO.
- * @throws SecurityException if permission issue
- */
-suspend fun StoragePathModel.InternalOnly.createDirectory(context: Context): File =
-    withContext(Dispatchers.IO) {
-        val rootFile = this@createDirectory.internalLocation.toFile(context)
-        rootFile.resolveSubPaths(
-            this@createDirectory.fullRelativePath, createDir = true, lastPathIsFile = false
-        )
-    }
-
+fun StoragePathModel.InternalOnly.toNioPath(context: Context): Path =
+    internalLocation.toFile(context)
+        .resolve(fullRelativePath)
+        .toPath()
 
 /**
  * Run in IO thread for io parts.
@@ -70,9 +36,9 @@ suspend fun StoragePathModel.InternalOnly.createDirectory(context: Context): Fil
  */
 suspend fun SharedStorageRootSource.toUri(userRootUriProvider: suspend (UserId) -> Uri?) =
     when (this) {
-        is SharedStorageRootSource.Direct -> this.uriStr.toUriOrThrow()
-        is SharedStorageRootSource.LookupByUser -> userRootUriProvider(this.userId)
-            ?: throw IllegalStateException("Storage root URI for current user ${this.userId} is null.")
+        is SharedStorageRootSource.Direct -> uriStr.toUriOrThrow()
+        is SharedStorageRootSource.LookupByUser -> userRootUriProvider(userId)
+            ?: throw IllegalStateException("Storage root URI for current user $userId is null.")
     }
 
 
@@ -154,27 +120,22 @@ suspend fun StoragePathModel.toAbsolutePathModelsWithoutCreating(
     userRootUriProvider: suspend (UserId) -> Uri?,
     context: Context,
 ): List<AbsolutePathModel> {
+
+    suspend fun fromShared(m: StoragePathModel.SharedStorageOnly) = AbsolutePathModel.UriStrModel(
+        m.findUriOrThrow(userRootUriProvider, context = context)
+            .toUriStr()
+    )
+
+    fun fromInternal(m: StoragePathModel.InternalOnly) = AbsolutePathModel.AppPathModel(
+        m.toNioPath(context)
+            .toAppPath()
+    )
+
     return when (this) {
-        is StoragePathModel.SharedStorageOnly -> listOf(
-            AbsolutePathModel.UriStrModel(
-                this.findUriOrThrow(userRootUriProvider, context = context)
-                    .toUriStr()
-            )
-        )
-
-        is StoragePathModel.InternalOnly -> listOf(
-            AbsolutePathModel.FileModel(this.toFileWithoutCreatingDirectories(context))
-        )
-
+        is StoragePathModel.SharedStorageOnly -> listOf(fromShared(this))
+        is StoragePathModel.InternalOnly -> listOf(fromInternal(this))
         is StoragePathModel.DualWrite -> listOf(
-            AbsolutePathModel.UriStrModel(
-                this.toSharedStorageOnly()
-                    .findUriOrThrow(userRootUriProvider, context = context)
-                    .toUriStr()
-            ), AbsolutePathModel.FileModel(
-                this.toInternalOnly()
-                    .toFileWithoutCreatingDirectories(context)
-            )
+            fromShared(this.toSharedStorageOnly()), fromInternal(this.toInternalOnly())
         )
     }
 }

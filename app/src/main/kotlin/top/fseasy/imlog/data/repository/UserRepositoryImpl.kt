@@ -9,28 +9,26 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
+import top.fseasy.imlog.di.ApplicationIoScope
 import top.fseasy.imlog.domain.model.AppInitData
-import top.fseasy.imlog.domain.model.AvatarModel
+import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.User
+import top.fseasy.imlog.domain.model.UserAvatarModel
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.UserPreference
+import top.fseasy.imlog.domain.model.defaultUserPresetAvatar
 import top.fseasy.imlog.domain.model.serialize
+import top.fseasy.imlog.domain.model.toUserAvatarModelOrNull
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
-import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
-import top.fseasy.imlog.di.ApplicationIoScope
-import top.fseasy.imlog.domain.model.AuthState
-import top.fseasy.imlog.domain.model.defaultUserPresetAvatar
-import top.fseasy.imlog.domain.model.toAvatarModelOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.App_init_data as AppInitDataEntity
@@ -113,7 +111,7 @@ class UserRepositoryImpl @Inject constructor(
 
     override suspend fun createAndSetCurrentUser(
         username: String,
-        avatarModel: AvatarModel,
+        avatarModel: UserAvatarModel,
     ): UserId = withContext(dispatcher) {
         val userId = retrySQLiteOnKeyConflict {
             UserId.random()
@@ -142,7 +140,7 @@ class UserRepositoryImpl @Inject constructor(
     private fun UserEntity.toDomain() = User(
         id = UserId(id),
         username = username,
-        avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultUserPresetAvatar(),
+        avatarModel = avatar_model.toUserAvatarModelOrNull() ?: defaultUserPresetAvatar(),
         lastSignInAt = last_signin_at,
         createdAt = created_at,
         attributesUpdatedAt = attributes_updated_at,
@@ -166,7 +164,7 @@ class UserRepositoryImpl @Inject constructor(
     private fun syncInsertNewUserIntoUserTable(
         userId: UserId,
         username: String,
-        avatarModel: AvatarModel,
+        avatarModel: UserAvatarModel,
         now: Long = System.currentTimeMillis(),
     ) {
         database.userQueries.insertUser(

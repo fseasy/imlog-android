@@ -3,11 +3,12 @@ package top.fseasy.imlog.domain.model
 import kotlinx.serialization.Serializable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlin.jvm.JvmInline
 
 data class User(
     val id: UserId,
     val username: String,
-    val avatarModel: AvatarModel,
+    val avatarModel: UserAvatarModel,
     val lastSignInAt: Long,
     val createdAt: Long,
     val attributesUpdatedAt: Long,

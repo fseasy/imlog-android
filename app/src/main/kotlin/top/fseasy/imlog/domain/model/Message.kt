@@ -3,7 +3,7 @@ package top.fseasy.imlog.domain.model
 import kotlinx.serialization.Serializable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
-
+import kotlin.jvm.JvmInline
 
 enum class MessageType(val value: String) {
     Text("text"), Image("image"), Video("video"), Audio("audio"), Voice("voice"), GenericFile("generic_file"),

@@ -1,20 +1,3 @@
-package top.fseasy.imlog.domain.usecase
-
-import top.fseasy.imlog.domain.model.InternalLocation
-import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.domain.model.StoragePathModel
-import top.fseasy.imlog.domain.model.SharedStorageRootSource
-import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.repository.ResourceProvider
-import top.fseasy.imlog.domain.repository.StringConstantId
-import top.fseasy.imlog.domain.util.splitNameAndExtension
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlin.random.Random
-
 /**
  * define path rules for the top-level storage buckets:
  * - shared storage: mainly for user message data (backup, sync)
@@ -42,8 +25,67 @@ import kotlin.random.Random
  *    user storage root: $root/$user_id/
  */
 
+package top.fseasy.imlog.domain.usecase
+
+import top.fseasy.imlog.domain.model.InternalLocation
+import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.domain.model.StoragePathModel
+import top.fseasy.imlog.domain.model.SharedStorageRootSource
+import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.repository.ResourceProvider
+import top.fseasy.imlog.domain.repository.StringConstantId
+import top.fseasy.imlog.domain.util.splitNameAndExtension
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.random.Random
+
+
 /**
  * Why Singleton: Will be used frequently and widely; has member val
+ *
+ * # File Hierarchy
+ *
+ * ## Internal Cache
+ * ```
+ * Internal Cache/
+ * └── $user_id/
+ *     └── message_cache/
+ *         └── $filename
+ * ```
+ *
+ * ## Internal Persistent
+ * ```
+ * Internal Persistent/
+ * └── $user_id/
+ *     ├── avatar/
+ *     │   ├── topic/
+ *     │   │   └── $avatar_filename
+ *     │   └── user/
+ *     │       └── $avatar_filename
+ *     └── thumbnail/
+ *         └── $topic_id/
+ *             └── $date-hierarchy (yyyy-mm/day-range-utc, example: `2026-07/day01-10-utc`)
+ *                 └── $filename
+ * ```
+ *
+ * ## Shared-Storage
+ * ```
+ * Shared-Storage/
+ * └── $user_id/
+ *     ├── message/
+ *     │   └── $topic_id/
+ *     │       └── $date-hierarchy/
+ *     │           └── $filename
+ *     └── avatar/ (dual write)
+ *         ├── topic/
+ *         │   └── $avatar_filename
+ *         └── user/
+ *             └── $avatar_filename
+ * ```
+ *
  */
 @Singleton
 class StoragePathUseCase @Inject constructor(
@@ -63,6 +105,11 @@ class StoragePathUseCase @Inject constructor(
         return userSelectedRootDirName.contains(appStaticName, ignoreCase = true)
     }
 
+    /**
+     * Marker location.
+     *
+     * = `$SHARED-STORAGE-ROOT / $user / $markername`
+     */
     fun buildSharedStorageRootMarkerFilePath(userId: UserId): StoragePathModel.SharedStorageOnly =
         StoragePathModel.SharedStorageOnly(
             listOf(getUserRootDirName(userId), sharedStorageRootMarkerFilename),
@@ -71,9 +118,14 @@ class StoragePathUseCase @Inject constructor(
 
     /**
      * The root dir name for every user.
+     *
+     * = `$user.id`
      */
     fun getUserRootDirName(userId: UserId): String = userId.value
 
+    /**
+     * = `$user / avatar / user / $filename`
+     */
     fun buildUserAvatarStoragePath(
         signInUserId: UserId,
         filename: String,
@@ -87,6 +139,9 @@ class StoragePathUseCase @Inject constructor(
         )
     }
 
+    /**
+     * = `$user / avatar / topic / $filename`
+     */
     fun buildTopicAvatarStoragePath(
         signInUserId: UserId,
         filename: String,
@@ -101,7 +156,8 @@ class StoragePathUseCase @Inject constructor(
     }
 
     /** Add a time prefix on the given original filename. Used for semantic meaningful condition
-     * Rule: $time_prefix + $truncated_original_name + .suffix
+     *
+     * Rule: `$time_prefix + $truncated_original_name + .suffix`
      */
     fun buildUserFriendlyTimestampedFilename(timestampMs: Long, originalFilename: String): String =
         addPrefixToFilename(formatToUtcDayAndTime(timestampMs), originalFilename)
@@ -109,7 +165,7 @@ class StoragePathUseCase @Inject constructor(
     /** Add a timestamp + random-int on the given original filename.
      *  Used for cache name that don't need the semantic meaning but still keep a time info.
      *
-     * Rule: $time_prefix + $truncated_original_name + .suffix
+     * Rule: `$time_prefix + $truncated_original_name + .suffix`
      */
     fun buildTimestampedFilename(timestampMs: Long, originalFilename: String) =
         addPrefixToFilename("$timestampMs-${Random.nextInt(1000)}", originalFilename)
@@ -126,7 +182,9 @@ class StoragePathUseCase @Inject constructor(
 
     /**
      * Build message file path for message cache file.
-     * rule: $user_root_name / message_cache / $filename (no more hierarchy)
+     *
+     * rule: `$user_root_name / message_cache / $filename (no more hierarchy)`
+     *
      * Location: internal cache
      */
     fun buildMessageCacheFileStoragePath(
@@ -137,7 +195,7 @@ class StoragePathUseCase @Inject constructor(
     )
 
     /**
-     * rule: $user_root_name / message / $topic_id / $date-hierarchy / $filename
+     * rule: `$user_root_name / message / $topic_id / $date-hierarchy / $filename`
      */
     fun buildMessageRawFileStoragePath(
         userId: UserId,
@@ -155,7 +213,7 @@ class StoragePathUseCase @Inject constructor(
     )
 
     /**
-     * rule: $user_root_name / thumbnail / $topic_id / $date-hierarchy / $filename
+     * rule: `$user_root_name / thumbnail / $topic_id / $date-hierarchy / $filename`
      */
     fun buildMessageThumbnailStoragePath(
         userId: UserId,
@@ -172,6 +230,9 @@ class StoragePathUseCase @Inject constructor(
         ), internalLocation = InternalLocation.Persistent
     )
 
+    /**
+     * = `$STORAGE-CACHE-ROOT / $user / $resourceName / $filename`
+     */
     private fun buildInternalCacheStoragePath(
         userId: UserId,
         resourceName: ResourceName,
@@ -184,7 +245,7 @@ class StoragePathUseCase @Inject constructor(
     )
 
     /**
-     * rule: $user_root_name / $source-name / $topic_id / $date-hierarchy / $filename
+     * rule: `$user_root_name / $source-name / $topic_id / $date-hierarchy / $filename`
      */
     private fun buildMessageFileFullRelativePath(
         userId: UserId,
@@ -235,6 +296,9 @@ class StoragePathUseCase @Inject constructor(
         return listOf(yearMonth, dayRange)
     }
 
+    /**
+     * = `$user / avatar / $avatarTarget / $filename`
+     */
     private fun buildAvatarRelativePath(
         userId: UserId,
         avatarTargetName: AvatarTargetName,
@@ -243,6 +307,9 @@ class StoragePathUseCase @Inject constructor(
         avatarTargetName.value, filename
     )
 
+    /**
+     * = `$userRoot / $resourceName`
+     */
     private fun buildResourceRootRelativePath(
         userId: UserId,
         resourceName: ResourceName,

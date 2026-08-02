@@ -1,6 +1,28 @@
 package top.fseasy.imlog.domain.model
 
-import java.io.File
+import kotlinx.serialization.Serializable
+import kotlin.jvm.JvmInline
+
+/**
+ * The uri representation in Domain level, without introducing the android platform dependency
+ */
+@JvmInline
+@Serializable
+value class UriStr(val value: String) {
+    init {
+        require(value.isNotBlank()) { "URI string cannot be blank" }
+    }
+}
+
+/**
+ * Represents a file path that the app can directly access via normal file APIs
+ * (e.g. context.filesDir, cacheDir, etc.).
+ *
+ * Using String is sufficient at the domain level.
+ */
+@JvmInline
+@Serializable
+value class AppPath(val value: String)
 
 /**
  * To flag it is in internal-persistent or internal-cache location
@@ -44,6 +66,7 @@ sealed interface StoragePathModel {
     }
 }
 
+
 /**
  * In domain layer, it's used in user-given file condition, or file processing result.
  * In data/UI layer, should prefer use this type instead of @StoragePathModel.
@@ -53,5 +76,5 @@ sealed interface StoragePathModel {
  */
 sealed interface AbsolutePathModel {
     data class UriStrModel(val value: UriStr) : AbsolutePathModel
-    data class FileModel(val value: File) : AbsolutePathModel
+    data class AppPathModel(val value: AppPath) : AbsolutePathModel
 }

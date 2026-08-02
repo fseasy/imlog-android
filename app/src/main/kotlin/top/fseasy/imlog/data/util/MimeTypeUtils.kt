@@ -112,7 +112,7 @@ object MimeTypeUtils {
      */
     suspend fun getMimeTypeOrNull(absolutePathModel: AbsolutePathModel, context: Context): String? =
         when (absolutePathModel) {
-            is AbsolutePathModel.FileModel -> getMimeType(absolutePathModel.value)
+            is AbsolutePathModel.AppPathModel -> getMimeType(absolutePathModel.value)
 
             is AbsolutePathModel.UriStrModel -> absolutePathModel.value.toUriOrNull()
                 ?.let {

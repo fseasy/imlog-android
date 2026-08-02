@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 import timber.log.Timber
 import top.fseasy.imlog.domain.util.defaultJson
 
-// NOTE: Kotlin Serializable will save name instead of ordinal for enum class in Json format
+// NOTE: Kotlin Serializable will save name instead of ordinal for enum class in JSON format
 //       So no needs to set a String name for each enum.
 enum class UserPresetAvatar {
     Rabbit, Panda, Fox;

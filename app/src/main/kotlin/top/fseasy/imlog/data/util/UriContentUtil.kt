@@ -172,7 +172,7 @@ suspend fun copyUriToFile(
             try {
                 val bytesCopied = input.copyTo(output)
                 return@withContext FileCopyResult.Success(
-                    bytesCopied, AbsolutePathModel.FileModel(destination)
+                    bytesCopied, AbsolutePathModel.AppPathModel(destination)
                 )
             } catch (e: IOException) {
                 return@withContext FileCopyResult.Error.CopyIOError(e)

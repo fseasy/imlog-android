@@ -4,8 +4,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import top.fseasy.imlog.domain.model.AppInitData
 import top.fseasy.imlog.domain.model.AuthState
-import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.User
+import top.fseasy.imlog.domain.model.UserAvatarModel
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.UserPreference
 
@@ -20,7 +20,7 @@ interface UserRepository {
     /**
      * @throws Exception when create user failed. parent should process it based on the business logic.
      */
-    suspend fun createAndSetCurrentUser(username: String, avatarModel: AvatarModel): UserId
+    suspend fun createAndSetCurrentUser(username: String, avatarModel: UserAvatarModel): UserId
 
     suspend fun getLocalSignedInUsers(): List<User>
     suspend fun getUserPreference(userId: UserId): UserPreference?

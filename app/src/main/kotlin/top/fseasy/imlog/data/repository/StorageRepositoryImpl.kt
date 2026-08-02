@@ -8,11 +8,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import top.fseasy.imlog.data.mapper.createDirectory
 import top.fseasy.imlog.data.mapper.ensureDirectorUri
 import top.fseasy.imlog.data.mapper.ensureFileUri
 import top.fseasy.imlog.data.mapper.toAbsolutePathModelsWithoutCreating
-import top.fseasy.imlog.data.mapper.toFileWithCreatingDirectories
+import top.fseasy.imlog.data.mapper.toFile
+import top.fseasy.imlog.data.mapper.toNioPath
 import top.fseasy.imlog.data.mapper.toUri
 import top.fseasy.imlog.data.mapper.toUriOrNull
 import top.fseasy.imlog.data.mapper.toUriOrThrow
@@ -40,7 +40,10 @@ import top.fseasy.imlog.sqldelight.SqlDelightDb
 import java.io.FileNotFoundException
 import javax.inject.Inject
 import javax.inject.Singleton
-import top.fseasy.imlog.domain.util.deleteFile as deleteFileObject
+import kotlin.io.path.createDirectories
+import kotlin.io.path.createParentDirectories
+import kotlin.io.path.writeBytes
+import top.fseasy.imlog.data.util.syncDeleteFile as syncDeleteJavaFile
 
 @Singleton
 class StorageRepositoryImpl @Inject constructor(
@@ -128,10 +131,15 @@ class StorageRepositoryImpl @Inject constructor(
      * @return created dir UriStr if filePath contains Uri, else null.
      */
     override suspend fun mkdirs(filePath: StoragePathModel): UriStr? {
+
+        suspend fun mkdirsForInternal(p: StoragePathModel.InternalOnly) = withContext(dispatcher) {
+            p.toNioPath(context)
+                .createDirectories()
+        }
+
         val uri = when (filePath) {
             is StoragePathModel.DualWrite -> {
-                filePath.toInternalOnly()
-                    .createDirectory(context)
+                mkdirsForInternal(filePath.toInternalOnly())
                 filePath.toSharedStorageOnly()
                     .ensureDirectorUri(::getSharedStorageRootUriWithCache, context = context)
             }
@@ -141,7 +149,7 @@ class StorageRepositoryImpl @Inject constructor(
             )
 
             is StoragePathModel.InternalOnly -> {
-                filePath.createDirectory(context)
+                mkdirsForInternal(filePath)
                 null
             }
         }
@@ -186,9 +194,10 @@ class StorageRepositoryImpl @Inject constructor(
         filePath: StoragePathModel.InternalOnly,
         content: ByteArray,
     ) {
-        val file = filePath.toFileWithCreatingDirectories(context)
+        val path = filePath.toNioPath(context)
         withContext(dispatcher) {
-            file.writeBytes(content)
+            path.createParentDirectories()
+                .writeBytes(content)
         }
     }
 
@@ -298,7 +307,8 @@ class StorageRepositoryImpl @Inject constructor(
         srcUri: Uri,
         pathModel: StoragePathModel.InternalOnly,
     ): FileCopyResult {
-        val tgtFile = pathModel.toFileWithCreatingDirectories(context)
+        val tgtFile = pathModel.toNioPath(context)
+            .toFile()
         return copyUriToFile(context, srcUri, tgtFile)
     }
 
@@ -316,15 +326,17 @@ class StorageRepositoryImpl @Inject constructor(
                 return UriPathUtil.deleteUri(context, uri)
             }
 
-            is AbsolutePathModel.FileModel -> {
+            is AbsolutePathModel.AppPathModel -> {
                 return withContext(dispatcher) {
-                    deleteFileObject(filePath.value)
+                    syncDeleteJavaFile(filePath.value.toFile())
                 }
             }
         }
     }
 
-    /** Run in IO thread in io parts.
+    /**
+     * Run in IO thread for io parts.
+     *
      * Swallow all the exceptions.
      */
     override suspend fun deleteFile(

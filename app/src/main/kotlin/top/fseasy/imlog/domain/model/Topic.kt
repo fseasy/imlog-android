@@ -3,6 +3,7 @@ package top.fseasy.imlog.domain.model;
 import kotlinx.serialization.Serializable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlin.jvm.JvmInline
 
 @JvmInline
 @Serializable
@@ -26,7 +27,7 @@ value class TopicId(val value: String) {
 data class Topic(
     val id: TopicId,
     val name: String,
-    val avatarModel: AvatarModel,
+    val avatarModel: TopicAvatarModel,
     val description: String?,
     val creatorId: UserId?, // Can be null if creator is deleted
     val createdAt: Long,
@@ -39,7 +40,7 @@ data class Topic(
 data class HomeTopic(
     val id: TopicId,
     val name: String,
-    val avatarModel: AvatarModel,
+    val avatarModel: TopicAvatarModel,
     val isPinned: Boolean,
     val hasUnread: Boolean,
     val messageUpdatedAt: Long,

@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import kotlin.io.path.createParentDirectories
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.ExperimentalUuidApi
 
@@ -25,8 +26,9 @@ enum class VoiceRecorderState {
 }
 
 /**
- * 封装语音录制全流程，提供响应式状态与计时。
- * [coroutineScope] 用于驱动内部计时器，建议传入 ViewModelScope 保证生命周期一致。
+ * VoiceRecorder that wraps the MediaRecorder & timer
+ *
+ * @param coroutineScope for internal timer running. Recommended pass the viewModelScope
  */
 class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable {
 
@@ -68,15 +70,17 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
      * @throws Exception
      */
     @OptIn(ExperimentalUuidApi::class)
-    suspend fun start(context: Context, outputFile: File) {
+    suspend fun start(context: Context, path: java.nio.file.Path) {
         if (_state.value == VoiceRecorderState.Recording) return
         return withContext(Dispatchers.IO) {
             // Reset.
             syncCleanup()
-            currentFile = outputFile
+            val currentOutputFile = path.createParentDirectories()
+                .toFile()
+            currentFile = currentOutputFile
 
             try {
-                mediaRecorder = syncCreateMediaRecorder(context, outputFile).apply {
+                mediaRecorder = syncCreateMediaRecorder(context, currentOutputFile).apply {
                     prepare()
                     start()
                 }

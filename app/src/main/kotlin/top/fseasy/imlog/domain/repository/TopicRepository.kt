@@ -1,10 +1,10 @@
 package top.fseasy.imlog.domain.repository
 
 import kotlinx.coroutines.flow.Flow
-import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.Topic
+import top.fseasy.imlog.domain.model.TopicAvatarModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicPreference
 import top.fseasy.imlog.domain.model.UserId
@@ -25,7 +25,7 @@ interface TopicRepository {
      * @throws Exception
      */
     fun syncCreateNewTopic(
-        creatorId: UserId, name: String, avatarModel: AvatarModel, description: String?,
+        creatorId: UserId, name: String, avatarModel: TopicAvatarModel, description: String?,
         createdAtTimestampMs: Long = System.currentTimeMillis(),
     ): TopicId
 
@@ -35,7 +35,7 @@ interface TopicRepository {
      * @throws Exception
      */
     suspend fun createNewTopic(
-        creatorId: UserId, name: String, avatarModel: AvatarModel, description: String?,
+        creatorId: UserId, name: String, avatarModel: TopicAvatarModel, description: String?,
         createdAtTimestampMs: Long = System.currentTimeMillis(),
     ): TopicId
 
@@ -45,7 +45,7 @@ interface TopicRepository {
     suspend fun updateAvatarModel(
         userId: UserId,
         topicId: TopicId,
-        newAvatarModel: AvatarModel,
+        newAvatarModel: TopicAvatarModel,
     ): Boolean
 
     suspend fun updateTopicBackground(

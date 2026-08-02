@@ -6,14 +6,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import top.fseasy.imlog.data.mapper.toFileWithCreatingDirectories
+import top.fseasy.imlog.data.mapper.toNioPath
 import top.fseasy.imlog.data.util.VoiceRecorder
 import top.fseasy.imlog.data.util.VoiceRecorderState
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
-import java.io.File
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -47,8 +46,8 @@ class VoiceRecorderStateHolder(
     )
 
     suspend fun startVoiceRecording(userId: UserId) {
-        val outputFile = generateVoiceRecordingOutputFileInMessageCacheRule(userId = userId)
-        voiceRecorder.start(context, outputFile)
+        val path = generateVoiceRecordingOutputPathInMessageCacheRule(userId = userId)
+        voiceRecorder.start(context, path)
     }
 
     suspend fun cancelVoiceRecording() {
@@ -68,18 +67,17 @@ class VoiceRecorderStateHolder(
             }
     }
 
-    private suspend fun generateVoiceRecordingOutputFileInMessageCacheRule(
+    private fun generateVoiceRecordingOutputPathInMessageCacheRule(
         userId: UserId,
         now: Long = System.currentTimeMillis(),
-    ): File {
+    ): java.nio.file.Path {
         val filename = storagePathUseCase.buildTimestampedFilename(
             now, originalFilename = VoiceRecorder.generateOutputAudioDefaultFilename("voice")
         )
         val outputFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(
             userId = userId, filename = filename
         )
-        val outputFile = outputFilePath.toFileWithCreatingDirectories(context)
-        return outputFile
+        return outputFilePath.toNioPath(context)
     }
 
     override fun close() {

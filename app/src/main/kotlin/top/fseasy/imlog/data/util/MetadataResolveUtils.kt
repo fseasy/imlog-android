@@ -51,7 +51,7 @@ object MetadataResolveUtils {
             is AbsolutePathModel.UriStrModel -> filePath.value.toUriOrNull()
                 ?.let { resolveAudio(context, uri = it) }
 
-            is AbsolutePathModel.FileModel -> resolveAudio(filePath.value)
+            is AbsolutePathModel.AppPathModel -> resolveAudio(filePath.value)
         }
 
     /**
@@ -115,7 +115,7 @@ object MetadataResolveUtils {
             is AbsolutePathModel.UriStrModel -> filePath.value.toUriOrNull()
                 ?.let { resolveVideo(context, uri = it) }
 
-            is AbsolutePathModel.FileModel -> resolveVideo(context, file = filePath.value)
+            is AbsolutePathModel.AppPathModel -> resolveVideo(context, file = filePath.value)
         }
 
     /***
@@ -197,7 +197,7 @@ object MetadataResolveUtils {
             is AbsolutePathModel.UriStrModel -> filePath.value.toUriOrNull()
                 ?.let { resolveImage(context, uri = it) }
 
-            is AbsolutePathModel.FileModel -> resolveImage(filePath.value)
+            is AbsolutePathModel.AppPathModel -> resolveImage(filePath.value)
         }
 
     /***
@@ -270,7 +270,7 @@ object MetadataResolveUtils {
         is AbsolutePathModel.UriStrModel -> filePath.value.toUriOrNull()
             ?.let { resolveGenericFile(context, uri = it) }
 
-        is AbsolutePathModel.FileModel -> resolveGenericFile(filePath.value)
+        is AbsolutePathModel.AppPathModel -> resolveGenericFile(filePath.value)
     }
 
     /**

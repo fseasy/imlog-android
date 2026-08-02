@@ -8,17 +8,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
-import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.Topic
+import top.fseasy.imlog.domain.model.TopicAvatarModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicMemberRole
 import top.fseasy.imlog.domain.model.TopicPreference
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.defaultTopicPresetAvatar
 import top.fseasy.imlog.domain.model.serialize
-import top.fseasy.imlog.domain.model.toAvatarModelOrNull
+import top.fseasy.imlog.domain.model.toTopicAvatarModelOrNull
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.Topic_message_state
@@ -79,7 +79,7 @@ class TopicRepositoryImpl @Inject constructor(
      * @throws Exception
      */
     override fun syncCreateNewTopic(
-        creatorId: UserId, name: String, avatarModel: AvatarModel, description: String?,
+        creatorId: UserId, name: String, avatarModel: TopicAvatarModel, description: String?,
         createdAtTimestampMs: Long,
     ): TopicId {
         val topicId = TopicId.random()
@@ -130,7 +130,7 @@ class TopicRepositoryImpl @Inject constructor(
     }
 
     override suspend fun createNewTopic(
-        creatorId: UserId, name: String, avatarModel: AvatarModel, description: String?,
+        creatorId: UserId, name: String, avatarModel: TopicAvatarModel, description: String?,
         createdAtTimestampMs: Long,
     ): TopicId = withContext(dispatcher) {
         retrySQLiteOnKeyConflict {
@@ -165,7 +165,7 @@ class TopicRepositoryImpl @Inject constructor(
     override suspend fun updateAvatarModel(
         userId: UserId,
         topicId: TopicId,
-        newAvatarModel: AvatarModel,
+        newAvatarModel: TopicAvatarModel,
     ): Boolean = withContext(dispatcher) {
         val now = System.currentTimeMillis()
         val rowsAffected = database.topicUpdateQueries.updateTopicAvatarModel(
@@ -243,7 +243,7 @@ class TopicRepositoryImpl @Inject constructor(
     private fun TopicEntity.toDomain() = Topic(
         id = id,
         name = name,
-        avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
+        avatarModel = avatar_model.toTopicAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
         description = description,
         creatorId = creator_id,
         createdAt = created_at,
@@ -261,7 +261,7 @@ class TopicRepositoryImpl @Inject constructor(
     private fun HomeTopicEntity.toDomain() = HomeTopic(
         id = id,
         name = name,
-        avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
+        avatarModel = avatar_model.toTopicAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
         description = description,
         isPinned = pinned == 1L,
         hasUnread = has_unread == 1L,
