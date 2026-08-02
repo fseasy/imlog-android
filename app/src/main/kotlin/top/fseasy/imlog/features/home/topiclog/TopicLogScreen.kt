@@ -25,12 +25,11 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.features.home.topiclog.timeline.ContextState
-import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
-import top.fseasy.imlog.features.home.topiclog.timeline.TimelineViewModel
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposer
+import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
+import top.fseasy.imlog.features.home.topiclog.timeline.ContextState
 import top.fseasy.imlog.features.home.topiclog.timeline.TimelineScreen
-
+import top.fseasy.imlog.features.home.topiclog.timeline.TimelineViewModel
 
 @Composable
 fun TopicLogScreen(
@@ -39,35 +38,38 @@ fun TopicLogScreen(
     timelineViewModel: TimelineViewModel = hiltViewModel(),
     composerViewModel: MessageComposerViewModel = hiltViewModel(),
 ) {
-    val topicName =
-        (timelineViewModel.contextStateFlow.collectAsStateWithLifecycle().value as? ContextState.Success)?.topic?.name
-    val focusManager = LocalFocusManager.current
+  val topicName =
+      (timelineViewModel.contextStateFlow.collectAsStateWithLifecycle().value
+              as? ContextState.Success)
+          ?.topic
+          ?.name
+  val focusManager = LocalFocusManager.current
 
-    val handleComposerDismiss = {
-        focusManager.clearFocus()
-        composerViewModel.clearInputMode()
-    }
+  val handleComposerDismiss = {
+    focusManager.clearFocus()
+    composerViewModel.clearInputMode()
+  }
 
-    TopicLogContent(
-        topicId = timelineViewModel.topicId,
-        topicName = topicName,
-        onNavigateBack = onNavigateBack,
-        onSettingsClick = onSettingsClick,
-        timelineSection = {
-            TimelineScreen(
-                onTapOutside = handleComposerDismiss,
-                onDragList = handleComposerDismiss,
-                timelineViewModel = timelineViewModel,
-            )
-        },
-        composerSection = {
-            MessageComposer(
-                onNavigateBack = onNavigateBack,
-                viewModel = composerViewModel,
-            )
-        },
-        handleComposerDismiss = handleComposerDismiss
-    )
+  TopicLogContent(
+      topicId = timelineViewModel.topicId,
+      topicName = topicName,
+      onNavigateBack = onNavigateBack,
+      onSettingsClick = onSettingsClick,
+      timelineSection = {
+        TimelineScreen(
+            onTapOutside = handleComposerDismiss,
+            onDragList = handleComposerDismiss,
+            timelineViewModel = timelineViewModel,
+        )
+      },
+      composerSection = {
+        MessageComposer(
+            onNavigateBack = onNavigateBack,
+            viewModel = composerViewModel,
+        )
+      },
+      handleComposerDismiss = handleComposerDismiss,
+  )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,52 +85,52 @@ private fun TopicLogContent(
     modifier: Modifier = Modifier,
 ) {
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = {
-                Text(
-                    topicName ?: stringResource(R.string.common_ui_text_loading_dots)
-                )
-            }, navigationIcon = {
-                IconButton(onClick = { onNavigateBack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.btn_back))
-                }
-            }, actions = {
-                IconButton(onClick = { onSettingsClick(topicId) }) {
-                    Icon(Icons.Default.Settings, stringResource(R.string.btn_setting))
-                }
-            })
-        },
-        modifier = modifier.fillMaxSize()
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-//                .padding(top = paddingValues.calculateTopPadding())
+  Scaffold(
+      topBar = {
+        TopAppBar(
+            title = {
+              Text(topicName ?: stringResource(R.string.common_ui_text_loading_dots))
+            },
+            navigationIcon = {
+              IconButton(onClick = { onNavigateBack() }) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.btn_back))
+              }
+            },
+            actions = {
+              IconButton(onClick = { onSettingsClick(topicId) }) {
+                Icon(Icons.Default.Settings, stringResource(R.string.btn_setting))
+              }
+            },
+        )
+      },
+      modifier = modifier.fillMaxSize(),
+  ) { paddingValues ->
+    Column(
+        modifier =
+            Modifier.fillMaxSize()
+                //                .padding(top = paddingValues.calculateTopPadding())
                 .padding(paddingValues)
                 .consumeWindowInsets(paddingValues)
                 .imePadding()
-        ) {
-            Box(
-                modifier = modifier
-                    .weight(1f)
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            handleComposerDismiss()
-                        }
-                    }) {
-                timelineSection()
-            }
+    ) {
+      Box(
+          modifier =
+              modifier.weight(1f).fillMaxSize().pointerInput(Unit) {
+                detectTapGestures {
+                  handleComposerDismiss()
+                }
+              }
+      ) {
+        timelineSection()
+      }
 
-            composerSection()
-        }
+      composerSection()
     }
+  }
 }
 
-
-//@Composable
-//fun FullScreenImage(uri: String) {
+// @Composable
+// fun FullScreenImage(uri: String) {
 //    Dialog(
 //        onDismissRequest = { }, properties = DialogProperties(usePlatformDefaultWidth = false)
 //    ) {
@@ -146,9 +148,9 @@ private fun TopicLogContent(
 //            )
 //        }
 //    }
-//}
+// }
 //
-//class TimelinePreviewParameterProvider : PreviewParameterProvider<TimelineUiState> {
+// class TimelinePreviewParameterProvider : PreviewParameterProvider<TimelineUiState> {
 //    override val values = sequenceOf(
 //        // 状态 1：加载中
 //        TimelineUiState(
@@ -198,13 +200,13 @@ private fun TopicLogContent(
 //            voiceRecordingElapsed = 3400 // 模拟录制了 3.4 秒
 //        )
 //    )
-//}
+// }
 //
-//@Preview(showBackground = true, name = "Timeline Multi-State Preview")
-//@Composable
-//fun TimelineScreenPreview(
+// @Preview(showBackground = true, name = "Timeline Multi-State Preview")
+// @Composable
+// fun TimelineScreenPreview(
 //    @PreviewParameter(TimelinePreviewParameterProvider::class) uiState: TimelineUiState,
-//) {
+// ) {
 //    MaterialTheme {
 //        TimelineContent(
 //            uiState = uiState,
@@ -217,4 +219,4 @@ private fun TopicLogContent(
 //            onSendAudio = {},
 //            onVoiceRecordingStateChange = {})
 //    }
-//}
+// }

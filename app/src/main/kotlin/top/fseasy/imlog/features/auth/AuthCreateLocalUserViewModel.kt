@@ -22,42 +22,46 @@ data class SignInUpCreateUserUiState(
 )
 
 @HiltViewModel
-class SignInUpCreateUserViewModel @Inject constructor(
+class SignInUpCreateUserViewModel
+@Inject
+constructor(
     @param:ApplicationContext private val context: Context,
     private val signInUpUseCase: SignInUpUseCase,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(SignInUpCreateUserUiState())
-    val uiState = _uiState.asStateFlow()
+  private val _uiState = MutableStateFlow(SignInUpCreateUserUiState())
+  val uiState = _uiState.asStateFlow()
 
-    private var hasInitializedUserCreation = false;
+  private var hasInitializedUserCreation = false
 
-    fun createUser() {
-        // Guard duplicated creation! use this following sync-checking to avoid
-        if (hasInitializedUserCreation) return
-        hasInitializedUserCreation = true
+  fun createUser() {
+    // Guard duplicated creation! use this following sync-checking to avoid
+    if (hasInitializedUserCreation) return
+    hasInitializedUserCreation = true
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(createUserState = TaskExecuteState.Executing) }
-            runCatching {
-                signInUpUseCase.createNewUserBySamplingProfile()
-            }.onFailure { e ->
-                Timber.e(e, "Create User failed, msg = [${e.message}]")
-                _uiState.update {
-                    it.copy(
-                        createUserState = TaskExecuteState.Failure(
-                            e.message ?: context.getString(R.string.error_unknown)
-                        )
-                    )
-                }
+    viewModelScope.launch {
+      _uiState.update { it.copy(createUserState = TaskExecuteState.Executing) }
+      runCatching {
+        signInUpUseCase.createNewUserBySamplingProfile()
+      }
+          .onFailure { e ->
+            Timber.e(e, "Create User failed, msg = [${e.message}]")
+            _uiState.update {
+              it.copy(
+                  createUserState =
+                      TaskExecuteState.Failure(
+                          e.message ?: context.getString(R.string.error_unknown)
+                      )
+              )
             }
-                .onSuccess {
-                    _uiState.update { it.copy(createUserState = TaskExecuteState.Success(Unit)) }
-                }
-        }
+          }
+          .onSuccess {
+            _uiState.update { it.copy(createUserState = TaskExecuteState.Success(Unit)) }
+          }
     }
+  }
 
-    fun onCreateUserFail() {
-        hasInitializedUserCreation = false
-        createUser()
-    }
+  fun onCreateUserFail() {
+    hasInitializedUserCreation = false
+    createUser()
+  }
 }

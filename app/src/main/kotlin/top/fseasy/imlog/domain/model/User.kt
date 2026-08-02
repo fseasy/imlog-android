@@ -3,7 +3,6 @@ package top.fseasy.imlog.domain.model
 import kotlinx.serialization.Serializable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
-import kotlin.jvm.JvmInline
 
 data class User(
     val id: UserId,
@@ -17,18 +16,17 @@ data class User(
 @JvmInline
 @Serializable
 value class UserId(val value: String) {
-    init {
-        require(value.startsWith(PREFIX)) { "Invalid UserId prefix" }
-    }
+  init {
+    require(value.startsWith(PREFIX)) { "Invalid UserId prefix" }
+  }
 
-    companion object {
-        private const val PREFIX = "usr_"
+  companion object {
+    private const val PREFIX = "usr_"
 
-        @OptIn(ExperimentalUuidApi::class)
-        fun random(): UserId {
-            val uuid = Uuid.generateV7()
-                .toHexString()
-            return UserId("${PREFIX}${uuid}")
-        }
+    @OptIn(ExperimentalUuidApi::class)
+    fun random(): UserId {
+      val uuid = Uuid.generateV7().toHexString()
+      return UserId("${PREFIX}${uuid}")
     }
+  }
 }

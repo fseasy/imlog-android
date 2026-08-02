@@ -19,38 +19,38 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun OnboardingDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
+    onConfirm: (String) -> Unit,
 ) {
-    var username by remember { mutableStateOf("") }
+  var username by remember { mutableStateOf("") }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Welcome to ImTrace!") },
-        text = {
-            Column {
-                Text("Let's set up your profile to get started.")
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it },
-                    label = { Text("Your Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(username) },
-                enabled = username.isNotBlank()
-            ) {
-                Text("Continue")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Later")
-            }
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text("Welcome to ImTrace!") },
+      text = {
+        Column {
+          Text("Let's set up your profile to get started.")
+          Spacer(modifier = Modifier.height(16.dp))
+          OutlinedTextField(
+              value = username,
+              onValueChange = { username = it },
+              label = { Text("Your Name") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth(),
+          )
         }
-    )
+      },
+      confirmButton = {
+        TextButton(
+            onClick = { onConfirm(username) },
+            enabled = username.isNotBlank(),
+        ) {
+          Text("Continue")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = onDismiss) {
+          Text("Later")
+        }
+      },
+  )
 }

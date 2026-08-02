@@ -29,33 +29,41 @@ data class AnimatedTextLineConfig(
     val text: String,
     val style: TextStyle,
     val alignment: TextAlign = TextAlign.Center,
-    val durationMs: Long = 1000,          // 该阶段动画持续时间
-    val stayDurationMs: Long = 0,         // 动画完成后停留时间
+    val durationMs: Long = 1000, // 该阶段动画持续时间
+    val stayDurationMs: Long = 0, // 动画完成后停留时间
     val highlight: HighlightConfig? = null, // 高亮配置（仅当前阶段有效）
     val enterTransition: EnterTransition? = null, // 自定义进入动画
-    val exitTransition: ExitTransition? = null,    // 自定义退出动画
+    val exitTransition: ExitTransition? = null, // 自定义退出动画
 )
 
 data class StackedAnimationTiming(
     val initialDelay: Long = 200,
-    val lineGap: Long = 500,  // 行与行之间的间隔
+    val lineGap: Long = 500, // 行与行之间的间隔
     val overlap: Boolean = false, // 是否叠加（前一行不完全消失后一行才出现）
 )
 
 fun defaultEnterTransition(): EnterTransition {
-    return fadeIn(animationSpec = tween(600)) + slideInVertically(
-        initialOffsetY = { it / 3 }, animationSpec = tween(600, easing = FastOutSlowInEasing)
-    ) + scaleIn(
-        initialScale = 0.8f, animationSpec = tween(600)
-    )
+  return fadeIn(animationSpec = tween(600)) +
+      slideInVertically(
+          initialOffsetY = { it / 3 },
+          animationSpec = tween(600, easing = FastOutSlowInEasing),
+      ) +
+      scaleIn(
+          initialScale = 0.8f,
+          animationSpec = tween(600),
+      )
 }
 
 fun defaultExitTransition(): ExitTransition {
-    return fadeOut(animationSpec = tween(500)) + slideOutVertically(
-        targetOffsetY = { -it / 4 }, animationSpec = tween(500)
-    ) + scaleOut(
-        targetScale = 0.9f, animationSpec = tween(500)
-    )
+  return fadeOut(animationSpec = tween(500)) +
+      slideOutVertically(
+          targetOffsetY = { -it / 4 },
+          animationSpec = tween(500),
+      ) +
+      scaleOut(
+          targetScale = 0.9f,
+          animationSpec = tween(500),
+      )
 }
 
 @Composable
@@ -65,53 +73,57 @@ fun StackedAnimatedText(
     timingConfig: StackedAnimationTiming = StackedAnimationTiming(),
     onAnimationComplete: () -> Unit = {},
 ) {
-    var currentPhase by remember { mutableIntStateOf(-1) }
+  var currentPhase by remember { mutableIntStateOf(-1) }
 
-    LaunchedEffect(Unit) {
-        var accumulatedDelay = timingConfig.initialDelay
+  LaunchedEffect(Unit) {
+    var accumulatedDelay = timingConfig.initialDelay
 
-        textLines.forEachIndexed { index, config ->
-            // 延迟到该阶段的开始时间
-            delay(accumulatedDelay)
-            currentPhase = index
-            accumulatedDelay += config.durationMs
+    textLines.forEachIndexed { index, config ->
+      // 延迟到该阶段的开始时间
+      delay(accumulatedDelay)
+      currentPhase = index
+      accumulatedDelay += config.durationMs
 
-            // 如果配置了停留时间，在该阶段停留
-            if (config.stayDurationMs > 0) {
-                delay(config.stayDurationMs)
-            }
-        }
-
-        onAnimationComplete()
+      // 如果配置了停留时间，在该阶段停留
+      if (config.stayDurationMs > 0) {
+        delay(config.stayDurationMs)
+      }
     }
 
-    Box(
-        modifier = modifier, contentAlignment = Alignment.Center
-    ) {
-        textLines.forEachIndexed { index, config ->
-            val isVisible = currentPhase >= index
-            val isActive = currentPhase == index
+    onAnimationComplete()
+  }
 
-            val enterTransition = config.enterTransition ?: defaultEnterTransition()
-            val exitTransition = config.exitTransition ?: defaultExitTransition()
+  Box(
+      modifier = modifier,
+      contentAlignment = Alignment.Center,
+  ) {
+    textLines.forEachIndexed { index, config ->
+      val isVisible = currentPhase >= index
+      val isActive = currentPhase == index
 
-            AnimatedVisibility(
-                visible = isVisible, enter = enterTransition, exit = exitTransition
-            ) {
-                if (isActive && config.highlight != null) {
-                    HighlightedText(
-                        text = config.text,
-                        style = config.style,
-                        highlight = config.highlight,
-                        textAlign = config.alignment
-                    )
-                } else {
-                    Text(
-                        text = config.text, style = config.style, textAlign = config.alignment
-                    )
-                }
-            }
+      val enterTransition = config.enterTransition ?: defaultEnterTransition()
+      val exitTransition = config.exitTransition ?: defaultExitTransition()
+
+      AnimatedVisibility(
+          visible = isVisible,
+          enter = enterTransition,
+          exit = exitTransition,
+      ) {
+        if (isActive && config.highlight != null) {
+          HighlightedText(
+              text = config.text,
+              style = config.style,
+              highlight = config.highlight,
+              textAlign = config.alignment,
+          )
+        } else {
+          Text(
+              text = config.text,
+              style = config.style,
+              textAlign = config.alignment,
+          )
         }
+      }
     }
+  }
 }
-

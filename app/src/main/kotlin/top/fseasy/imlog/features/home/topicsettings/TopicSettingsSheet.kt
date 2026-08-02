@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.R
+import top.fseasy.imlog.features.home.getArchiveListItemResource
+import top.fseasy.imlog.features.home.getPinListItemResource
 import top.fseasy.imlog.ui.components.AppCircularProgress
 import top.fseasy.imlog.ui.components.AppInternalErrorContent
 
@@ -40,23 +42,26 @@ fun TopicSettingsSheet(
     afterDeleteNavigate: () -> Unit,
     viewModel: TopicSettingsViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiStateFlow.collectAsStateWithLifecycle()
+  val uiState by viewModel.uiStateFlow.collectAsStateWithLifecycle()
 
-    when (uiState) {
-        TopicSettingsUiState.Loading -> AppCircularProgress()
-        is TopicSettingsUiState.Error -> AppInternalErrorContent((uiState as TopicSettingsUiState.Error).userFriendlyReason)
-        is TopicSettingsUiState.Success,
-            -> TopicSettingsSheetContent(
+  when (uiState) {
+    TopicSettingsUiState.Loading -> AppCircularProgress()
+    is TopicSettingsUiState.Error ->
+        AppInternalErrorContent((uiState as TopicSettingsUiState.Error).userFriendlyReason)
+    is TopicSettingsUiState.Success,
+    ->
+        TopicSettingsSheetContent(
             uiState = uiState as TopicSettingsUiState.Success,
             onBack = onBack,
             onTogglePin = { viewModel.togglePin() },
             onToggleArchive = { viewModel.toggleArchive() },
             onDeleteTopic = {
-                viewModel.deleteTopic()
-                afterDeleteNavigate()
+              viewModel.deleteTopic()
+              afterDeleteNavigate()
             },
-            onUpdateTopicName = { newName -> viewModel.updateTopicName(newName) })
-    }
+            onUpdateTopicName = { newName -> viewModel.updateTopicName(newName) },
+        )
+  }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,77 +74,79 @@ fun TopicSettingsSheetContent(
     onDeleteTopic: () -> Unit,
     onUpdateTopicName: (String) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
+  val sheetState = rememberModalBottomSheetState()
 
-    var showEditNameDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
+  var showEditNameDialog by remember { mutableStateOf(false) }
+  var showDeleteDialog by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(
-        onDismissRequest = onBack, sheetState = sheetState
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.topic_settings_title),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+  ModalBottomSheet(
+      onDismissRequest = onBack,
+      sheetState = sheetState,
+  ) {
+    Column(modifier = Modifier.padding(16.dp)) {
+      Text(
+          text = stringResource(R.string.topic_settings_title),
+          style = MaterialTheme.typography.titleLarge,
+          modifier = Modifier.padding(bottom = 16.dp),
+      )
 
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.topic_settings_edit_name)) },
-                supportingContent = { Text(uiState.topic.name) },
-                leadingContent = { Icon(painterResource(R.drawable.icon_image), null) },
-                modifier = Modifier.fillMaxWidth()
-            )
+      ListItem(
+          headlineContent = { Text(stringResource(R.string.topic_settings_edit_name)) },
+          supportingContent = { Text(uiState.topic.name) },
+          leadingContent = { Icon(painterResource(R.drawable.icon_image), null) },
+          modifier = Modifier.fillMaxWidth(),
+      )
 
-            TopicPinSetting(
-                isPinned = uiState.preference.isPinned,
-                onTogglePin = onTogglePin,
-                modifier = Modifier,
-            )
+      TopicPinSetting(
+          isPinned = uiState.preference.isPinned,
+          onTogglePin = onTogglePin,
+          modifier = Modifier,
+      )
 
-            TopicArchiveSetting(
-                isArchived = uiState.preference.isArchived,
-                onToggleArchive = onToggleArchive,
-                modifier = Modifier
-            )
+      TopicArchiveSetting(
+          isArchived = uiState.preference.isArchived,
+          onToggleArchive = onToggleArchive,
+          modifier = Modifier,
+      )
 
-            Spacer(modifier = Modifier.height(32.dp))
+      Spacer(modifier = Modifier.height(32.dp))
 
-            TextButton(
-                onClick = { showDeleteDialog = true }, modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    stringResource(R.string.topic_settings_delete_topic),
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
+      TextButton(
+          onClick = { showDeleteDialog = true },
+          modifier = Modifier.fillMaxWidth(),
+      ) {
+        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            stringResource(R.string.topic_settings_delete_topic),
+            color = MaterialTheme.colorScheme.error,
+        )
+      }
 
-            Spacer(modifier = Modifier.height(32.dp))
-        }
+      Spacer(modifier = Modifier.height(32.dp))
     }
+  }
 
-    if (showEditNameDialog) {
-        EditTopicNameDialog(onDismiss = { showEditNameDialog = false }, onConfirm = { newName ->
-            onUpdateTopicName(newName)
-            showEditNameDialog = false
-        })
-    }
+  if (showEditNameDialog) {
+    EditTopicNameDialog(
+        onDismiss = { showEditNameDialog = false },
+        onConfirm = { newName ->
+          onUpdateTopicName(newName)
+          showEditNameDialog = false
+        },
+    )
+  }
 
-    if (showDeleteDialog) {
-        DeleteTopicDialog(onDismiss = { showDeleteDialog = false }, onConfirm = {
-            showDeleteDialog = false
-            onDeleteTopic()
-        })
-    }
+  if (showDeleteDialog) {
+    DeleteTopicDialog(
+        onDismiss = { showDeleteDialog = false },
+        onConfirm = {
+          showDeleteDialog = false
+          onDeleteTopic()
+        },
+    )
+  }
 }
-
-
-private data class ToggleElementResource(
-    val supportingStringId: Int,
-    val buttonStringId: Int,
-)
 
 @Composable
 private fun TopicPinSetting(
@@ -147,37 +154,28 @@ private fun TopicPinSetting(
     onTogglePin: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val res = remember(isPinned) {
-        if (isPinned) {
-            ToggleElementResource(
-                supportingStringId = R.string.topic_settings_pinned_status,
-                buttonStringId = R.string.topic_settings_btn_unpin
-            )
-        } else {
-            ToggleElementResource(
-                supportingStringId = R.string.topic_settings_unpinned_status,
-                buttonStringId = R.string.topic_settings_btn_pin
-            )
+  val res =
+      remember(isPinned) {
+        getPinListItemResource(isPinned)
+      }
 
+  ListItem(
+      headlineContent = { Text(stringResource(R.string.topic_settings_pin_topic)) },
+      supportingContent = { Text(stringResource(res.supportingStringRes)) },
+      leadingContent = {
+        Icon(
+            painterResource(res.iconRes),
+            contentDescription = null,
+        )
+      },
+      modifier = modifier.fillMaxWidth(),
+      trailingContent = {
+        TextButton(onClick = onTogglePin) {
+          Text(stringResource(res.buttonStringRes))
         }
-    }
-
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.topic_settings_pin_topic)) },
-        supportingContent = { Text(stringResource(res.supportingStringId)) },
-        leadingContent = {
-            Icon(
-                painterResource(R.drawable.icon_keep), contentDescription = null
-            )
-        },
-        modifier = modifier.fillMaxWidth(),
-        trailingContent = {
-            TextButton(onClick = onTogglePin) {
-                Text(stringResource(res.buttonStringId))
-            }
-        })
+      },
+  )
 }
-
 
 @Composable
 private fun TopicArchiveSetting(
@@ -185,86 +183,78 @@ private fun TopicArchiveSetting(
     onToggleArchive: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val res = remember(isArchived) {
-        if (isArchived) {
-            ToggleElementResource(
-                supportingStringId = R.string.topic_settings_archived_status,
-                buttonStringId = R.string.topic_settings_btn_unarchive
-            )
-        } else {
-            ToggleElementResource(
-                supportingStringId = R.string.topic_settings_unarchived_status,
-                buttonStringId = R.string.topic_settings_btn_archive
-            )
+  val res =
+      remember(isArchived) {
+        getArchiveListItemResource(isArchived)
+      }
 
+  ListItem(
+      headlineContent = { Text(stringResource(R.string.topic_settings_archive_topic)) },
+      supportingContent = { Text(stringResource(res.supportingStringRes)) },
+      leadingContent = {
+        Icon(
+            painterResource(res.iconRes),
+            contentDescription = null,
+        )
+      },
+      modifier = modifier.fillMaxWidth(),
+      trailingContent = {
+        TextButton(onClick = onToggleArchive) {
+          Text(stringResource(res.buttonStringRes))
         }
-    }
-
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.topic_settings_archive_topic)) },
-        supportingContent = { Text(stringResource(res.supportingStringId)) },
-        leadingContent = {
-            Icon(
-                painterResource(R.drawable.icon_archive), contentDescription = null
-            )
-        },
-        modifier = modifier.fillMaxWidth(),
-        trailingContent = {
-            TextButton(onClick = onToggleArchive) {
-                Text(stringResource(res.buttonStringId))
-            }
-        })
+      },
+  )
 }
-
 
 @Composable
 private fun EditTopicNameDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
-    var editedName by rememberSaveable() { mutableStateOf("") }
+  var editedName by rememberSaveable() { mutableStateOf("") }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.topic_settings_edit_name)) },
-        text = {
-            OutlinedTextField(
-                value = editedName,
-                onValueChange = { editedName = it },
-                label = { Text(stringResource(R.string.topic_settings_name_input_field_label)) },
-                singleLine = true
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(editedName) }) {
-                Text(stringResource(R.string.btn_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_cancel))
-            }
-        })
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text(stringResource(R.string.topic_settings_edit_name)) },
+      text = {
+        OutlinedTextField(
+            value = editedName,
+            onValueChange = { editedName = it },
+            label = { Text(stringResource(R.string.topic_settings_name_input_field_label)) },
+            singleLine = true,
+        )
+      },
+      confirmButton = {
+        TextButton(onClick = { onConfirm(editedName) }) {
+          Text(stringResource(R.string.btn_save))
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = onDismiss) {
+          Text(stringResource(R.string.btn_cancel))
+        }
+      },
+  )
 }
-
 
 @Composable
 fun DeleteTopicDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.topic_settings_delete_confirm_title)) },
-        text = { Text(stringResource(R.string.topic_settings_delete_confirm_desc)) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(stringResource(R.string.btn_delete), color = MaterialTheme.colorScheme.error)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.btn_cancel))
-            }
-        })
+  AlertDialog(
+      onDismissRequest = onDismiss,
+      title = { Text(stringResource(R.string.topic_settings_delete_confirm_title)) },
+      text = { Text(stringResource(R.string.topic_settings_delete_confirm_desc)) },
+      confirmButton = {
+        TextButton(onClick = onConfirm) {
+          Text(stringResource(R.string.btn_delete), color = MaterialTheme.colorScheme.error)
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = onDismiss) {
+          Text(stringResource(R.string.btn_cancel))
+        }
+      },
+  )
 }

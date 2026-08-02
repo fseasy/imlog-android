@@ -12,61 +12,65 @@ import top.fseasy.imlog.domain.repository.MessageAttachmentSource
 import top.fseasy.imlog.domain.repository.MessageRepository
 import javax.inject.Inject
 
-class InitializeAttachmentMessageUseCase @Inject constructor(
+class InitializeAttachmentMessageUseCase
+@Inject
+constructor(
     private val messageRepository: MessageRepository,
     private val dbRunner: DbRunner,
 ) {
 
-    /**
-     * @throws Throwable
-     */
-    suspend fun forUriSource(
-        srcUriStr: UriStr,
-        senderId: UserId,
-        topicId: TopicId,
-        messageTimestampMs: Long,
-        messageType: MessageType,
-        fileMetadata: FileMetadataUnion,
-    ): MessageId = dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
-        val messageId = messageRepository.syncInsertInitialAttachmentMessage(
-            topicId = topicId,
-            senderId = senderId,
-            type = messageType,
-            timestampMs = messageTimestampMs,
-            fileMetadata = fileMetadata
-        )
+  /** @throws Throwable */
+  suspend fun forUriSource(
+      srcUriStr: UriStr,
+      senderId: UserId,
+      topicId: TopicId,
+      messageTimestampMs: Long,
+      messageType: MessageType,
+      fileMetadata: FileMetadataUnion,
+  ): MessageId =
+      dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
+        val messageId =
+            messageRepository.syncInsertInitialAttachmentMessage(
+                topicId = topicId,
+                senderId = senderId,
+                type = messageType,
+                timestampMs = messageTimestampMs,
+                fileMetadata = fileMetadata,
+            )
         messageRepository.syncInsertInitialAttachmentProcessingTaskState(
             messageId = messageId,
             fileSource = MessageAttachmentSource.FromUriStr(srcUriStr),
-            taskStartTime = messageTimestampMs
+            taskStartTime = messageTimestampMs,
         )
         messageId
-    }
+      }
 
-    /**
-     * @param cacheFilename: obey the @StoragePathUseCase.buildMessageCacheFileStoragePath
-     * @throws Throwable
-     */
-    suspend fun forCacheFileSource(
-        cacheFilename: String,
-        senderId: UserId,
-        topicId: TopicId,
-        messageTimestampMs: Long,
-        messageType: MessageType,
-        fileMetadata: FileMetadataUnion,
-    ): MessageId = dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
-        val messageId = messageRepository.syncInsertInitialAttachmentMessage(
-            topicId = topicId,
-            senderId = senderId,
-            type = messageType,
-            timestampMs = messageTimestampMs,
-            fileMetadata = fileMetadata
-        )
+  /**
+   * @param cacheFilename: obey the @StoragePathUseCase.buildMessageCacheFileStoragePath
+   * @throws Throwable
+   */
+  suspend fun forCacheFileSource(
+      cacheFilename: String,
+      senderId: UserId,
+      topicId: TopicId,
+      messageTimestampMs: Long,
+      messageType: MessageType,
+      fileMetadata: FileMetadataUnion,
+  ): MessageId =
+      dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
+        val messageId =
+            messageRepository.syncInsertInitialAttachmentMessage(
+                topicId = topicId,
+                senderId = senderId,
+                type = messageType,
+                timestampMs = messageTimestampMs,
+                fileMetadata = fileMetadata,
+            )
         messageRepository.syncInsertInitialAttachmentProcessingTaskState(
             messageId = messageId,
             fileSource = MessageAttachmentSource.FromMessageCache(cacheFilename),
-            taskStartTime = messageTimestampMs
+            taskStartTime = messageTimestampMs,
         )
         messageId
-    }
+      }
 }

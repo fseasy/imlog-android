@@ -10,6 +10,5 @@ import top.fseasy.imlog.worker.BackgroundTaskRunnerImpl
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class BackgroundTaskRunnerModule {
-    @Binds
-    abstract fun bindBackgroundTaskRunner(impl: BackgroundTaskRunnerImpl): BackgroundTaskRunner
+  @Binds abstract fun bindBackgroundTaskRunner(impl: BackgroundTaskRunnerImpl): BackgroundTaskRunner
 }

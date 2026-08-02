@@ -48,13 +48,13 @@ fun VoiceRecodingRow(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val recordingState by voiceRecordingUiStateFlow.collectAsStateWithLifecycle()
-    VoiceRecodingContent(
-        voiceRecordingUiState = recordingState,
-        onCancel = onCancel,
-        onSend = onSend,
-        modifier = modifier
-    )
+  val recordingState by voiceRecordingUiStateFlow.collectAsStateWithLifecycle()
+  VoiceRecodingContent(
+      voiceRecordingUiState = recordingState,
+      onCancel = onCancel,
+      onSend = onSend,
+      modifier = modifier,
+  )
 }
 
 @Composable
@@ -64,65 +64,62 @@ fun VoiceRecodingContent(
     onSend: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var blink by remember { mutableStateOf(false) }
+  var blink by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            blink = !blink
-            delay(600.milliseconds)
-        }
+  LaunchedEffect(Unit) {
+    while (true) {
+      blink = !blink
+      delay(600.milliseconds)
     }
-    val alphaAnim by animateFloatAsState(targetValue = if (blink) 1f else 0.2f, label = "blink")
+  }
+  val alphaAnim by animateFloatAsState(targetValue = if (blink) 1f else 0.2f, label = "blink")
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .height(38.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFFFF0F0)),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        IconButton(onClick = onCancel) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = stringResource(R.string.composer_delete_voice_btn_desc),
-                tint = Color(0xFFFF3B30)
-            )
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .alpha(alphaAnim)
-                    .background(Color(0xFFFF3B30), CircleShape)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = (voiceRecordingUiState.elapsed.toMmSsFormat()),
-                color = Color(0xFFFF3B30),
-                fontSize = 14.sp,
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(
-                onClick = onSend,
-                modifier = Modifier
-                    .size(32.dp)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = stringResource(R.string.composer_send_voice_btn_desc),
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-        }
+  Row(
+      modifier =
+          modifier
+              .fillMaxWidth()
+              .padding(horizontal = 12.dp, vertical = 8.dp)
+              .height(38.dp)
+              .clip(RoundedCornerShape(12.dp))
+              .background(Color(0xFFFFF0F0)),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.SpaceBetween,
+  ) {
+    IconButton(onClick = onCancel) {
+      Icon(
+          imageVector = Icons.Default.Delete,
+          contentDescription = stringResource(R.string.composer_delete_voice_btn_desc),
+          tint = Color(0xFFFF3B30),
+      )
     }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      Box(
+          modifier = Modifier.size(8.dp).alpha(alphaAnim).background(Color(0xFFFF3B30), CircleShape)
+      )
+      Spacer(modifier = Modifier.width(6.dp))
+      Text(
+          text = (voiceRecordingUiState.elapsed.toMmSsFormat()),
+          color = Color(0xFFFF3B30),
+          fontSize = 14.sp,
+          style = MaterialTheme.typography.bodyMedium,
+      )
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      IconButton(
+          onClick = onSend,
+          modifier =
+              Modifier.size(32.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
+      ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.Send,
+            contentDescription = stringResource(R.string.composer_send_voice_btn_desc),
+            tint = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.size(16.dp),
+        )
+      }
+      Spacer(modifier = Modifier.width(4.dp))
+    }
+  }
 }

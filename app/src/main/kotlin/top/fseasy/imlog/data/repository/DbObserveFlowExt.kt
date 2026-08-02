@@ -14,14 +14,14 @@ import kotlin.coroutines.cancellation.CancellationException
 inline fun <T> safeObserveFlowOrNull(
     crossinline logMessage: () -> String,
     crossinline builder: () -> Flow<T?>,
-): Flow<T?> = try {
-    builder()
-        .catch { e ->
-            Timber.i(e, "${logMessage()}, emit null")
-            emit(null)
-        }
-} catch (e: Exception) {
-    if (e is CancellationException) throw e
-    Timber.i(e, "${logMessage()} (construction)")
-    flowOf(null)
-}
+): Flow<T?> =
+    try {
+      builder().catch { e ->
+        Timber.i(e, "${logMessage()}, emit null")
+        emit(null)
+      }
+    } catch (e: Exception) {
+      if (e is CancellationException) throw e
+      Timber.i(e, "${logMessage()} (construction)")
+      flowOf(null)
+    }

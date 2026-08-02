@@ -27,23 +27,25 @@ fun AppCircularProgress(
     strokeWidth: Dp = 4.dp,
     loadingDisplayMessage: String? = null,
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(size), color = color, strokeWidth = strokeWidth
-        )
-        if (!loadingDisplayMessage.isNullOrEmpty()) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = loadingDisplayMessage,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
-                fontSize = 14.sp
-            )
-        }
+  Column(
+      modifier = modifier,
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.Center,
+  ) {
+    CircularProgressIndicator(
+        modifier = Modifier.size(size),
+        color = color,
+        strokeWidth = strokeWidth,
+    )
+    if (!loadingDisplayMessage.isNullOrEmpty()) {
+      Spacer(modifier = Modifier.height(12.dp))
+      Text(
+          text = loadingDisplayMessage,
+          color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+          fontSize = 14.sp,
+      )
     }
+  }
 }
 
 @Composable
@@ -52,23 +54,25 @@ fun LoadingContentWrapper(
     modifier: Modifier = Modifier,
     loadingDisplayMessage: String? = null,
     loadingContent: @Composable () -> Unit = {
-        Box(
-            modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center
-        ) {
-            AppCircularProgress(loadingDisplayMessage = loadingDisplayMessage)
-        }
+      Box(
+          modifier = modifier.fillMaxSize(),
+          contentAlignment = Alignment.Center,
+      ) {
+        AppCircularProgress(loadingDisplayMessage = loadingDisplayMessage)
+      }
     },
     content: @Composable () -> Unit,
 ) {
-    if (isLoading) {
-        loadingContent()
-    } else {
-        content()
-    }
+  if (isLoading) {
+    loadingContent()
+  } else {
+    content()
+  }
 }
 
 /**
- * @param failureContent - if null, same to the loading content; else will pass the error reason to the lambda
+ * @param failureContent - if null, same to the loading content; else will pass the error reason to
+ *   the lambda
  * @param successContent - will receive the Success data.
  */
 @Composable
@@ -77,30 +81,31 @@ fun <T> TaskStateLoadingWrapper(
     modifier: Modifier = Modifier,
     loadingDisplayMessage: String? = null,
     loadingContent: @Composable () -> Unit = {
-        Box(
-            modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center
-        ) {
-            AppCircularProgress(loadingDisplayMessage = loadingDisplayMessage)
-        }
+      Box(
+          modifier = modifier.fillMaxSize(),
+          contentAlignment = Alignment.Center,
+      ) {
+        AppCircularProgress(loadingDisplayMessage = loadingDisplayMessage)
+      }
     },
     failureContent: @Composable ((String) -> Unit)? = null,
     successContent: @Composable (T) -> Unit,
 ) {
-    when (state) {
-        is TaskExecuteState.Idle,
-        is TaskExecuteState.Executing,
-            -> loadingContent()
+  when (state) {
+    is TaskExecuteState.Idle,
+    is TaskExecuteState.Executing,
+    -> loadingContent()
 
-        is TaskExecuteState.Failure -> {
-            if (failureContent != null) {
-                failureContent(state.reason)
-            } else {
-                loadingContent()
-            }
-        }
-
-        is TaskExecuteState.Success -> {
-            successContent(state.data)
-        }
+    is TaskExecuteState.Failure -> {
+      if (failureContent != null) {
+        failureContent(state.reason)
+      } else {
+        loadingContent()
+      }
     }
+
+    is TaskExecuteState.Success -> {
+      successContent(state.data)
+    }
+  }
 }

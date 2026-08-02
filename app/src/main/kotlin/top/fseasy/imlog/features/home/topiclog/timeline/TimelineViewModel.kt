@@ -24,19 +24,20 @@ import top.fseasy.imlog.navigation.MainScreen
 import javax.inject.Inject
 
 sealed interface ContextState {
-    object Loading : ContextState
+  object Loading : ContextState
 
-    data class Error(val reason: String) : ContextState
+  data class Error(val reason: String) : ContextState
 
-    data class Success(
-        val topic: Topic,
-        val currentUserId: UserId,
-    ) : ContextState
+  data class Success(
+      val topic: Topic,
+      val currentUserId: UserId,
+  ) : ContextState
 }
 
-
 @HiltViewModel
-class TimelineViewModel @Inject constructor(
+class TimelineViewModel
+@Inject
+constructor(
     savedStateHandle: SavedStateHandle,
     userRepository: UserRepository,
     private val topicRepository: TopicRepository,
@@ -44,38 +45,40 @@ class TimelineViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
-    val topicId: TopicId = savedStateHandle.toRoute<MainScreen.TopicTimeline>().topicId
+  val topicId: TopicId = savedStateHandle.toRoute<MainScreen.TopicTimeline>().topicId
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val contextStateFlow: StateFlow<ContextState> = combine(
-        userRepository.observeCurrentUserIdOrNull()
-            .filterNotNull(),
-        topicRepository.observeTopicOrNull(topicId),
-    ) { uid, topic ->
-        when (topic) {
-            null -> ContextState.Error("Failed to load Topic for id: $topicId")
-            else -> ContextState.Success(
-                currentUserId = uid,
-                topic = topic,
-            )
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ContextState.Loading
-    )
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val contextStateFlow: StateFlow<ContextState> =
+      combine(
+              userRepository.observeCurrentUserIdOrNull().filterNotNull(),
+              topicRepository.observeTopicOrNull(topicId),
+          ) { uid, topic ->
+            when (topic) {
+              null -> ContextState.Error("Failed to load Topic for id: $topicId")
+              else ->
+                  ContextState.Success(
+                      currentUserId = uid,
+                      topic = topic,
+                  )
+            }
+          }
+          .stateIn(
+              scope = viewModelScope,
+              started = SharingStarted.WhileSubscribed(5000),
+              initialValue = ContextState.Loading,
+          )
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val messagesStateFlow: StateFlow<List<Message>?> =
-        messageRepository.observeTopicMessagesOrNull(topicId)
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyList()
-            )
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val messagesStateFlow: StateFlow<List<Message>?> =
+      messageRepository
+          .observeTopicMessagesOrNull(topicId)
+          .stateIn(
+              scope = viewModelScope,
+              started = SharingStarted.WhileSubscribed(5000),
+              initialValue = emptyList(),
+          )
 
-    fun copyMessage(message: Message) {
-        // TODO: 实现剪贴板复制
-    }
-
+  fun copyMessage(message: Message) {
+    // TODO: 实现剪贴板复制
+  }
 }

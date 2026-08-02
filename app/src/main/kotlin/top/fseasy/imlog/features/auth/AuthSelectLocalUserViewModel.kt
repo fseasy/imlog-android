@@ -21,7 +21,6 @@ import javax.inject.Inject
 
 data class LocalUser(val id: UserId, val name: String, val avatar: UserAvatarUiModel)
 
-
 @Immutable
 data class AuthSelectLocalUserUiState(
     val loadLocalUserState: TaskExecuteState<List<LocalUser>> = TaskExecuteState.Idle,
@@ -30,76 +29,87 @@ data class AuthSelectLocalUserUiState(
 )
 
 @HiltViewModel
-class AuthSelectLocalUserViewModel @Inject constructor(
+class AuthSelectLocalUserViewModel
+@Inject
+constructor(
     @param:ApplicationContext private val context: Context,
     private val signInUpUseCase: SignInUpUseCase,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(AuthSelectLocalUserUiState())
-    val uiState = _uiState.asStateFlow()
+  private val _uiState = MutableStateFlow(AuthSelectLocalUserUiState())
+  val uiState = _uiState.asStateFlow()
 
-    init {
-        loadUsers()
-    }
+  init {
+    loadUsers()
+  }
 
-    fun selectUser(userId: UserId) {
-        viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    selectUserState = TaskExecuteState.Executing, selectedUserId = userId
-                )
-            } // make UI change!
-            runCatching {
-                signInUpUseCase.setCurrentUser(userId)
-            }.fold(onSuccess = {
+  fun selectUser(userId: UserId) {
+    viewModelScope.launch {
+      _uiState.update {
+        it.copy(
+            selectUserState = TaskExecuteState.Executing,
+            selectedUserId = userId,
+        )
+      } // make UI change!
+      runCatching {
+            signInUpUseCase.setCurrentUser(userId)
+          }
+          .fold(
+              onSuccess = {
                 _uiState.update {
-                    it.copy(
-                        selectUserState = TaskExecuteState.Success(
-                            Unit
-                        )
-                    )
+                  it.copy(selectUserState = TaskExecuteState.Success(Unit))
                 }
-            }, onFailure = { e ->
+              },
+              onFailure = { e ->
                 Timber.e(e, "Select User failed")
                 _uiState.update {
-                    it.copy(
-                        selectUserState = TaskExecuteState.Failure(
-                            e.message ?: context.getString(R.string.error_unknown)
-                        )
-                    )
+                  it.copy(
+                      selectUserState =
+                          TaskExecuteState.Failure(
+                              e.message ?: context.getString(R.string.error_unknown)
+                          )
+                  )
                 }
-            })
-        }
+              },
+          )
     }
+  }
 
-    fun onErrorDismiss() {
-        // reset state
-        _uiState.update { it.copy(selectUserState = TaskExecuteState.Idle, selectedUserId = null) }
-    }
+  fun onErrorDismiss() {
+    // reset state
+    _uiState.update { it.copy(selectUserState = TaskExecuteState.Idle, selectedUserId = null) }
+  }
 
-    private fun loadUsers() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(loadLocalUserState = TaskExecuteState.Executing) }
-            runCatching {
-                signInUpUseCase.getLocalSignedInUsers()
-            }.fold(onSuccess = { users ->
+  private fun loadUsers() {
+    viewModelScope.launch {
+      _uiState.update { it.copy(loadLocalUserState = TaskExecuteState.Executing) }
+      runCatching {
+            signInUpUseCase.getLocalSignedInUsers()
+          }
+          .fold(
+              onSuccess = { users ->
                 val localUsers = users.map { u ->
-                    LocalUser(
-                        id = u.id, name = u.username, avatar = u.avatarModel.toUserAvatarUIModel()
-                    )
+                  LocalUser(
+                      id = u.id,
+                      name = u.username,
+                      avatar = u.avatarModel.toUserAvatarUIModel(),
+                  )
                 }
                 _uiState.update {
-                    it.copy(loadLocalUserState = TaskExecuteState.Success(localUsers))
+                  it.copy(loadLocalUserState = TaskExecuteState.Success(localUsers))
                 }
-            }, onFailure = { e ->
+              },
+              onFailure = { e ->
                 Timber.e(e, "Get local SignedIn users failed")
                 _uiState.update {
-                    it.copy(
-                        loadLocalUserState = TaskExecuteState.Failure(
-                            e.message ?: context.getString(R.string.error_unknown)
-                        ),
-                    )
+                  it.copy(
+                      loadLocalUserState =
+                          TaskExecuteState.Failure(
+                              e.message ?: context.getString(R.string.error_unknown)
+                          ),
+                  )
                 }
-            })
-        }
+              },
+          )
     }
+  }
 }

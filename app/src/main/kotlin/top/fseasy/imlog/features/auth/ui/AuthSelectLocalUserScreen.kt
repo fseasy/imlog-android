@@ -38,20 +38,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import top.fseasy.imlog.features.auth.LocalUser
-import top.fseasy.imlog.ui.components.AppTextButton
-import top.fseasy.imlog.ui.components.UserAvatar
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.features.auth.AuthSelectLocalUserUiState
 import top.fseasy.imlog.features.auth.AuthSelectLocalUserViewModel
-import top.fseasy.imlog.ui.components.AppCircularProgress
+import top.fseasy.imlog.features.auth.LocalUser
+import top.fseasy.imlog.ui.components.AppTextButton
 import top.fseasy.imlog.ui.components.TaskStateLoadingWrapper
+import top.fseasy.imlog.ui.components.UserAvatar
 import top.fseasy.imlog.ui.model.TaskExecuteState
 import top.fseasy.imlog.ui.model.UserAvatarUiModel
 
-private const val USER_NUM_OF_EACH_ROW = 2;
-private const val CARD_MAX_WIDTH = 150;
+private const val USER_NUM_OF_EACH_ROW = 2
+
+private const val CARD_MAX_WIDTH = 150
 
 @Composable
 fun AuthSelectLocalUserScreen(
@@ -60,16 +60,16 @@ fun AuthSelectLocalUserScreen(
     modifier: Modifier = Modifier,
     viewModel: AuthSelectLocalUserViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+  val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    SelectUserFramework(
-        uiState = uiState,
-        onSelectUserClick = { uid -> viewModel.selectUser(uid) },
-        onNavigateToCreateUser = onNavigateToCreateUser,
-        onAuthSuccessNavigate = onAuthSuccessNavigate,
-        onErrorDismiss = { viewModel.onErrorDismiss() },
-        modifier = modifier
-    )
+  SelectUserFramework(
+      uiState = uiState,
+      onSelectUserClick = { uid -> viewModel.selectUser(uid) },
+      onNavigateToCreateUser = onNavigateToCreateUser,
+      onAuthSuccessNavigate = onAuthSuccessNavigate,
+      onErrorDismiss = { viewModel.onErrorDismiss() },
+      modifier = modifier,
+  )
 }
 
 @Composable
@@ -81,35 +81,34 @@ private fun SelectUserFramework(
     onErrorDismiss: () -> Unit,
     modifier: Modifier,
 ) {
-    val snackbarHostState = remember { SnackbarHostState() }
+  val snackbarHostState = remember { SnackbarHostState() }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        modifier = modifier.fillMaxSize()
-    ) { paddingValues ->
-
-        Surface(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(paddingValues), color = MaterialTheme.colorScheme.background
-        ) {
-            TaskStateLoadingWrapper(
-                state = uiState.loadLocalUserState,
-                modifier = modifier,
-                successContent = { localUsers ->
-                    SelectUserContent(
-                        signedInUsers = localUsers,
-                        selectUserState = uiState.selectUserState,
-                        selectedUserId = uiState.selectedUserId,
-                        onSelectUserClick = onSelectUserClick,
-                        onNavigateToCreateUser = onNavigateToCreateUser,
-                        onAuthSuccessNavigate = onAuthSuccessNavigate,
-                        onErrorDismiss = onErrorDismiss,
-                        snackbarHostState = snackbarHostState,
-                    )
-                })
-        }
+  Scaffold(
+      snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+      modifier = modifier.fillMaxSize(),
+  ) { paddingValues ->
+    Surface(
+        modifier = modifier.fillMaxSize().padding(paddingValues),
+        color = MaterialTheme.colorScheme.background,
+    ) {
+      TaskStateLoadingWrapper(
+          state = uiState.loadLocalUserState,
+          modifier = modifier,
+          successContent = { localUsers ->
+            SelectUserContent(
+                signedInUsers = localUsers,
+                selectUserState = uiState.selectUserState,
+                selectedUserId = uiState.selectedUserId,
+                onSelectUserClick = onSelectUserClick,
+                onNavigateToCreateUser = onNavigateToCreateUser,
+                onAuthSuccessNavigate = onAuthSuccessNavigate,
+                onErrorDismiss = onErrorDismiss,
+                snackbarHostState = snackbarHostState,
+            )
+          },
+      )
     }
+  }
 }
 
 @Composable
@@ -123,100 +122,90 @@ private fun SelectUserContent(
     onErrorDismiss: () -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
-    val chunkedUsers = remember(signedInUsers) { signedInUsers.chunked(USER_NUM_OF_EACH_ROW) }
-    val scrollState = rememberScrollState()
+  val chunkedUsers = remember(signedInUsers) { signedInUsers.chunked(USER_NUM_OF_EACH_ROW) }
+  val scrollState = rememberScrollState()
 
-    LaunchedEffect(selectUserState) {
-        if (selectUserState is TaskExecuteState.Failure) {
-            snackbarHostState.showSnackbar(message = selectUserState.reason)
-            onErrorDismiss()
-        } else if (selectUserState is TaskExecuteState.Success) {
-            onAuthSuccessNavigate()
-        }
+  LaunchedEffect(selectUserState) {
+    if (selectUserState is TaskExecuteState.Failure) {
+      snackbarHostState.showSnackbar(message = selectUserState.reason)
+      onErrorDismiss()
+    } else if (selectUserState is TaskExecuteState.Success) {
+      onAuthSuccessNavigate()
     }
+  }
+
+  Column(
+      modifier = Modifier.fillMaxSize().verticalScroll(scrollState),
+      verticalArrangement = Arrangement.Center,
+  ) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+      Text(
+          text = stringResource(R.string.signinup_signup_welcome),
+          style = MaterialTheme.typography.titleMedium,
+          color = MaterialTheme.colorScheme.primary,
+          fontWeight = FontWeight.SemiBold,
+      )
+      Spacer(modifier = Modifier.height(8.dp))
+      Text(
+          text = stringResource(R.string.signinup_signup_select_account),
+          style = MaterialTheme.typography.headlineMedium,
+          color = MaterialTheme.colorScheme.onBackground,
+          fontWeight = FontWeight.Bold,
+      )
+    }
+
+    Spacer(modifier = Modifier.height(48.dp))
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState), verticalArrangement = Arrangement.Center
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally
+      chunkedUsers.forEachIndexed { rowIndex, rowUsers ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = stringResource(R.string.signinup_signup_welcome),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold
+          rowUsers.forEachIndexed { index, user ->
+            val isCurrentCardLoading =
+                selectedUserId == user.id && selectUserState == TaskExecuteState.Executing
+            val shouldDisable = selectUserState == TaskExecuteState.Executing
+            GridUserCard(
+                user = user,
+                onClick = { onSelectUserClick(user.id) },
+                isLoading = isCurrentCardLoading,
+                enabled = !shouldDisable,
+                modifier =
+                    Modifier.weight(1f, fill = false).widthIn(max = CARD_MAX_WIDTH.dp), // 限制卡片最大宽度
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.signinup_signup_select_account),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        Spacer(modifier = Modifier.height(48.dp))
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            chunkedUsers.forEachIndexed { rowIndex, rowUsers ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    rowUsers.forEachIndexed { index, user ->
-                        val isCurrentCardLoading =
-                            selectedUserId == user.id && selectUserState == TaskExecuteState.Executing
-                        val shouldDisable = selectUserState == TaskExecuteState.Executing
-                        GridUserCard(
-                            user = user,
-                            onClick = { onSelectUserClick(user.id) },
-                            isLoading = isCurrentCardLoading,
-                            enabled = !shouldDisable,
-                            modifier = Modifier
-                                .weight(1f, fill = false)
-                                .widthIn(max = CARD_MAX_WIDTH.dp) // 限制卡片最大宽度
-                        )
-                        if (index < rowUsers.lastIndex) {
-                            Spacer(modifier = Modifier.width(16.dp))
-                        }
-                    }
-
-                    if (rowIndex > 0) {
-                        // 如果多行，则尾行在填不满时，在右侧放置等宽的隐形占位符，实现靠左对齐的效果
-                        repeat(USER_NUM_OF_EACH_ROW - rowUsers.size) {
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Spacer(
-                                modifier = Modifier
-                                    .weight(1f, fill = false)
-                                    .widthIn(max = CARD_MAX_WIDTH.dp)
-                            )
-                        }
-                    }
-                }
+            if (index < rowUsers.lastIndex) {
+              Spacer(modifier = Modifier.width(16.dp))
             }
+          }
+
+          if (rowIndex > 0) {
+            // 如果多行，则尾行在填不满时，在右侧放置等宽的隐形占位符，实现靠左对齐的效果
+            repeat(USER_NUM_OF_EACH_ROW - rowUsers.size) {
+              Spacer(modifier = Modifier.width(16.dp))
+              Spacer(modifier = Modifier.weight(1f, fill = false).widthIn(max = CARD_MAX_WIDTH.dp))
+            }
+          }
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
-        AppTextButton(
-            onClick = onNavigateToCreateUser,
-            text = stringResource(R.string.signinup_goto_create_user),
-            enabled = selectUserState is TaskExecuteState.Idle
-        )
+      }
     }
-}
 
+    Spacer(modifier = Modifier.height(24.dp))
+    AppTextButton(
+        onClick = onNavigateToCreateUser,
+        text = stringResource(R.string.signinup_goto_create_user),
+        enabled = selectUserState is TaskExecuteState.Idle,
+    )
+  }
+}
 
 @Composable
 private fun GridUserCard(
@@ -226,32 +215,35 @@ private fun GridUserCard(
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // downgrade the alpha
-    val contentAlpha = if (enabled || isLoading) 1.0f else 0.5f
-    Card(
-        onClick = onClick, enabled = enabled && !isLoading, colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f)
-        ), shape = MaterialTheme.shapes.large, modifier = modifier.alpha(contentAlpha)
+  // downgrade the alpha
+  val contentAlpha = if (enabled || isLoading) 1.0f else 0.5f
+  Card(
+      onClick = onClick,
+      enabled = enabled && !isLoading,
+      colors =
+          CardDefaults.cardColors(
+              containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+              disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
+          ),
+      shape = MaterialTheme.shapes.large,
+      modifier = modifier.alpha(contentAlpha),
+  ) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 24.dp, horizontal = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            LoadingAwareAvatar(user.avatar, isLoading = isLoading, modifier = modifier)
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = user.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+      LoadingAwareAvatar(user.avatar, isLoading = isLoading, modifier = modifier)
+      Spacer(modifier = Modifier.height(12.dp))
+      Text(
+          text = user.name,
+          style = MaterialTheme.typography.titleMedium,
+          fontWeight = FontWeight.SemiBold,
+          color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+      )
     }
+  }
 }
 
 @Composable
@@ -260,21 +252,23 @@ fun LoadingAwareAvatar(
     isLoading: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier.size(64.dp), contentAlignment = Alignment.Center
-    ) {
-        Crossfade(targetState = isLoading, animationSpec = tween(300)) { loading ->
-            if (loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(32.dp),
-                    strokeWidth = 3.dp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            } else {
-                UserAvatar(
-                    model = avatar, modifier = Modifier.size(64.dp)
-                )
-            }
-        }
+  Box(
+      modifier = modifier.size(64.dp),
+      contentAlignment = Alignment.Center,
+  ) {
+    Crossfade(targetState = isLoading, animationSpec = tween(300)) { loading ->
+      if (loading) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(32.dp),
+            strokeWidth = 3.dp,
+            color = MaterialTheme.colorScheme.primary,
+        )
+      } else {
+        UserAvatar(
+            model = avatar,
+            modifier = Modifier.size(64.dp),
+        )
+      }
     }
+  }
 }

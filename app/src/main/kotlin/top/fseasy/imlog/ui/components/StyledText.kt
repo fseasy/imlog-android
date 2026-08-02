@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 
-
 data class HighlightConfig(
     val color: Color = Color(0xFFFFD54F),
     val scale: Float = 1.0f,
@@ -34,50 +33,67 @@ fun HighlightedText(
     highlight: HighlightConfig,
     textAlign: TextAlign = TextAlign.Center,
 ) {
-    val glowAlpha = remember { Animatable(0f) }
+  val glowAlpha = remember { Animatable(0f) }
 
-    LaunchedEffect(Unit) {
-        // 呼吸光效
-        while (true) {
-            glowAlpha.animateTo(0.8f, animationSpec = tween(1500))
-            glowAlpha.animateTo(0.3f, animationSpec = tween(1500))
-        }
+  LaunchedEffect(Unit) {
+    // 呼吸光效
+    while (true) {
+      glowAlpha.animateTo(0.8f, animationSpec = tween(1500))
+      glowAlpha.animateTo(0.3f, animationSpec = tween(1500))
+    }
+  }
+
+  // 将缩放和透明度统一交给 graphicsLayer 管理，避免布局尺寸改变导致重排或错位
+  val baseModifier = Modifier.graphicsLayer {
+    scaleX = highlight.scale
+    scaleY = highlight.scale
+  }
+
+  Box(
+      modifier = Modifier.wrapContentSize(),
+      contentAlignment = Alignment.Center,
+  ) {
+    // 发光层
+    if (highlight.glowColor != Color.Unspecified) {
+      Text(
+          text = text,
+          style =
+              style.copy(
+                  color = highlight.glowColor,
+                  shadow =
+                      Shadow(
+                          color = highlight.glowColor,
+                          offset = Offset(0f, 0f),
+                          blurRadius = 20f,
+                      ),
+              ),
+          textAlign = textAlign,
+          modifier =
+              baseModifier.graphicsLayer {
+                alpha = glowAlpha.value
+                // 使用 Compose 的 asComposeRenderEffect 包装器
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                  renderEffect =
+                      android.graphics.RenderEffect.createBlurEffect(
+                              20f,
+                              20f,
+                              Shader.TileMode.CLAMP,
+                          )
+                          .asComposeRenderEffect()
+                }
+              },
+      )
     }
 
-    // 将缩放和透明度统一交给 graphicsLayer 管理，避免布局尺寸改变导致重排或错位
-    val baseModifier = Modifier.graphicsLayer {
-        scaleX = highlight.scale
-        scaleY = highlight.scale
-    }
-
-    Box(
-        modifier = Modifier.wrapContentSize(), contentAlignment = Alignment.Center
-    ) {
-        // 发光层
-        if (highlight.glowColor != Color.Unspecified) {
-            Text(
-                text = text, style = style.copy(
-                    color = highlight.glowColor,
-                    shadow = Shadow(
-                        color = highlight.glowColor, offset = Offset(0f, 0f), blurRadius = 20f
-                    ),
-                ), textAlign = textAlign, modifier = baseModifier.graphicsLayer {
-                    alpha = glowAlpha.value
-                    // 使用 Compose 的 asComposeRenderEffect 包装器
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        renderEffect = android.graphics.RenderEffect.createBlurEffect(
-                            20f, 20f, Shader.TileMode.CLAMP
-                        )
-                            .asComposeRenderEffect()
-                    }
-                })
-        }
-
-        // 主文本
-        Text(
-            text = text, style = style.copy(
+    // 主文本
+    Text(
+        text = text,
+        style =
+            style.copy(
                 color = if (highlight.color != Color.Unspecified) highlight.color else style.color
-            ), textAlign = textAlign, modifier = baseModifier
-        )
-    }
+            ),
+        textAlign = textAlign,
+        modifier = baseModifier,
+    )
+  }
 }

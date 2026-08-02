@@ -25,105 +25,92 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ViewScreen(
-    viewModel: ViewViewModel = hiltViewModel()
-) {
-    val uiState by viewModel.uiState.collectAsState()
+fun ViewScreen(viewModel: ViewViewModel = hiltViewModel()) {
+  val uiState by viewModel.uiState.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("View") }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+  Scaffold(
+      topBar = {
+        TopAppBar(title = { Text("View") })
+      }
+  ) { paddingValues ->
+    Column(
+        modifier = Modifier.fillMaxSize().padding(paddingValues).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+      Text(
+          text = "Your Activity",
+          style = MaterialTheme.typography.titleLarge,
+      )
+
+      Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(16.dp),
+      ) {
+        StatCard(
+            title = "Total Days",
+            value = uiState.statistics.totalDays.toString(),
+            modifier = Modifier.weight(1f),
+        )
+        StatCard(
+            title = "Total Records",
+            value = uiState.statistics.totalMessages.toString(),
+            modifier = Modifier.weight(1f),
+        )
+      }
+
+      Spacer(modifier = Modifier.height(16.dp))
+
+      if (uiState.statistics.totalMessages > 0) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors =
+                CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
+          Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Your Activity",
-                style = MaterialTheme.typography.titleLarge
+                text = "Average",
+                style = MaterialTheme.typography.titleMedium,
             )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                StatCard(
-                    title = "Total Days",
-                    value = uiState.statistics.totalDays.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-                StatCard(
-                    title = "Total Records",
-                    value = uiState.statistics.totalMessages.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (uiState.statistics.totalMessages > 0) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Average",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        val avgPerDay = if (uiState.statistics.totalDays > 0) {
-                            uiState.statistics.totalMessages.toFloat() / uiState.statistics.totalDays
-                        } else 0f
-                        Text(
-                            text = "%.1f records per day".format(avgPerDay),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
+            Spacer(modifier = Modifier.height(8.dp))
+            val avgPerDay =
+                if (uiState.statistics.totalDays > 0) {
+                  uiState.statistics.totalMessages.toFloat() / uiState.statistics.totalDays
+                } else 0f
+            Text(
+                text = "%.1f records per day".format(avgPerDay),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+          }
         }
+      }
     }
+  }
 }
 
 @Composable
 fun StatCard(
     title: String,
     value: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+  Card(
+      modifier = modifier,
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+  ) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-            )
-        }
+      Text(
+          text = value,
+          style = MaterialTheme.typography.displayMedium,
+          color = MaterialTheme.colorScheme.onPrimaryContainer,
+      )
+      Text(
+          text = title,
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+      )
     }
+  }
 }

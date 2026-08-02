@@ -29,10 +29,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import timber.log.Timber
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.ui.components.AppInternalErrorContent
 import top.fseasy.imlog.ui.components.AppOutlinedButton
 import top.fseasy.imlog.ui.components.HighlightConfig
 import top.fseasy.imlog.ui.components.HighlightedText
-import top.fseasy.imlog.ui.components.AppInternalErrorContent
 
 @Composable
 fun SharedStorageSelectScreen(
@@ -40,23 +40,23 @@ fun SharedStorageSelectScreen(
     onSuccessNavigate: () -> Unit,
     viewModel: SelectSharedStorageViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+  val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+  val context = LocalContext.current
 
-    SharedStorageSelectContent(uiState, onSuccessNavigate = onSuccessNavigate) { uri ->
-        try {
-            // persist permission.
-            // This logic should STAY in ui as it need the context while
-            // viewModel shouldn't hold the context
-            val takeFlags =
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            context.contentResolver.takePersistableUriPermission(uri, takeFlags)
-            viewModel.onSelectUriPermissionGrantSuccess(currentUserId, uri)
-        } catch (e: Exception) {
-            Timber.e(e, "Select and take permission failed")
-            viewModel.onSelectUriFailure(e)
-        }
+  SharedStorageSelectContent(uiState, onSuccessNavigate = onSuccessNavigate) { uri ->
+    try {
+      // persist permission.
+      // This logic should STAY in ui as it need the context while
+      // viewModel shouldn't hold the context
+      val takeFlags =
+          Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+      context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+      viewModel.onSelectUriPermissionGrantSuccess(currentUserId, uri)
+    } catch (e: Exception) {
+      Timber.e(e, "Select and take permission failed")
+      viewModel.onSelectUriFailure(e)
     }
+  }
 }
 
 @Composable
@@ -65,76 +65,75 @@ fun SharedStorageSelectContent(
     onSuccessNavigate: () -> Unit,
     onSelect: (uri: Uri) -> Unit,
 ) {
-    LaunchedEffect(uiState.selectState) {
-        if (uiState.selectState is UriSelectState.Success) onSuccessNavigate()
-    }
+  LaunchedEffect(uiState.selectState) {
+    if (uiState.selectState is UriSelectState.Success) onSuccessNavigate()
+  }
 
-    // register folder picker to launch system picker
-    val folderPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri ->
+  // register folder picker to launch system picker
+  val folderPickerLauncher =
+      rememberLauncherForActivityResult(contract = ActivityResultContracts.OpenDocumentTree()) { uri
+        ->
         if (uri == null) return@rememberLauncherForActivityResult
         onSelect(uri)
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        HighlightedText(
-            text = stringResource(R.string.select_storage_slogan),
-            style = MaterialTheme.typography.titleMedium,
-            highlight = HighlightConfig(),
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+      }
+  Column(
+      modifier = Modifier.fillMaxSize().padding(24.dp),
+      verticalArrangement = Arrangement.Center,
+      horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    HighlightedText(
+        text = stringResource(R.string.select_storage_slogan),
+        style = MaterialTheme.typography.titleMedium,
+        highlight = HighlightConfig(),
+        textAlign = TextAlign.Center,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
 
-        Text(
-            text = stringResource(R.string.select_storage_select_tip),
-            style = MaterialTheme.typography.titleSmall,
-            textAlign = TextAlign.Start
-        )
-        Spacer(modifier = Modifier.height(32.dp))
+    Text(
+        text = stringResource(R.string.select_storage_select_tip),
+        style = MaterialTheme.typography.titleSmall,
+        textAlign = TextAlign.Start,
+    )
+    Spacer(modifier = Modifier.height(32.dp))
 
-        when (val state = uiState.selectState) {
-            is UriSelectState.IDLE,
-            is UriSelectState.PROCESSING,
-                -> AppOutlinedButton(
-                onClick = { folderPickerLauncher.launch(null) },
-                text = stringResource(R.string.btn_choose_storage),
-                loading = state is UriSelectState.PROCESSING
-            )
+    when (val state = uiState.selectState) {
+      is UriSelectState.IDLE,
+      is UriSelectState.PROCESSING,
+      ->
+          AppOutlinedButton(
+              onClick = { folderPickerLauncher.launch(null) },
+              text = stringResource(R.string.btn_choose_storage),
+              loading = state is UriSelectState.PROCESSING,
+          )
 
-            is UriSelectState.Success -> {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Icon(
-                        painterResource(R.drawable.icon_check_circle),
-                        contentDescription = stringResource(R.string.select_storage_btn_content_success),
-                        tint = MaterialTheme.colorScheme.primaryContainer,
-                    )
-                    Text(
-                        state.rootDirName, style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                Text(
-                    stringResource(R.string.select_storage_all_set),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-
-            is UriSelectState.Failure -> {
-                AppInternalErrorContent(state.cause.message ?: stringResource(R.string.error_unknown))
-                AppOutlinedButton(
-                    onClick = { folderPickerLauncher.launch(null) },
-                    text = stringResource(R.string.btn_retry),
-                )
-            }
+      is UriSelectState.Success -> {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+          Icon(
+              painterResource(R.drawable.icon_check_circle),
+              contentDescription = stringResource(R.string.select_storage_btn_content_success),
+              tint = MaterialTheme.colorScheme.primaryContainer,
+          )
+          Text(
+              state.rootDirName,
+              style = MaterialTheme.typography.bodyMedium,
+          )
         }
-    }
-}
+        Text(
+            stringResource(R.string.select_storage_all_set),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+      }
 
+      is UriSelectState.Failure -> {
+        AppInternalErrorContent(state.cause.message ?: stringResource(R.string.error_unknown))
+        AppOutlinedButton(
+            onClick = { folderPickerLauncher.launch(null) },
+            text = stringResource(R.string.btn_retry),
+        )
+      }
+    }
+  }
+}

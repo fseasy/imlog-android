@@ -31,226 +31,254 @@ import top.fseasy.imlog.sqldelight.Message_attachment_processing_task_states as 
 import top.fseasy.imlog.sqldelight.Messages as MessageEntity
 
 @Singleton
-class MessageRepositoryImpl @Inject constructor(
+class MessageRepositoryImpl
+@Inject
+constructor(
     @param:ApplicationContext val context: Context,
     private val database: SqlDelightDb,
     private val dispatcher: CoroutineDispatcher,
 ) : MessageRepository {
 
-    /**
-     * To render the timeline message list.
-     */
-    override fun observeTopicMessagesOrNull(topicId: TopicId): Flow<List<Message>?> =
-        safeObserveFlowOrNull({ "Failed to observe messages for topic: $topicId" }) {
-            database.messageQueries.getMessagesByTopic(topicId.value)
-                .asFlow()
-                .mapToList(dispatcher)
-                .map { rows -> rows.mapNotNull { it.toDomain() } }
-        }
-
-    override fun observeStatistics(senderId: UserId): Flow<Statistics> =
-        database.messageStatQueries.statOneUserUsage(senderId.value)
+  /** To render the timeline message list. */
+  override fun observeTopicMessagesOrNull(topicId: TopicId): Flow<List<Message>?> =
+      safeObserveFlowOrNull({ "Failed to observe messages for topic: $topicId" }) {
+        database.messageQueries
+            .getMessagesByTopic(topicId.value)
             .asFlow()
-            .mapToOne(dispatcher)
-            .map { Statistics(totalDays = it.total_days, totalMessages = it.total_messages) }
+            .mapToList(dispatcher)
+            .map { rows -> rows.mapNotNull { it.toDomain() } }
+      }
 
-    override fun syncInsertInitialAttachmentMessage(
-        topicId: TopicId,
-        senderId: UserId,
-        type: MessageType,
-        timestampMs: Long,
-        fileMetadata: FileMetadataUnion,
-    ): MessageId {
-        val initialMessage = createInitialAttachmentMessageEntity(
+  override fun observeStatistics(senderId: UserId): Flow<Statistics> =
+      database.messageStatQueries
+          .statOneUserUsage(senderId.value)
+          .asFlow()
+          .mapToOne(dispatcher)
+          .map { Statistics(totalDays = it.total_days, totalMessages = it.total_messages) }
+
+  override fun syncInsertInitialAttachmentMessage(
+      topicId: TopicId,
+      senderId: UserId,
+      type: MessageType,
+      timestampMs: Long,
+      fileMetadata: FileMetadataUnion,
+  ): MessageId {
+    val initialMessage =
+        createInitialAttachmentMessageEntity(
             topicId = topicId,
             senderId = senderId,
             type = type,
             timestampMs = timestampMs,
-            srcMetadata = fileMetadata
+            srcMetadata = fileMetadata,
         )
-        database.messageQueries.insertMessage(initialMessage)
-        return MessageId(initialMessage.id)
-    }
+    database.messageQueries.insertMessage(initialMessage)
+    return MessageId(initialMessage.id)
+  }
 
-    override fun syncInsertInitialAttachmentProcessingTaskState(
-        messageId: MessageId,
-        fileSource: MessageAttachmentSource,
-        taskStartTime: Long,
-    ) {
-        val initialStateEntity = createInitialAttachmentProcessingTaskStateEntity(
-            messageId = messageId, fileSource = fileSource, taskStartTime = taskStartTime
+  override fun syncInsertInitialAttachmentProcessingTaskState(
+      messageId: MessageId,
+      fileSource: MessageAttachmentSource,
+      taskStartTime: Long,
+  ) {
+    val initialStateEntity =
+        createInitialAttachmentProcessingTaskStateEntity(
+            messageId = messageId,
+            fileSource = fileSource,
+            taskStartTime = taskStartTime,
         )
 
-        database.messageAttachmentProcessingQueries.insertAttachmentProcessingState(
-            initialStateEntity
-        )
-    }
+    database.messageAttachmentProcessingQueries.insertAttachmentProcessingState(initialStateEntity)
+  }
 
-    /**
-     * insert message to DB. only suitable for Text message because the other message need extra file process.
-     * TODO: remove this when we also need some side effects when processing text message
-     */
-    override suspend fun saveTextMessage(message: Message): Unit = withContext(dispatcher) {
+  /**
+   * insert message to DB. only suitable for Text message because the other message need extra file
+   * process.
+   *
+   * TODO: remove this when we also need some side effects when processing text message
+   */
+  override suspend fun saveTextMessage(message: Message): Unit =
+      withContext(dispatcher) {
         database.messageQueries.insertMessage(message.toEntity())
-    }
+      }
 
-    override suspend fun delete(messageId: MessageId): Boolean = withContext(dispatcher) {
+  override suspend fun delete(messageId: MessageId): Boolean =
+      withContext(dispatcher) {
         database.messageQueries.deleteMessageLogical(id = messageId.value).value > 0L
-    }
+      }
 
-    override suspend fun setAttachmentProcessingInternalCacheFilename(
-        messageId: MessageId,
-        filename: String?,
-    ): Boolean = withContext(dispatcher) {
+  override suspend fun setAttachmentProcessingInternalCacheFilename(
+      messageId: MessageId,
+      filename: String?,
+  ): Boolean =
+      withContext(dispatcher) {
         retryOnAnyException {
-            database.messageAttachmentProcessingQueries.setInternalCacheFilename(
-                internalCachedFilename = filename, messageId = messageId.value
-            ).value > 0L
+          database.messageAttachmentProcessingQueries
+              .setInternalCacheFilename(
+                  internalCachedFilename = filename,
+                  messageId = messageId.value,
+              )
+              .value > 0L
         }
-    }
+      }
 
-    override suspend fun setAttachmentMessageRawFilename(
-        messageId: MessageId,
-        filename: String?,
-    ): Boolean = withContext(dispatcher) {
+  override suspend fun setAttachmentMessageRawFilename(
+      messageId: MessageId,
+      filename: String?,
+  ): Boolean =
+      withContext(dispatcher) {
         retryOnAnyException {
-            database.messageQueries.updateMessageRawFilename(
-                filename = filename, messageId = messageId.value
-            ).value > 0L
+          database.messageQueries
+              .updateMessageRawFilename(
+                  filename = filename,
+                  messageId = messageId.value,
+              )
+              .value > 0L
         }
-    }
+      }
 
-    override suspend fun setAttachmentMessageThumbnailFilename(
-        messageId: MessageId,
-        filename: String?,
-    ): Boolean = withContext(dispatcher) {
+  override suspend fun setAttachmentMessageThumbnailFilename(
+      messageId: MessageId,
+      filename: String?,
+  ): Boolean =
+      withContext(dispatcher) {
         retryOnAnyException {
-            database.messageQueries.updateMessageThumbnailFilename(
-                filename = filename, messageId = messageId.value
-            ).value > 0L
+          database.messageQueries
+              .updateMessageThumbnailFilename(
+                  filename = filename,
+                  messageId = messageId.value,
+              )
+              .value > 0L
         }
-    }
+      }
 
-
-    override suspend fun setAttachmentProcessingTaskFail(
-        messageId: MessageId,
-        stage: MessageProcessingErrorStage,
-        errorUserRetryable: Boolean,
-    ) = withContext(dispatcher) {
+  override suspend fun setAttachmentProcessingTaskFail(
+      messageId: MessageId,
+      stage: MessageProcessingErrorStage,
+      errorUserRetryable: Boolean,
+  ) =
+      withContext(dispatcher) {
         retryOnAnyException {
-            database.messageAttachmentProcessingQueries.updateProcessingError(
-                errorStage = stage.value,
-                errorUserRetryable = if (errorUserRetryable) 1L else 0L,
-                messageId = messageId.value
-            ).value > 0L
+          database.messageAttachmentProcessingQueries
+              .updateProcessingError(
+                  errorStage = stage.value,
+                  errorUserRetryable = if (errorUserRetryable) 1L else 0L,
+                  messageId = messageId.value,
+              )
+              .value > 0L
         }
-    }
+      }
 
-    override suspend fun deleteAttachmentProcessingTaskState(
-        messageId: MessageId,
-    ) = withContext(dispatcher) {
+  override suspend fun deleteAttachmentProcessingTaskState(
+      messageId: MessageId,
+  ) =
+      withContext(dispatcher) {
         retryOnAnyException {
-            database.messageAttachmentProcessingQueries.deleteAttachmentProcessingState(messageId.value).value > 0L
+          database.messageAttachmentProcessingQueries
+              .deleteAttachmentProcessingState(messageId.value)
+              .value > 0L
         }
-    }
+      }
 
-
-    private fun createInitialAttachmentProcessingTaskStateEntity(
-        messageId: MessageId,
-        fileSource: MessageAttachmentSource,
-        taskStartTime: Long,
-    ): FileProcessingTaskStateEntity {
-        val (srcUriDbStr, internalCacheFilename) = when (fileSource) {
-            is MessageAttachmentSource.FromUriStr -> fileSource.uriStr.value to null
-            is MessageAttachmentSource.FromMessageCache -> null to fileSource.filename
+  private fun createInitialAttachmentProcessingTaskStateEntity(
+      messageId: MessageId,
+      fileSource: MessageAttachmentSource,
+      taskStartTime: Long,
+  ): FileProcessingTaskStateEntity {
+    val (srcUriDbStr, internalCacheFilename) =
+        when (fileSource) {
+          is MessageAttachmentSource.FromUriStr -> fileSource.uriStr.value to null
+          is MessageAttachmentSource.FromMessageCache -> null to fileSource.filename
         }
-        return FileProcessingTaskStateEntity(
-            message_id = messageId.value,
-            src_uri = srcUriDbStr,
-            internal_cached_filename = internalCacheFilename,
-            task_tart_time = taskStartTime,
-            error_stage = null,
-            error_user_retryable = null,
-        )
-    }
-
-    private fun createInitialAttachmentMessageEntity(
-        topicId: TopicId,
-        senderId: UserId,
-        type: MessageType,
-        timestampMs: Long,
-        srcMetadata: FileMetadataUnion,
-    ) = MessageEntity(
-        id = MessageId.random().value,
-        topic_id = topicId.value,
-        sender_id = senderId.value,
-        type = type.value,
-        text = null,
-        created_at = timestampMs,
-        mime_type = srcMetadata.mimeType,
-        width = srcMetadata.width?.toLong(),
-        height = srcMetadata.height?.toLong(),
-        duration = srcMetadata.duration?.inWholeMilliseconds,
-        file_size = srcMetadata.fileSize,
-        original_filename = srcMetadata.displayName,
-        raw_filename = null,
-        thumbnail_filename = null,
-        attributes_updated_at = timestampMs,
-        is_deleted = 0,
-        quote_message = null // TODO: This should be passed in
+    return FileProcessingTaskStateEntity(
+        message_id = messageId.value,
+        src_uri = srcUriDbStr,
+        internal_cached_filename = internalCacheFilename,
+        task_tart_time = taskStartTime,
+        error_stage = null,
+        error_user_retryable = null,
     )
+  }
 
-    private fun GetMessagesByTopicRowEntity.toDomain(): Message? {
-        val messageType = MessageType.fromValue(type) ?: run {
-            Timber.w("Get invalid message-type: $type from db, failed to parse")
-            return null
-        }
-        return Message(
-            id = MessageId(id),
-            topicId = TopicId(topic_id),
-            senderId = UserId(sender_id),
-            type = messageType,
-            quoteMessage = quote_message?.getOrNull(),
-            text = text,
-            // media file fields
-            originalFileUri = src_uri?.toUri()
-                ?.toUriStr(),
-            originalFilename = original_filename,
-            storedFilename = raw_filename,
-            fileSize = file_size,
-            mimeType = mime_type,
-            duration = duration,
-            width = width?.toInt(),
-            height = height?.toInt(),
-            thumbnailName = thumbnail_filename,
-            // - end of media file fields
-            createdAt = created_at,
-            attributesUpdatedAt = attributes_updated_at,
-        )
-    }
+  private fun createInitialAttachmentMessageEntity(
+      topicId: TopicId,
+      senderId: UserId,
+      type: MessageType,
+      timestampMs: Long,
+      srcMetadata: FileMetadataUnion,
+  ) =
+      MessageEntity(
+          id = MessageId.random().value,
+          topic_id = topicId.value,
+          sender_id = senderId.value,
+          type = type.value,
+          text = null,
+          created_at = timestampMs,
+          mime_type = srcMetadata.mimeType,
+          width = srcMetadata.width?.toLong(),
+          height = srcMetadata.height?.toLong(),
+          duration = srcMetadata.duration?.inWholeMilliseconds,
+          file_size = srcMetadata.fileSize,
+          original_filename = srcMetadata.displayName,
+          raw_filename = null,
+          thumbnail_filename = null,
+          attributes_updated_at = timestampMs,
+          is_deleted = 0,
+          quote_message = null, // TODO: This should be passed in
+      )
 
-    private fun Message.toEntity() = MessageEntity(
-        id = id.value,
-        topic_id = topicId.value,
-        sender_id = senderId.value,
-        /**
-         * should only occur in the following condition:
-         * 1. Entity -> Domain (get invalid type, type = null)
-         * 2. Domain -> Entity (set the null type to `__unknown__`)
-         */
-        type = type.value,
+  private fun GetMessagesByTopicRowEntity.toDomain(): Message? {
+    val messageType =
+        MessageType.fromValue(type)
+            ?: run {
+              Timber.w("Get invalid message-type: $type from db, failed to parse")
+              return null
+            }
+    return Message(
+        id = MessageId(id),
+        topicId = TopicId(topic_id),
+        senderId = UserId(sender_id),
+        type = messageType,
+        quoteMessage = quote_message?.getOrNull(),
         text = text,
-        raw_filename = storedFilename,
-        file_size = fileSize,
+        // media file fields
+        originalFileUri = src_uri?.toUri()?.toUriStr(),
+        originalFilename = original_filename,
+        storedFilename = raw_filename,
+        fileSize = file_size,
+        mimeType = mime_type,
         duration = duration,
-        thumbnail_filename = thumbnailName,
-        created_at = createdAt,
-        attributes_updated_at = attributesUpdatedAt,
-        is_deleted = 0,
-        original_filename = originalFilename,
-        mime_type = mimeType,
-        width = width?.toLong(),
-        height = height?.toLong(),
-        quote_message = quoteMessage?.let { Result.success(it) },
+        width = width?.toInt(),
+        height = height?.toInt(),
+        thumbnailName = thumbnail_filename,
+        // - end of media file fields
+        createdAt = created_at,
+        attributesUpdatedAt = attributes_updated_at,
     )
+  }
+
+  private fun Message.toEntity() =
+      MessageEntity(
+          id = id.value,
+          topic_id = topicId.value,
+          sender_id = senderId.value,
+          /**
+           * should only occur in the following condition:
+           * 1. Entity -> Domain (get invalid type, type = null)
+           * 2. Domain -> Entity (set the null type to `__unknown__`)
+           */
+          type = type.value,
+          text = text,
+          raw_filename = storedFilename,
+          file_size = fileSize,
+          duration = duration,
+          thumbnail_filename = thumbnailName,
+          created_at = createdAt,
+          attributes_updated_at = attributesUpdatedAt,
+          is_deleted = 0,
+          original_filename = originalFilename,
+          mime_type = mimeType,
+          width = width?.toLong(),
+          height = height?.toLong(),
+          quote_message = quoteMessage?.let { Result.success(it) },
+      )
 }

@@ -9,37 +9,43 @@ import top.fseasy.imlog.domain.repository.DbRunner
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import javax.inject.Inject
 
-class SqlDelightRunner @Inject constructor(
+class SqlDelightRunner
+@Inject
+constructor(
     private val database: SqlDelightDb,
     private val ioDispatcher: CoroutineDispatcher,
 ) : DbRunner {
-    override suspend fun <T> runTransactionInIOThread(
-        retry: RetryModel,
-        block: () -> T,
-    ): T = runInIoThread(retry, block = {
-        database.transactionWithResult {
-            block()
-        }
-    })
-
-    override suspend fun <T> runInIoThread(retry: RetryModel, block: () -> T): T =
-        withContext(ioDispatcher) {
-            when (retry) {
-                RetryModel.None -> {
-                    block()
-                }
-
-                RetryModel.OnDbConflict -> {
-                    retrySQLiteOnKeyConflict {
-                        block()
-                    }
-                }
-
-                RetryModel.OnAnyException -> {
-                    retryOnAnyException {
-                        block()
-                    }
-                }
+  override suspend fun <T> runTransactionInIOThread(
+      retry: RetryModel,
+      block: () -> T,
+  ): T =
+      runInIoThread(
+          retry,
+          block = {
+            database.transactionWithResult {
+              block()
             }
+          },
+      )
+
+  override suspend fun <T> runInIoThread(retry: RetryModel, block: () -> T): T =
+      withContext(ioDispatcher) {
+        when (retry) {
+          RetryModel.None -> {
+            block()
+          }
+
+          RetryModel.OnDbConflict -> {
+            retrySQLiteOnKeyConflict {
+              block()
+            }
+          }
+
+          RetryModel.OnAnyException -> {
+            retryOnAnyException {
+              block()
+            }
+          }
         }
+      }
 }

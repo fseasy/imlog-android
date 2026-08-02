@@ -77,4 +77,16 @@
     <string name="topic_settings_delete_confirm_title">Delete Topic?</string>
     <string name="topic_settings_delete_confirm_desc">This action cannot be undone. All messages in this topic will be deleted.</string>
     <string name="topic_list_empty_text">No topics yet.</string>
+    <string name="home_topic_message_snippet_draft_header">Draft</string>
+    <string name="home_topic_message_snippet_image_type_note">Image</string>
+    <string name="home_topic_message_snippet_video_type_note">Video</string>
+    <string name="home_topic_message_snippet_Audio_type_note">Audio</string>
+    <string name="home_topic_message_snippet_voice_type_note">Voice</string>
+    <string name="home_topic_message_snippet_generic_file_type_note">File</string>
+    <string name="term_avatar">Avatar</string>
+    <string name="term_topic">Topic</string>
+    <string name="topic_avatar_content_description">Avatar of Topic %1$s</string>
+    <string name="home_screen_more_options_icon_desc">More Options</string>
+    <string name="home_screen_more_options_menu_item_create_topic">Create New Topic</string>
+    <string name="home_screen_more_options_menu_item_setting">Settings</string>
 </resources>

@@ -38,32 +38,37 @@ fun ImageCropper(
     onCropComplete: (CropImageView.CropResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // remember the last trigger state. to avoid duplicated trigger on composing
-    var lastTriggeredState by remember { mutableStateOf(false) }
+  // remember the last trigger state. to avoid duplicated trigger on composing
+  var lastTriggeredState by remember { mutableStateOf(false) }
 
-    AndroidView(modifier = modifier.fillMaxSize(), factory = { context ->
+  AndroidView(
+      modifier = modifier.fillMaxSize(),
+      factory = { context ->
         CropImageView(context).apply {
-            setImageCropOptions(cropOptions)
+          setImageCropOptions(cropOptions)
         }
-    }, update = { view ->
+      },
+      update = { view ->
         // update the listener every time to apply the latest action!
         // because when parent composing, this callback may change (if it's lambda with closure)
         view.setOnCropImageCompleteListener { _, result ->
-            onCropComplete(result)
+          onCropComplete(result)
         }
         if (view.tag != imageUri) {
-            view.setImageUriAsync(imageUri)
-            view.tag = imageUri
+          view.setImageUriAsync(imageUri)
+          view.tag = imageUri
         }
         // only crop when trigger changes.
         // (avoid call multiple crop while parent composing on cropTrigger = true)
         if (cropTrigger && !lastTriggeredState) {
-            view.croppedImageAsync()
+          view.croppedImageAsync()
         }
         lastTriggeredState = cropTrigger
-    }, onRelease = { view ->
+      },
+      onRelease = { view ->
         view.setOnCropImageCompleteListener(null)
-    })
+      },
+  )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,79 +80,85 @@ fun CropImageDialog(
     onCropSuccess: (Uri) -> Unit,
     onCropFailure: (String) -> Unit,
 ) {
-    // 使用 rememberSaveable 防止屏幕旋转导致状态重置
-    var triggerCrop by rememberSaveable { mutableStateOf(false) }
+  // 使用 rememberSaveable 防止屏幕旋转导致状态重置
+  var triggerCrop by rememberSaveable { mutableStateOf(false) }
 
-    val cropOptions = remember {
-        CropImageOptions().apply {
-            // 1:1 circle
-            cropShape = CropImageView.CropShape.OVAL
-            aspectRatioX = 1
-            aspectRatioY = 1
-            fixAspectRatio = true
-        }
+  val cropOptions = remember {
+    CropImageOptions().apply {
+      // 1:1 circle
+      cropShape = CropImageView.CropShape.OVAL
+      aspectRatioX = 1
+      aspectRatioY = 1
+      fixAspectRatio = true
     }
+  }
 
-    Dialog(
-        onDismissRequest = {
-            // disable close Dialog while cropping
-            if (!triggerCrop) {
-                onDismiss()
-            }
-        }, properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            // also disable back-key / outside-click dismiss while cropping
-            dismissOnBackPress = !triggerCrop, dismissOnClickOutside = !triggerCrop
-        )
-    ) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Scaffold(topBar = {
-                TopAppBar(
-                    title = { Text(title, style = MaterialTheme.typography.titleMedium) },
-                    navigationIcon = {
-                        AppBackIconButton(onClick = onDismiss, enabled = !triggerCrop)
-                    })
-            }, bottomBar = {
-                Surface(modifier = Modifier.fillMaxSize(), shadowElevation = 8.dp) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        AppTextButton(
-                            onClick = onDismiss,
-                            enabled = !triggerCrop,
-                            text = stringResource(R.string.btn_cancel),
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        AppPrimaryButton(
-                            onClick = { triggerCrop = true },
-                            enabled = !triggerCrop,
-                            loading = triggerCrop,
-                            text = stringResource(R.string.btn_confirm),
-                            icon = Icons.Default.Done,
-                            modifier = Modifier.weight(1.5f)
-                        )
-                    }
-                }
-            }) { paddingValues ->
-                Box(modifier = Modifier.padding(paddingValues)) {
-                    ImageCropper(
-                        imageUri = imageUri,
-                        cropOptions = cropOptions,
-                        cropTrigger = triggerCrop,
-                        onCropComplete = { result ->
-                            triggerCrop = false // reset
-                            if (result.isSuccessful) {
-                                result.uriContent?.let { onCropSuccess(it) }
-                                    ?: onCropFailure("Uri is Null")
-                            } else {
-                                onCropFailure(result.error?.message ?: "Unknown Error")
-                            }
-                        })
-                }
-            }
+  Dialog(
+      onDismissRequest = {
+        // disable close Dialog while cropping
+        if (!triggerCrop) {
+          onDismiss()
         }
+      },
+      properties =
+          DialogProperties(
+              usePlatformDefaultWidth = false,
+              // also disable back-key / outside-click dismiss while cropping
+              dismissOnBackPress = !triggerCrop,
+              dismissOnClickOutside = !triggerCrop,
+          ),
+  ) {
+    Surface(modifier = Modifier.fillMaxSize()) {
+      Scaffold(
+          topBar = {
+            TopAppBar(
+                title = { Text(title, style = MaterialTheme.typography.titleMedium) },
+                navigationIcon = {
+                  AppBackIconButton(onClick = onDismiss, enabled = !triggerCrop)
+                },
+            )
+          },
+          bottomBar = {
+            Surface(modifier = Modifier.fillMaxSize(), shadowElevation = 8.dp) {
+              Row(
+                  modifier = Modifier.fillMaxSize().padding(16.dp),
+                  horizontalArrangement = Arrangement.spacedBy(12.dp),
+              ) {
+                AppTextButton(
+                    onClick = onDismiss,
+                    enabled = !triggerCrop,
+                    text = stringResource(R.string.btn_cancel),
+                    modifier = Modifier.weight(1f),
+                )
+
+                AppPrimaryButton(
+                    onClick = { triggerCrop = true },
+                    enabled = !triggerCrop,
+                    loading = triggerCrop,
+                    text = stringResource(R.string.btn_confirm),
+                    icon = Icons.Default.Done,
+                    modifier = Modifier.weight(1.5f),
+                )
+              }
+            }
+          },
+      ) { paddingValues ->
+        Box(modifier = Modifier.padding(paddingValues)) {
+          ImageCropper(
+              imageUri = imageUri,
+              cropOptions = cropOptions,
+              cropTrigger = triggerCrop,
+              onCropComplete = { result ->
+                triggerCrop = false // reset
+                if (result.isSuccessful) {
+                  result.uriContent?.let { onCropSuccess(it) } ?: onCropFailure("Uri is Null")
+                } else {
+                  onCropFailure(result.error?.message ?: "Unknown Error")
+                }
+              },
+          )
+        }
+      }
     }
+  }
 }

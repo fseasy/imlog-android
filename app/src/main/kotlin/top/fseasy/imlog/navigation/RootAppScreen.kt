@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -42,83 +43,100 @@ private data class BottomNavItem<T : Any>(
 
 @Composable
 fun RootAppScreen(navController: NavHostController = rememberNavController()) {
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
+  val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+  val scope = rememberCoroutineScope()
 
-    val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = currentBackStackEntry?.destination
-    val isAtHome = currentDestination?.hasRoute<MainScreen.Home>() == true
+  val currentBackStackEntry by navController.currentBackStackEntryAsState()
+  val currentDestination = currentBackStackEntry?.destination
+  val isAtHome = currentDestination?.hasRoute<MainScreen.Home>() ?: false
 
-    // 3. 使用 remember 缓存底部栏配置，避免每次 Recomposition 都重复创建
-    val bottomNavItems = remember {
-        listOf(
-            BottomNavItem(
-                route = MainScreen.Home,
-                icon = Icons.Default.Home,
-                labelRes = R.string.nav_home,
-                isSelected = { dest -> dest?.hasRoute<MainScreen.Home>() == true }), BottomNavItem(
-                route = MainScreen.Dashboard,
-                icon = Icons.Default.Settings,
-                labelRes = R.string.nav_dashboard,
-                isSelected = { dest -> dest?.hasRoute<MainScreen.Dashboard>() == true })
-        )
-    }
-    val showBottomBar = isAtHome || bottomNavItems.any { it.isSelected(currentDestination) }
+  val bottomNavItems = remember {
+    listOf(
+        BottomNavItem(
+            route = MainScreen.Home,
+            icon = Icons.Default.Home,
+            labelRes = R.string.nav_home,
+            isSelected = { dest -> dest?.hasRoute<MainScreen.Home>() == true },
+        ),
+        BottomNavItem(
+            route = MainScreen.Dashboard,
+            icon = Icons.Default.Settings,
+            labelRes = R.string.nav_dashboard,
+            isSelected = { dest -> dest?.hasRoute<MainScreen.Dashboard>() == true },
+        ),
+    )
+  }
+  val showBottomBar = isAtHome || bottomNavItems.any { it.isSelected(currentDestination) }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState, gesturesEnabled = isAtHome, drawerContent = {
-            SettingsDrawer(
-                onNavigate = { route ->
-                    scope.launch { drawerState.close() }
-                    navController.navigate(route)
-                })
-        }) {
-        Scaffold(
-            bottomBar = {
-                if (showBottomBar) {
-                    NavigationBar {
-                        // 4. 循环生成导航按钮
-                        bottomNavItems.forEach { item ->
-                            val selected = item.isSelected(currentDestination)
-                            NavigationBarItem(selected = selected, onClick = {
-                                if (!selected) {
-                                    navController.navigate(item.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            }, icon = {
-                                Icon(
-                                    imageVector = item.icon,
-                                    contentDescription = stringResource(item.labelRes)
-                                )
-                            }, label = { Text(stringResource(item.labelRes)) })
-                        }
-                    }
-                }
-            }) { paddingValues ->
-            NavHost(
-                navController = navController,
-                startDestination = AppInitGraph,
-                modifier = Modifier.padding(paddingValues)
-            ) {
-                appInitGraph(navController, onInitSuccessNavigate = {
-                    navController.navigate(MainGraph) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                })
-                mainGraph(
-                    navController,
-                    onOpenDrawer = { scope.launch { drawerState.open() } },
-                    onSignedOutNavigate = {
-                        navController.navigate(AppInitGraph) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                    })
+  ModalNavigationDrawer(
+      drawerState = drawerState,
+      gesturesEnabled = isAtHome,
+      drawerContent = {
+        SettingsDrawer(
+            onNavigate = { route ->
+              scope.launch { drawerState.close() }
+              navController.navigate(route)
             }
-        }
+        )
+      },
+  ) {
+    Scaffold(
+        bottomBar = {
+          if (showBottomBar) {
+            NavigationBar {
+              // 4. 循环生成导航按钮
+              bottomNavItems.forEach { item ->
+                val selected = item.isSelected(currentDestination)
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = {
+                      if (!selected) {
+                        navController.navigate(item.route) {
+                          popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                          }
+                          launchSingleTop = true
+                          restoreState = true
+                        }
+                      }
+                    },
+                    icon = {
+                      Icon(
+                          imageVector = item.icon,
+                          contentDescription = stringResource(item.labelRes),
+                      )
+                    },
+                    label = { Text(stringResource(item.labelRes)) },
+                )
+              }
+            }
+          }
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { paddingValues ->
+      NavHost(
+          navController = navController,
+          startDestination = AppInitGraph,
+          modifier = Modifier.padding(paddingValues),
+      ) {
+        appInitGraph(
+            navController,
+            onInitSuccessNavigate = {
+              navController.navigate(MainGraph) {
+                popUpTo(0) { inclusive = true }
+              }
+            },
+        )
+        mainGraph(
+            navController,
+            onOpenDrawer = { scope.launch { drawerState.open() } },
+            onSignedOutNavigate = {
+              navController.navigate(AppInitGraph) {
+                popUpTo(0) { inclusive = true }
+              }
+            },
+        )
+      }
     }
+  }
 }

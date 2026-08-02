@@ -17,14 +17,13 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.ui.model.TaskExecuteState
 import top.fseasy.imlog.features.appinit.WelcomeUiState
 import top.fseasy.imlog.features.appinit.WelcomeViewModel
+import top.fseasy.imlog.ui.components.AppInternalErrorContent
 import top.fseasy.imlog.ui.components.AppPrimaryButton
 import top.fseasy.imlog.ui.components.HighlightConfig
 import top.fseasy.imlog.ui.components.HighlightedText
-import top.fseasy.imlog.ui.components.AppInternalErrorContent
-
+import top.fseasy.imlog.ui.model.TaskExecuteState
 
 @Composable
 fun WelcomeScreen(
@@ -33,18 +32,19 @@ fun WelcomeScreen(
     onSuccessNavigate: () -> Unit,
     viewModel: WelcomeViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+  val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) {
-        if (needCreateFirstTopic) viewModel.autoCreateFirstTopic(userId)
-    }
+  LaunchedEffect(Unit) {
+    if (needCreateFirstTopic) viewModel.autoCreateFirstTopic(userId)
+  }
 
-    WelcomeEntry(
-        needCreateFirstTopic = needCreateFirstTopic,
-        uiState = uiState,
-        onSuccessNavigate = onSuccessNavigate,
-        onCreateTopicRetryClick = { viewModel.triggerCreateFirstTopic(userId) },
-        onStartClick = { viewModel.markWelcomeShown(userId) })
+  WelcomeEntry(
+      needCreateFirstTopic = needCreateFirstTopic,
+      uiState = uiState,
+      onSuccessNavigate = onSuccessNavigate,
+      onCreateTopicRetryClick = { viewModel.triggerCreateFirstTopic(userId) },
+      onStartClick = { viewModel.markWelcomeShown(userId) },
+  )
 }
 
 @Composable
@@ -55,35 +55,37 @@ fun WelcomeEntry(
     onCreateTopicRetryClick: () -> Unit,
     onStartClick: () -> Unit,
 ) {
-    LaunchedEffect(uiState.markWelcomeState) {
-        if (uiState.markWelcomeState is TaskExecuteState.Success) {
-            onSuccessNavigate()
-        }
+  LaunchedEffect(uiState.markWelcomeState) {
+    if (uiState.markWelcomeState is TaskExecuteState.Success) {
+      onSuccessNavigate()
     }
+  }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        HighlightedText(
-            stringResource(R.string.welcome_headline),
-            style = MaterialTheme.typography.headlineMedium,
-            highlight = HighlightConfig(),
-            textAlign = TextAlign.Start
-        )
+  Column(modifier = Modifier.fillMaxSize()) {
+    HighlightedText(
+        stringResource(R.string.welcome_headline),
+        style = MaterialTheme.typography.headlineMedium,
+        highlight = HighlightConfig(),
+        textAlign = TextAlign.Start,
+    )
 
-        Spacer(Modifier.height(30.dp))
+    Spacer(Modifier.height(30.dp))
 
-        if (needCreateFirstTopic) {
-            when (val state = uiState.topicCreateState) {
-                is TaskExecuteState.Idle -> Text("Preparing to Create the first topic for you")
-                is TaskExecuteState.Executing -> Text("Creating the first topic")
-                is TaskExecuteState.Success -> WelcomeContent(uiState, onStartClick)
-                is TaskExecuteState.Failure -> AppInternalErrorContent(
-                    state.reason, onRetry = onCreateTopicRetryClick
-                )
-            }
-        } else {
-            WelcomeContent(uiState, onStartClick)
-        }
+    if (needCreateFirstTopic) {
+      when (val state = uiState.topicCreateState) {
+        is TaskExecuteState.Idle -> Text("Preparing to Create the first topic for you")
+        is TaskExecuteState.Executing -> Text("Creating the first topic")
+        is TaskExecuteState.Success -> WelcomeContent(uiState, onStartClick)
+        is TaskExecuteState.Failure ->
+            AppInternalErrorContent(
+                state.reason,
+                onRetry = onCreateTopicRetryClick,
+            )
+      }
+    } else {
+      WelcomeContent(uiState, onStartClick)
     }
+  }
 }
 
 @Composable
@@ -91,24 +93,26 @@ fun WelcomeContent(
     uiState: WelcomeUiState,
     onStartClick: () -> Unit,
 ) {
-    Text(
-        stringResource(R.string.welcome_body), style = MaterialTheme.typography.bodyMedium
-    )
+  Text(
+      stringResource(R.string.welcome_body),
+      style = MaterialTheme.typography.bodyMedium,
+  )
 
-    Spacer(Modifier.height(30.dp))
+  Spacer(Modifier.height(30.dp))
 
-    when (val state = uiState.markWelcomeState) {
-        is TaskExecuteState.Idle,
-        is TaskExecuteState.Executing,
-        is TaskExecuteState.Success,
-            -> AppPrimaryButton(
+  when (val state = uiState.markWelcomeState) {
+    is TaskExecuteState.Idle,
+    is TaskExecuteState.Executing,
+    is TaskExecuteState.Success,
+    ->
+        AppPrimaryButton(
             onClick = onStartClick,
             loading = state != TaskExecuteState.Idle,
-            text = stringResource(R.string.btn_start)
+            text = stringResource(R.string.btn_start),
         )
 
-        is TaskExecuteState.Failure -> {
-            AppInternalErrorContent(state.reason, onRetry = onStartClick)
-        }
+    is TaskExecuteState.Failure -> {
+      AppInternalErrorContent(state.reason, onRetry = onStartClick)
     }
+  }
 }

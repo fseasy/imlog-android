@@ -33,54 +33,60 @@ class VoiceRecorderStateHolder(
     private val context: Context,
 ) : AutoCloseable {
 
-    val voiceRecorder = VoiceRecorder(coroutineScope)
+  val voiceRecorder = VoiceRecorder(coroutineScope)
 
-    val voiceRecordingUiState: StateFlow<VoiceRecordingUiState> = combine(
-        voiceRecorder.state, voiceRecorder.elapsedMs
-    ) { state, elapsedMs ->
-        VoiceRecordingUiState(state, elapsedMs.milliseconds)
-    }.stateIn(
-        scope = coroutineScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = VoiceRecordingUiState()
-    )
+  val voiceRecordingUiState: StateFlow<VoiceRecordingUiState> =
+      combine(
+              voiceRecorder.state,
+              voiceRecorder.elapsedMs,
+          ) { state, elapsedMs ->
+            VoiceRecordingUiState(state, elapsedMs.milliseconds)
+          }
+          .stateIn(
+              scope = coroutineScope,
+              started = SharingStarted.WhileSubscribed(5_000),
+              initialValue = VoiceRecordingUiState(),
+          )
 
-    suspend fun startVoiceRecording(userId: UserId) {
-        val path = generateVoiceRecordingOutputPathInMessageCacheRule(userId = userId)
-        voiceRecorder.start(context, path)
+  suspend fun startVoiceRecording(userId: UserId) {
+    val path = generateVoiceRecordingOutputPathInMessageCacheRule(userId = userId)
+    voiceRecorder.start(context, path)
+  }
+
+  suspend fun cancelVoiceRecording() {
+    voiceRecorder.cancel()
+  }
+
+  suspend fun stopVoiceRecordingAndSendVoiceMessage(topicId: TopicId, userId: UserId) {
+    voiceRecorder.stop()?.let {
+      // It follows the message cache file generating rule, so only filename is necessary
+      sendVoiceMessageUseCase(
+          it.name,
+          userId = userId,
+          topicId = topicId,
+          messageTimestampMs = System.currentTimeMillis(),
+      )
     }
+  }
 
-    suspend fun cancelVoiceRecording() {
-        voiceRecorder.cancel()
-    }
-
-    suspend fun stopVoiceRecordingAndSendVoiceMessage(topicId: TopicId, userId: UserId) {
-        voiceRecorder.stop()
-            ?.let {
-                // It follows the message cache file generating rule, so only filename is necessary
-                sendVoiceMessageUseCase(
-                    it.name,
-                    userId = userId,
-                    topicId = topicId,
-                    messageTimestampMs = System.currentTimeMillis(),
-                )
-            }
-    }
-
-    private fun generateVoiceRecordingOutputPathInMessageCacheRule(
-        userId: UserId,
-        now: Long = System.currentTimeMillis(),
-    ): java.nio.file.Path {
-        val filename = storagePathUseCase.buildTimestampedFilename(
-            now, originalFilename = VoiceRecorder.generateOutputAudioDefaultFilename("voice")
+  private fun generateVoiceRecordingOutputPathInMessageCacheRule(
+      userId: UserId,
+      now: Long = System.currentTimeMillis(),
+  ): java.nio.file.Path {
+    val filename =
+        storagePathUseCase.buildTimestampedFilename(
+            now,
+            originalFilename = VoiceRecorder.generateOutputAudioDefaultFilename("voice"),
         )
-        val outputFilePath = storagePathUseCase.buildMessageCacheFileStoragePath(
-            userId = userId, filename = filename
+    val outputFilePath =
+        storagePathUseCase.buildMessageCacheFileStoragePath(
+            userId = userId,
+            filename = filename,
         )
-        return outputFilePath.toNioPath(context)
-    }
+    return outputFilePath.toNioPath(context)
+  }
 
-    override fun close() {
-        voiceRecorder.close()
-    }
+  override fun close() {
+    voiceRecorder.close()
+  }
 }

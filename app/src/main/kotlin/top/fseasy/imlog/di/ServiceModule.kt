@@ -10,6 +10,5 @@ import top.fseasy.imlog.domain.service.ThumbnailService
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class ServiceModule {
-    @Binds
-    abstract fun bindThumbnailService(impl: ThumbnailServiceImpl): ThumbnailService
+  @Binds abstract fun bindThumbnailService(impl: ThumbnailServiceImpl): ThumbnailService
 }

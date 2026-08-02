@@ -11,9 +11,7 @@ import java.io.File
 fun File.toFileProviderUri(context: Context): Uri =
     FileProvider.getUriForFile(context, FILE_PROVIDER_AUTHORITIES, this)
 
-/**
- * Append multiple sub path segments to base File. No io, pure CPU operations.
- */
+/** Append multiple sub path segments to base File. No io, pure CPU operations. */
 fun File.resolve(
     paths: List<String>,
 ): File = paths.fold(this) { acc, path -> File(acc, path) }
@@ -22,19 +20,21 @@ fun File.resolve(
  * Delete file with return FileDeleteResult.
  *
  * Sync version. not run in IO thread.
- *
  */
-fun syncDeleteFile(file: File): FileDeleteResult = try {
-    if (file.exists()) {
+fun syncDeleteFile(file: File): FileDeleteResult =
+    try {
+      if (file.exists()) {
         if (file.delete()) {
-            FileDeleteResult.Success
+          FileDeleteResult.Success
         } else {
-            FileDeleteResult.Error(IllegalStateException("File delete return false without exception"))
+          FileDeleteResult.Error(
+              IllegalStateException("File delete return false without exception")
+          )
         }
-    } else {
+      } else {
         FileDeleteResult.FileNotExist
+      }
+    } catch (e: Exception) {
+      Timber.d(e, "Delete file $file failed")
+      FileDeleteResult.Error(e)
     }
-} catch (e: Exception) {
-    Timber.d(e, "Delete file $file failed")
-    FileDeleteResult.Error(e)
-}

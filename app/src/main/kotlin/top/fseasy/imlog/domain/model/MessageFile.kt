@@ -38,8 +38,8 @@ data class GenericFileMetadata(
 )
 
 /**
- * Superset of all media metadata fields.
- * Used as a common transfer object between business logic and database layer.
+ * Superset of all media metadata fields. Used as a common transfer object between business logic
+ * and database layer.
  */
 @Serializable
 data class FileMetadataUnion(
@@ -51,45 +51,47 @@ data class FileMetadataUnion(
     val duration: Duration?,
 )
 
-fun AudioMetadata.toMetadataUnion() = FileMetadataUnion(
-    displayName = displayName,
-    fileSize = fileSize,
-    mimeType = mimeType,
-    duration = duration,
-    width = null,
-    height = null
-)
+fun AudioMetadata.toMetadataUnion() =
+    FileMetadataUnion(
+        displayName = displayName,
+        fileSize = fileSize,
+        mimeType = mimeType,
+        duration = duration,
+        width = null,
+        height = null,
+    )
 
-fun VideoMetadata.toMetadataUnion() = FileMetadataUnion(
-    displayName = displayName,
-    fileSize = fileSize,
-    mimeType = mimeType,
-    width = width,
-    height = height,
-    duration = duration,
-)
+fun VideoMetadata.toMetadataUnion() =
+    FileMetadataUnion(
+        displayName = displayName,
+        fileSize = fileSize,
+        mimeType = mimeType,
+        width = width,
+        height = height,
+        duration = duration,
+    )
 
-fun ImageMetadata.toMetadataUnion() = FileMetadataUnion(
-    displayName = displayName,
-    fileSize = fileSize,
-    mimeType = mimeType,
-    width = width,
-    height = height,
-    duration = null,
-)
+fun ImageMetadata.toMetadataUnion() =
+    FileMetadataUnion(
+        displayName = displayName,
+        fileSize = fileSize,
+        mimeType = mimeType,
+        width = width,
+        height = height,
+        duration = null,
+    )
 
-fun GenericFileMetadata.toMetadataUnion() = FileMetadataUnion(
-    displayName = displayName,
-    fileSize = fileSize,
-    mimeType = mimeType,
-    width = null,
-    height = null,
-    duration = null,
-)
+fun GenericFileMetadata.toMetadataUnion() =
+    FileMetadataUnion(
+        displayName = displayName,
+        fileSize = fileSize,
+        mimeType = mimeType,
+        width = null,
+        height = null,
+        duration = null,
+    )
 
-/**
- * To transfer info between coroutine and worker.
- */
+/** To transfer info between coroutine and worker. */
 @Serializable
 data class FinishSendingFileWorkerPayload(
     // -- Message Info
@@ -105,7 +107,7 @@ data class FinishSendingFileWorkerPayload(
 )
 
 sealed interface MessageProcessingErrorStage {
-    val value: String
+  val value: String
 }
 
 // =============
@@ -116,20 +118,20 @@ sealed interface MessageProcessingErrorStage {
 
 enum class AudioMessageProcessingErrorStage(override val value: String) :
     MessageProcessingErrorStage {
-    CopySrcToInternalCache(value = "copy_src2internal_cache"), SetInternalFilenameToDb(value = "set_internal_filename2db"), CopyToSharedStorage(
-        "copy2shared_storage"
-    ),
-    SetRawFilenameToDb("set_raw_filename2db"), DeleteInternalFileCache("delete_internal_file_cache"), DeleteTaskStateFromDb(
-        "delete_task_state_from_db"
-    ),
-    IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
-    ;
+  CopySrcToInternalCache(value = "copy_src2internal_cache"),
+  SetInternalFilenameToDb(value = "set_internal_filename2db"),
+  CopyToSharedStorage("copy2shared_storage"),
+  SetRawFilenameToDb("set_raw_filename2db"),
+  DeleteInternalFileCache("delete_internal_file_cache"),
+  DeleteTaskStateFromDb("delete_task_state_from_db"),
+  IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
+  ;
 
-    companion object {
-        private val valueMap = entries.associateBy(AudioMessageProcessingErrorStage::value)
+  companion object {
+    private val valueMap = entries.associateBy(AudioMessageProcessingErrorStage::value)
 
-        fun fromValue(value: String) = valueMap[value]
-    }
+    fun fromValue(value: String) = valueMap[value]
+  }
 }
 
 fun String?.toAudioMessageProcessingErrorStage(): AudioMessageProcessingErrorStage? =
@@ -137,42 +139,42 @@ fun String?.toAudioMessageProcessingErrorStage(): AudioMessageProcessingErrorSta
 
 enum class VoiceMessageProcessingErrorStage(override val value: String) :
     MessageProcessingErrorStage {
-    CopyToSharedStorage("copy2shared_storage"), SetRawFilenameToDb("set_raw_filename2db"), DeleteInternalFileCache(
-        "delete_internal_file_cache"
-    ),
-    DeleteTaskStateFromDb("delete_task_state_from_db"), IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
-    ;
+  CopyToSharedStorage("copy2shared_storage"),
+  SetRawFilenameToDb("set_raw_filename2db"),
+  DeleteInternalFileCache("delete_internal_file_cache"),
+  DeleteTaskStateFromDb("delete_task_state_from_db"),
+  IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
+  ;
 
-    companion object {
-        private val valueMap = entries.associateBy(VoiceMessageProcessingErrorStage::value)
+  companion object {
+    private val valueMap = entries.associateBy(VoiceMessageProcessingErrorStage::value)
 
-        fun fromValue(value: String) = valueMap[value]
-    }
+    fun fromValue(value: String) = valueMap[value]
+  }
 }
 
 fun String?.toVoiceMessageProcessingErrorStage(): VoiceMessageProcessingErrorStage? =
     this?.let { VoiceMessageProcessingErrorStage.fromValue(it) }
 
-
 enum class ImageMessageProcessingErrorStage(override val value: String) :
     MessageProcessingErrorStage {
-    CopySrcToInternalCache(value = "copy_src2internal_cache"), SetInternalFilenameToDb(value = "set_internal_filename2db"), CopyToSharedStorage(
-        "copy2shared_storage"
-    ),
-    SetRawFilenameToDb("set_raw_filename2db"), GenerateThumbnail("generate_thumbnail"), SaveThumbnailFile(
-        "save_thumbnail_file"
-    ),
-    SetThumbnailFilenameToDb("set_thumbnail_filename2db"), DeleteInternalFileCache("delete_internal_file_cache"), DeleteTaskStateFromDb(
-        "delete_task_state_from_db"
-    ),
-    IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
-    ;
+  CopySrcToInternalCache(value = "copy_src2internal_cache"),
+  SetInternalFilenameToDb(value = "set_internal_filename2db"),
+  CopyToSharedStorage("copy2shared_storage"),
+  SetRawFilenameToDb("set_raw_filename2db"),
+  GenerateThumbnail("generate_thumbnail"),
+  SaveThumbnailFile("save_thumbnail_file"),
+  SetThumbnailFilenameToDb("set_thumbnail_filename2db"),
+  DeleteInternalFileCache("delete_internal_file_cache"),
+  DeleteTaskStateFromDb("delete_task_state_from_db"),
+  IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
+  ;
 
-    companion object {
-        private val valueMap = entries.associateBy(ImageMessageProcessingErrorStage::value)
+  companion object {
+    private val valueMap = entries.associateBy(ImageMessageProcessingErrorStage::value)
 
-        fun fromValue(value: String) = valueMap[value]
-    }
+    fun fromValue(value: String) = valueMap[value]
+  }
 }
 
 fun String?.toImageMessageProcessingErrorStage(): ImageMessageProcessingErrorStage? =
@@ -180,48 +182,47 @@ fun String?.toImageMessageProcessingErrorStage(): ImageMessageProcessingErrorSta
 
 enum class VideoMessageProcessingErrorStage(override val value: String) :
     MessageProcessingErrorStage {
-    CopySrcToInternalCache(value = "copy_src2internal_cache"), SetInternalFilenameToDb(value = "set_internal_filename2db"), CopyToSharedStorage(
-        "copy2shared_storage"
-    ),
-    SetRawFilenameToDb("set_raw_filename2db"), GenerateThumbnail("generate_thumbnail"), SaveThumbnailFile(
-        "save_thumbnail_file"
-    ),
-    SetThumbnailFilenameToDb("set_thumbnail_filename2db"), DeleteInternalFileCache("delete_internal_file_cache"), DeleteTaskStateFromDb(
-        "delete_task_state_from_db"
-    ),
-    IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
-    ;
+  CopySrcToInternalCache(value = "copy_src2internal_cache"),
+  SetInternalFilenameToDb(value = "set_internal_filename2db"),
+  CopyToSharedStorage("copy2shared_storage"),
+  SetRawFilenameToDb("set_raw_filename2db"),
+  GenerateThumbnail("generate_thumbnail"),
+  SaveThumbnailFile("save_thumbnail_file"),
+  SetThumbnailFilenameToDb("set_thumbnail_filename2db"),
+  DeleteInternalFileCache("delete_internal_file_cache"),
+  DeleteTaskStateFromDb("delete_task_state_from_db"),
+  IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
+  ;
 
-    companion object {
-        private val valueMap = entries.associateBy(VideoMessageProcessingErrorStage::value)
+  companion object {
+    private val valueMap = entries.associateBy(VideoMessageProcessingErrorStage::value)
 
-        fun fromValue(value: String) = valueMap[value]
-    }
+    fun fromValue(value: String) = valueMap[value]
+  }
 }
 
 fun String?.toVideoMessageProcessingErrorStage(): VideoMessageProcessingErrorStage? =
     this?.let { VideoMessageProcessingErrorStage.fromValue(it) }
 
-
 enum class GenericFileMessageProcessingErrorStage(override val value: String) :
     MessageProcessingErrorStage {
-    CopySrcToInternalCache(value = "copy_src2internal_cache"), SetInternalFilenameToDb(value = "set_internal_filename2db"), CopyToSharedStorage(
-        "copy2shared_storage"
-    ),
-    SetRawFilenameToDb("set_raw_filename2db"), GenerateThumbnail("generate_thumbnail"), SaveThumbnailFile(
-        "save_thumbnail_file"
-    ),
-    SetThumbnailFilenameToDb("set_thumbnail_filename2db"), DeleteInternalFileCache("delete_internal_file_cache"), DeleteTaskStateFromDb(
-        "delete_task_state_from_db"
-    ),
-    IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
-    ;
+  CopySrcToInternalCache(value = "copy_src2internal_cache"),
+  SetInternalFilenameToDb(value = "set_internal_filename2db"),
+  CopyToSharedStorage("copy2shared_storage"),
+  SetRawFilenameToDb("set_raw_filename2db"),
+  GenerateThumbnail("generate_thumbnail"),
+  SaveThumbnailFile("save_thumbnail_file"),
+  SetThumbnailFilenameToDb("set_thumbnail_filename2db"),
+  DeleteInternalFileCache("delete_internal_file_cache"),
+  DeleteTaskStateFromDb("delete_task_state_from_db"),
+  IllegalState("illegal_state") // e.g: update message/task_state table with 0 row affected
+  ;
 
-    companion object {
-        private val valueMap = entries.associateBy(GenericFileMessageProcessingErrorStage::value)
+  companion object {
+    private val valueMap = entries.associateBy(GenericFileMessageProcessingErrorStage::value)
 
-        fun fromValue(value: String) = valueMap[value]
-    }
+    fun fromValue(value: String) = valueMap[value]
+  }
 }
 
 fun String?.toGenericFileMessageProcessingErrorStage(): GenericFileMessageProcessingErrorStage? =

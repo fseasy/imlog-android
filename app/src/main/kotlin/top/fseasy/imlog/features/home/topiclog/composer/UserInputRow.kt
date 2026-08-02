@@ -28,52 +28,55 @@ fun UserInputRow(
     onCancelVoiceRecoding: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Put textFieldValueState on parent component, so it's state can be saved even
-    // it switched to Voice input.
-    var textFieldValueState by remember {
-        mutableStateOf(TextFieldValue(text = inputText))
+  // Put textFieldValueState on parent component, so it's state can be saved even
+  // it switched to Voice input.
+  var textFieldValueState by remember {
+    mutableStateOf(TextFieldValue(text = inputText))
+  }
+
+  LaunchedEffect(inputText) {
+    // For condition 1. InputText load from draft db. 2. InputText cleared after sending message
+    if (inputText != textFieldValueState.text) {
+      textFieldValueState =
+          textFieldValueState.copy(
+              text = inputText,
+              // set cursor pointer to the end
+              selection = TextRange(inputText.length),
+          )
     }
+  }
 
-    LaunchedEffect(inputText) {
-        // For condition 1. InputText load from draft db. 2. InputText cleared after sending message
-        if (inputText != textFieldValueState.text) {
-            textFieldValueState = textFieldValueState.copy(
-                text = inputText,
-                // set cursor pointer to the end
-                selection = TextRange(inputText.length)
-            )
-        }
+  val isTextMode = inputMode == MessageInputModeParcelable.Text
+
+  AnimatedContent(
+      targetState = inputMode,
+      transitionSpec = {
+        fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(200))
+      },
+      label = "InputModeTransition",
+  ) { mode ->
+    when (mode) {
+      MessageInputModeParcelable.Voice ->
+          VoiceRecodingRow(
+              voiceRecordingUiStateFlow = voiceRecordingUiStateFlow,
+              onSend = onSendVoice,
+              onCancel = onCancelVoiceRecoding,
+              modifier = modifier,
+          )
+
+      else ->
+          UserInputDefaultRow(
+              textFieldValue = textFieldValueState,
+              isTextMode = isTextMode,
+              inputModeSetActions = inputModeSetActions,
+              onTextChanged = { newValue ->
+                textFieldValueState = newValue
+                if (newValue.text != inputText) { // filter unnecessary call
+                  onInputTextChange(newValue.text)
+                }
+              },
+              onSendText = onSendText,
+          )
     }
-
-    val isTextMode = inputMode == MessageInputModeParcelable.Text
-
-    AnimatedContent(
-        targetState = inputMode,
-        transitionSpec = {
-            fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(200))
-        },
-        label = "InputModeTransition"
-    ) { mode ->
-        when (mode) {
-            MessageInputModeParcelable.Voice -> VoiceRecodingRow(
-                voiceRecordingUiStateFlow = voiceRecordingUiStateFlow,
-                onSend = onSendVoice,
-                onCancel = onCancelVoiceRecoding,
-                modifier = modifier
-            )
-
-            else -> UserInputDefaultRow(
-                textFieldValue = textFieldValueState,
-                isTextMode = isTextMode,
-                inputModeSetActions = inputModeSetActions,
-                onTextChanged = { newValue ->
-                    textFieldValueState = newValue
-                    if (newValue.text != inputText) { // filter unnecessary call
-                        onInputTextChange(newValue.text)
-                    }
-                },
-                onSendText = onSendText,
-            )
-        }
-    }
+  }
 }

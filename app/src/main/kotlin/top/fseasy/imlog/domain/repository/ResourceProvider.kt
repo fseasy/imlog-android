@@ -1,23 +1,24 @@
 package top.fseasy.imlog.domain.repository
 
-
 enum class StringArrayResId {
-    RandomUsernameAdjectives,
-    RandomUsernameNouns;
+  RandomUsernameAdjectives,
+  RandomUsernameNouns,
 }
 
 enum class StringResId {
-    AppName,
-    TopicInitialName,
-    TopicInitialDescription
+  AppName,
+  TopicInitialName,
+  TopicInitialDescription,
 }
 
 enum class StringConstantId {
-    AppStaticName;
+  AppStaticName
 }
 
 interface ResourceProvider {
-    fun getStringArray(id: StringArrayResId): Array<String>
-    fun getString(id: StringResId): String
-    fun getConstString(id: StringConstantId): String
+  fun getStringArray(id: StringArrayResId): Array<String>
+
+  fun getString(id: StringResId): String
+
+  fun getConstString(id: StringConstantId): String
 }

@@ -3,69 +3,55 @@ package top.fseasy.imlog.domain.model
 import kotlinx.serialization.Serializable
 import timber.log.Timber
 import top.fseasy.imlog.domain.util.defaultJson
+import kotlin.enums.enumEntries
 
-// NOTE: Kotlin Serializable will save name instead of ordinal for enum class in JSON format
-//       So no needs to set a String name for each enum.
-enum class UserPresetAvatar {
-    Rabbit, Panda, Fox;
+// 1. 抽象公共预设接口
+interface PresetAvatar
 
-    companion object {
-        fun random(): UserPresetAvatar = entries.random()
-        fun first(): UserPresetAvatar = entries.first()
-    }
+enum class UserPresetAvatar : PresetAvatar {
+  Rabbit,
+  Panda,
+  Fox,
+}
+
+enum class TopicPresetAvatar : PresetAvatar {
+  Leaf,
+  Flower,
+  Raindrop,
 }
 
 @Serializable
-sealed interface UserAvatarModel {
-    /**
-     * See @StoragePathRuleUseCase
-     */
-    @Serializable
-    data class StorageFile(val name: String) : UserAvatarModel
+sealed interface AvatarModel<out T : PresetAvatar> {
+  @Serializable data class StorageFile(val name: String) : AvatarModel<Nothing>
 
-    @Serializable
-    data class Preset(val value: UserPresetAvatar) : UserAvatarModel
-
-}
-
-fun defaultUserPresetAvatar() = UserAvatarModel.Preset(UserPresetAvatar.first())
-
-
-// Don't name to `toString` as it'll be shadowed by member: Any.toString!
-fun UserAvatarModel.serialize(): String = defaultJson.encodeToString(this)
-fun String.toUserAvatarModelOrNull(): UserAvatarModel? = runCatching {
-    defaultJson.decodeFromString<UserAvatarModel>(this)
-}.getOrElse { e ->
-    Timber.w(e, "Deserialization UserAvatarModel failed, s=[$this]")
-    null // Provide null is a more concise way compared to pass a default value
-}
-
-
-enum class TopicPresetAvatar {
-    Leaf, Flower, Raindrop;
-
+  @Serializable
+  data class Preset<T : PresetAvatar>(val value: T) : AvatarModel<T> {
     companion object {
-        fun random(): TopicPresetAvatar = entries.random()
-        fun first(): TopicPresetAvatar = entries.first()
+      inline fun <reified T> default(): Preset<T> where T : Enum<T>, T : PresetAvatar {
+        return Preset(enumEntries<T>().first())
+      }
+
+      inline fun <reified T> random(): Preset<T> where T : Enum<T>, T : PresetAvatar {
+        return Preset(enumEntries<T>().random())
+      }
     }
+  }
 }
 
-@Serializable
-sealed interface TopicAvatarModel {
-    @Serializable
-    data class StorageFile(val name: String) : TopicAvatarModel
+typealias UserAvatarModel = AvatarModel<UserPresetAvatar>
 
-    @Serializable
-    data class Preset(val value: TopicPresetAvatar) : TopicAvatarModel
+typealias TopicAvatarModel = AvatarModel<TopicPresetAvatar>
+
+fun defaultUserPresetAvatar(): UserAvatarModel = AvatarModel.Preset.default()
+
+fun defaultTopicPresetAvatar(): TopicAvatarModel = AvatarModel.Preset.default()
+
+fun <T : PresetAvatar> AvatarModel<T>.serialize(): String = defaultJson.encodeToString(this)
+
+inline fun <reified T : PresetAvatar> String.toAvatarModelOrNull(): AvatarModel<T>? = runCatching {
+  defaultJson.decodeFromString<AvatarModel<T>>(this)
 }
-
-fun defaultTopicPresetAvatar() = TopicAvatarModel.Preset(TopicPresetAvatar.first())
-
-
-fun TopicAvatarModel.serialize(): String = defaultJson.encodeToString(this)
-fun String.toTopicAvatarModelOrNull(): TopicAvatarModel? = runCatching {
-    defaultJson.decodeFromString<TopicAvatarModel>(this)
-}.getOrElse { e ->
-    Timber.w(e, "Deserialization TopicAvatarModel failed, s=[$this]")
-    null // Provide null is a more concise way compared to pass a default value
-}
+    .getOrElse { e ->
+      Timber.w(e, "Deserialization AvatarModel failed, s=[$this]")
+      null
+    }

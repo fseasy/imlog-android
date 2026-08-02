@@ -24,71 +24,72 @@ data class WelcomeUiState(
 )
 
 @HiltViewModel
-class WelcomeViewModel @Inject constructor(
+class WelcomeViewModel
+@Inject
+constructor(
     @param:ApplicationContext private val context: Context,
     private val welcomeUseCase: WelcomeUseCase,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow<WelcomeUiState>(WelcomeUiState())
-    val uiState = _uiState.asStateFlow()
+  private val _uiState = MutableStateFlow<WelcomeUiState>(WelcomeUiState())
+  val uiState = _uiState.asStateFlow()
 
-    /**
-     * The decision of whether to create topic is passed from the screen.
-     * To guard the creation action, use this var.
-     * */
-    private var hasInitializedAutoFirstTopicCreation = false
+  /**
+   * The decision of whether to create topic is passed from the screen. To guard the creation
+   * action, use this var.
+   */
+  private var hasInitializedAutoFirstTopicCreation = false
 
-    /**
-     * Use this with creating guarding.
-     */
-    fun autoCreateFirstTopic(userId: UserId) {
-        if (hasInitializedAutoFirstTopicCreation) return
-        hasInitializedAutoFirstTopicCreation = true
-        triggerCreateFirstTopic(userId)
-    }
+  /** Use this with creating guarding. */
+  fun autoCreateFirstTopic(userId: UserId) {
+    if (hasInitializedAutoFirstTopicCreation) return
+    hasInitializedAutoFirstTopicCreation = true
+    triggerCreateFirstTopic(userId)
+  }
 
-    /**
-     * Use this with explicit indent.
-     */
-    fun triggerCreateFirstTopic(userId: UserId) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(topicCreateState = TaskExecuteState.Executing) }
-            when (val r = welcomeUseCase.createFirstTopicWithDefaultValueAndMarkInit(userId)) {
-                is CreateFirstTopicResult.SkipCreate,
-                is CreateFirstTopicResult.Success,
-                    -> _uiState.update { it.copy(topicCreateState = TaskExecuteState.Success(Unit)) }
+  /** Use this with explicit indent. */
+  fun triggerCreateFirstTopic(userId: UserId) {
+    viewModelScope.launch {
+      _uiState.update { it.copy(topicCreateState = TaskExecuteState.Executing) }
+      when (val r = welcomeUseCase.createFirstTopicWithDefaultValueAndMarkInit(userId)) {
+        is CreateFirstTopicResult.SkipCreate,
+        is CreateFirstTopicResult.Success,
+        -> _uiState.update { it.copy(topicCreateState = TaskExecuteState.Success(Unit)) }
 
-                is CreateFirstTopicResult.Failure -> _uiState.update {
-                    it.copy(
-                        topicCreateState = TaskExecuteState.Failure(
-                            r.cause.message ?: context.getString(R.string.error_unknown)
-                        )
-                    )
-                }
+        is CreateFirstTopicResult.Failure ->
+            _uiState.update {
+              it.copy(
+                  topicCreateState =
+                      TaskExecuteState.Failure(
+                          r.cause.message ?: context.getString(R.string.error_unknown)
+                      )
+              )
             }
-        }
+      }
     }
+  }
 
-    fun markWelcomeShown(userId: UserId) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(markWelcomeState = TaskExecuteState.Executing) }
-            welcomeUseCase.markWelcomeShown(userId)
-                .fold(onSuccess = {
-                    _uiState.update {
-                        it.copy(
-                            markWelcomeState = TaskExecuteState.Success(
-                                Unit
-                            )
-                        )
-                    }
-                }, onFailure = { e ->
-                    _uiState.update {
-                        it.copy(
-                            markWelcomeState = TaskExecuteState.Failure(
-                                e.message ?: context.getString(R.string.error_unknown)
-                            )
-                        )
-                    }
-                })
-        }
+  fun markWelcomeShown(userId: UserId) {
+    viewModelScope.launch {
+      _uiState.update { it.copy(markWelcomeState = TaskExecuteState.Executing) }
+      welcomeUseCase
+          .markWelcomeShown(userId)
+          .fold(
+              onSuccess = {
+                _uiState.update {
+                  it.copy(markWelcomeState = TaskExecuteState.Success(Unit))
+                }
+              },
+              onFailure = { e ->
+                _uiState.update {
+                  it.copy(
+                      markWelcomeState =
+                          TaskExecuteState.Failure(
+                              e.message ?: context.getString(R.string.error_unknown)
+                          )
+                  )
+                }
+              },
+          )
     }
+  }
 }

@@ -30,41 +30,45 @@ fun RightActionSlot(
     onAttachmentClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier.size(38.dp), contentAlignment = Alignment.Center
-    ) {
-        AnimatedContent(
-            targetState = couldSendingTextState, transitionSpec = {
-                (scaleIn(initialScale = 0.6f) + fadeIn()) togetherWith (scaleOut(targetScale = 0.6f) + fadeOut())
-            }, label = "RightSlotTransition"
-        ) { couldSendingText ->
-            if (couldSendingText) {
-                IconButton(
-                    onClick = onSendClick,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = stringResource(R.string.composer_send_btn_desc),
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            } else {
-                // Attachment Button
-                IconButton(
-                    onClick = onAttachmentClick, modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = stringResource(R.string.composer_attachment_icon_desc),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
+  Box(
+      modifier = modifier.size(38.dp),
+      contentAlignment = Alignment.Center,
+  ) {
+    AnimatedContent(
+        targetState = couldSendingTextState,
+        transitionSpec = {
+          (scaleIn(initialScale = 0.6f) + fadeIn()) togetherWith
+              (scaleOut(targetScale = 0.6f) + fadeOut())
+        },
+        label = "RightSlotTransition",
+    ) { couldSendingText ->
+      if (couldSendingText) {
+        IconButton(
+            onClick = onSendClick,
+            modifier =
+                Modifier.size(36.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
+        ) {
+          Icon(
+              imageVector = Icons.AutoMirrored.Filled.Send,
+              contentDescription = stringResource(R.string.composer_send_btn_desc),
+              tint = MaterialTheme.colorScheme.onPrimary,
+              modifier = Modifier.size(18.dp),
+          )
         }
+      } else {
+        // Attachment Button
+        IconButton(
+            onClick = onAttachmentClick,
+            modifier = Modifier.size(36.dp),
+        ) {
+          Icon(
+              imageVector = Icons.Default.Add,
+              contentDescription = stringResource(R.string.composer_attachment_icon_desc),
+              tint = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(24.dp),
+          )
+        }
+      }
     }
+  }
 }

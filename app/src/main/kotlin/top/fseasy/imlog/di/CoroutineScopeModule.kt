@@ -12,17 +12,17 @@ import kotlinx.coroutines.SupervisorJob
 @Module
 @InstallIn(SingletonComponent::class)
 object CoroutineScopeModule {
-    @Provides
-    @Singleton
-    @ApplicationDefaultScope
-    fun provideApplicationDefaultScope(): CoroutineScope {
-        return CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    }
+  @Provides
+  @Singleton
+  @ApplicationDefaultScope
+  fun provideApplicationDefaultScope(): CoroutineScope {
+    return CoroutineScope(SupervisorJob() + Dispatchers.Default)
+  }
 
-    @Provides
-    @Singleton
-    @ApplicationIoScope
-    fun provideApplicationIoScope(): CoroutineScope {
-        return CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    }
+  @Provides
+  @Singleton
+  @ApplicationIoScope
+  fun provideApplicationIoScope(): CoroutineScope {
+    return CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  }
 }

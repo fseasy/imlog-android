@@ -10,18 +10,16 @@ import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import top.fseasy.imlog.ui.model.UserAvatarUiModel
 
-
 @Composable
 fun UserAvatar(model: UserAvatarUiModel, modifier: Modifier = Modifier) {
-    AsyncImage(
-        model = when (model) {
+  AsyncImage(
+      model =
+          when (model) {
             is UserAvatarUiModel.Preset -> model.resId
             is UserAvatarUiModel.FilePath -> model.path
-        },
-        contentDescription = "User Avatar",
-        modifier = modifier
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentScale = ContentScale.Crop
-    )
+          },
+      contentDescription = "User Avatar",
+      modifier = modifier.clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+      contentScale = ContentScale.Crop,
+  )
 }

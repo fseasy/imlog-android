@@ -47,9 +47,7 @@ import androidx.compose.ui.unit.sp
 import timber.log.Timber
 import top.fseasy.imlog.R
 
-/**
- * Input + Voice Component
- */
+/** Input + Voice Component */
 @Composable
 fun TextAndVoiceComponent(
     textFieldValue: TextFieldValue,
@@ -60,46 +58,46 @@ fun TextAndVoiceComponent(
     modifier: Modifier = Modifier,
 ) {
 
-    Row(
-        modifier = modifier, verticalAlignment = Alignment.CenterVertically
-    ) {
-        UserInputTextField(
-            textFieldValue = textFieldValue,
-            onTextChanged = onTextChanged,
-            onFocusChanged = onFocusChanged,
-            modifier = Modifier.weight(1f)
-        )
-        AnimatedContent(
-            targetState = voiceButtonState, transitionSpec = {
-                val fadeInOut = fadeIn(animationSpec = tween(200)) togetherWith fadeOut(
-                    animationSpec = tween(200)
-                )
-                fadeInOut.using(
-                    SizeTransform(clip = false)
-                )
-            }, label = "VoiceButtonTransition"
-        ) { state ->
-            when (state) {
-                VoiceButtonState.Capsule -> {
-                    Row {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        UserInputVoiceButton(onClick = onVoiceSingleClick, isCircle = false)
-                    }
-                }
-
-                VoiceButtonState.Circle -> {
-                    Row {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        UserInputVoiceButton(onClick = onVoiceSingleClick, isCircle = true)
-                    }
-                }
-
-                VoiceButtonState.Hidden -> {
-                    Spacer(modifier = Modifier.size(0.dp))
-                }
-            }
+  Row(
+      modifier = modifier,
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    UserInputTextField(
+        textFieldValue = textFieldValue,
+        onTextChanged = onTextChanged,
+        onFocusChanged = onFocusChanged,
+        modifier = Modifier.weight(1f),
+    )
+    AnimatedContent(
+        targetState = voiceButtonState,
+        transitionSpec = {
+          val fadeInOut =
+              fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(200))
+          fadeInOut.using(SizeTransform(clip = false))
+        },
+        label = "VoiceButtonTransition",
+    ) { state ->
+      when (state) {
+        VoiceButtonState.Capsule -> {
+          Row {
+            Spacer(modifier = Modifier.width(8.dp))
+            UserInputVoiceButton(onClick = onVoiceSingleClick, isCircle = false)
+          }
         }
+
+        VoiceButtonState.Circle -> {
+          Row {
+            Spacer(modifier = Modifier.width(8.dp))
+            UserInputVoiceButton(onClick = onVoiceSingleClick, isCircle = true)
+          }
+        }
+
+        VoiceButtonState.Hidden -> {
+          Spacer(modifier = Modifier.size(0.dp))
+        }
+      }
     }
+  }
 }
 
 @Composable
@@ -109,55 +107,56 @@ private fun UserInputTextField(
     onFocusChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+  var isFocused by remember { mutableStateOf(false) }
 
-    val shape = RoundedCornerShape(12.dp)
-    val backgroundColor = if (isFocused) {
+  val shape = RoundedCornerShape(12.dp)
+  val backgroundColor =
+      if (isFocused) {
         MaterialTheme.colorScheme.surface
-    } else {
+      } else {
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-    }
-    val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+      }
+  val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
 
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(backgroundColor)
-            .border(1.dp, borderColor, shape)
-            .padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.CenterStart
-    ) {
-        BasicTextField(
-            value = textFieldValue,
-            onValueChange = onTextChanged,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 22.dp, max = 100.dp)
-                .onFocusChanged { state ->
-                    isFocused = state.isFocused
-                    onFocusChanged(state.isFocused)
-                },
-            textStyle = TextStyle(
-                fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface
+  Box(
+      modifier =
+          modifier
+              .clip(shape)
+              .background(backgroundColor)
+              .border(1.dp, borderColor, shape)
+              .padding(horizontal = 12.dp, vertical = 8.dp),
+      contentAlignment = Alignment.CenterStart,
+  ) {
+    BasicTextField(
+        value = textFieldValue,
+        onValueChange = onTextChanged,
+        modifier =
+            Modifier.fillMaxWidth().heightIn(min = 22.dp, max = 100.dp).onFocusChanged { state ->
+              isFocused = state.isFocused
+              onFocusChanged(state.isFocused)
+            },
+        textStyle =
+            TextStyle(
+                fontSize = 15.sp,
+                color = MaterialTheme.colorScheme.onSurface,
             ),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
-        ) { innerTextField ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart
-            ) {
-
-                if (textFieldValue.text.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.composer_text_input_placeholder),
-                        color = Color.Gray
-                    )
-                }
-
-                innerTextField()
-            }
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+    ) { innerTextField ->
+      Box(
+          modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+          contentAlignment = Alignment.CenterStart,
+      ) {
+        if (textFieldValue.text.isEmpty()) {
+          Text(
+              text = stringResource(R.string.composer_text_input_placeholder),
+              color = Color.Gray,
+          )
         }
+
+        innerTextField()
+      }
     }
+  }
 }
 
 @Composable
@@ -166,34 +165,40 @@ private fun UserInputVoiceButton(
     isCircle: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        shape = CircleShape, // Always use CircleShape, depending on Padding to change shape
-        color = MaterialTheme.colorScheme.primaryContainer, modifier = modifier.pointerInput(Unit) {
+  Surface(
+      shape = CircleShape, // Always use CircleShape, depending on Padding to change shape
+      color = MaterialTheme.colorScheme.primaryContainer,
+      modifier =
+          modifier.pointerInput(Unit) {
             detectTapGestures(
                 onTap = { onClick() },
-                onLongPress = { Timber.d("Long press. SKIP NOW") })
-        }) {
-        Row(
-            modifier = Modifier.padding(
-                horizontal = if (isCircle) 10.dp else 16.dp, vertical = 10.dp
-            ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = ImageVector.vectorResource(R.drawable.icon_mic),
-                contentDescription = stringResource(R.string.composer_mic_icon_desc),
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(18.dp)
+                onLongPress = { Timber.d("Long press. SKIP NOW") },
             )
+          },
+  ) {
+    Row(
+        modifier =
+            Modifier.padding(
+                horizontal = if (isCircle) 10.dp else 16.dp,
+                vertical = 10.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+      Icon(
+          imageVector = ImageVector.vectorResource(R.drawable.icon_mic),
+          contentDescription = stringResource(R.string.composer_mic_icon_desc),
+          tint = MaterialTheme.colorScheme.onPrimary,
+          modifier = Modifier.size(18.dp),
+      )
 
-            if (!isCircle) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = stringResource(R.string.composer_voice_button_text),
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
-        }
+      if (!isCircle) {
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = stringResource(R.string.composer_voice_button_text),
+            style = MaterialTheme.typography.labelLarge,
+        )
+      }
     }
+  }
 }

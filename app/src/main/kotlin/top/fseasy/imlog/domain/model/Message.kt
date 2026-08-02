@@ -3,35 +3,39 @@ package top.fseasy.imlog.domain.model
 import kotlinx.serialization.Serializable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
-import kotlin.jvm.JvmInline
 
 enum class MessageType(val value: String) {
-    Text("text"), Image("image"), Video("video"), Audio("audio"), Voice("voice"), GenericFile("generic_file"),
-    ;
+  Text("text"),
+  Image("image"),
+  Video("video"),
+  Audio("audio"),
+  Voice("voice"),
+  GenericFile("generic_file"),
+  ;
 
-    companion object {
-        private val valueMap = entries.associateBy(MessageType::value)
-        fun fromValue(value: String) = valueMap[value]
-    }
+  companion object {
+    private val valueMap = entries.associateBy(MessageType::value)
+
+    fun fromValue(value: String) = valueMap[value]
+  }
 }
 
 @JvmInline
 @Serializable
 value class MessageId(val value: String) {
-    init {
-        require(value.startsWith(PREFIX)) { "Invalid MessageId prefix" }
-    }
+  init {
+    require(value.startsWith(PREFIX)) { "Invalid MessageId prefix" }
+  }
 
-    companion object {
-        private const val PREFIX = "msg_"
+  companion object {
+    private const val PREFIX = "msg_"
 
-        @OptIn(ExperimentalUuidApi::class)
-        fun random(): MessageId {
-            val uuid = Uuid.generateV7()
-                .toHexString()
-            return MessageId("${PREFIX}${uuid}")
-        }
+    @OptIn(ExperimentalUuidApi::class)
+    fun random(): MessageId {
+      val uuid = Uuid.generateV7().toHexString()
+      return MessageId("${PREFIX}${uuid}")
     }
+  }
 }
 
 @Serializable
@@ -50,9 +54,7 @@ data class QuoteMessage(
     val thumbnail: QuoteMessageThumbnailFileBuildingArgs?,
 )
 
-/**
- * Time/Duration all are in MS.
- */
+/** Time/Duration all are in MS. */
 data class Message(
     val id: MessageId,
     val topicId: TopicId,
@@ -75,9 +77,7 @@ data class Message(
     val attributesUpdatedAt: Long = createdAt,
 )
 
-/**
- * For message preview
- */
+/** For message preview */
 @Serializable
 data class MessagePreview(
     val type: MessageType,
@@ -87,12 +87,12 @@ data class MessagePreview(
 
 @Serializable
 enum class MessageInputMode(val value: String) {
-    Text("text"), Voice("voice"), Attachment("Attachment")
+  Text("text"),
+  Voice("voice"),
+  Attachment("Attachment"),
 }
 
-/**
- * For composer draft
- */
+/** For composer draft */
 @Serializable
 data class MessageDraft(
     val inputMode: MessageInputMode? = null,
@@ -101,24 +101,23 @@ data class MessageDraft(
 )
 
 object MessageFactory {
-    fun createText(
-        topicId: TopicId,
-        senderId: UserId,
-        text: String,
-        timestampMs: Long,
-        quoteMessage: QuoteMessage? = null,
-    ): Message {
-        require(text.isNotBlank()) { "Failed to create empty Text: $topicId, $senderId" }
-        return Message(
-            id = MessageId.random(),
-            topicId = topicId,
-            senderId = senderId,
-            type = MessageType.Text,
-            text = text,
-            createdAt = timestampMs,
-            attributesUpdatedAt = timestampMs,
-            quoteMessage = quoteMessage,
-        )
-    }
+  fun createText(
+      topicId: TopicId,
+      senderId: UserId,
+      text: String,
+      timestampMs: Long,
+      quoteMessage: QuoteMessage? = null,
+  ): Message {
+    require(text.isNotBlank()) { "Failed to create empty Text: $topicId, $senderId" }
+    return Message(
+        id = MessageId.random(),
+        topicId = topicId,
+        senderId = senderId,
+        type = MessageType.Text,
+        text = text,
+        createdAt = timestampMs,
+        attributesUpdatedAt = timestampMs,
+        quoteMessage = quoteMessage,
+    )
+  }
 }
-

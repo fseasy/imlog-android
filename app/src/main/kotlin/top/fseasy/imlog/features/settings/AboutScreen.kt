@@ -25,77 +25,73 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(
-    onBack: () -> Unit
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("About ImTrace") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+fun AboutScreen(onBack: () -> Unit) {
+  Scaffold(
+      topBar = {
+        TopAppBar(
+            title = { Text("About ImTrace") },
+            navigationIcon = {
+              IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+              }
+            },
+        )
+      }
+  ) { paddingValues ->
+    Column(
+        modifier = Modifier.fillMaxSize().padding(paddingValues).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+      Surface(
+          modifier = Modifier.size(80.dp),
+          shape = MaterialTheme.shapes.large,
+          color = MaterialTheme.colorScheme.primary,
+      ) {
+        androidx.compose.foundation.layout.Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize(),
         ) {
-            Surface(
-                modifier = Modifier.size(80.dp),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.primary
-            ) {
-                androidx.compose.foundation.layout.Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Text(
-                        text = "IT",
-                        style = MaterialTheme.typography.headlineLarge,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "ImTrace",
-                style = MaterialTheme.typography.headlineMedium
-            )
-
-            Text(
-                text = "Version 1.0.0",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Text(
-                text = "ImTrace is your personal trace recording app. " +
-                        "Capture moments, organize thoughts, and track your journey " +
-                        "with rich media support including text, images, videos, and audio.",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Text(
-                text = "Made with Jetpack Compose",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.outline
-            )
+          Text(
+              text = "IT",
+              style = MaterialTheme.typography.headlineLarge,
+              color = MaterialTheme.colorScheme.onPrimary,
+          )
         }
+      }
+
+      Spacer(modifier = Modifier.height(24.dp))
+
+      Text(
+          text = "ImTrace",
+          style = MaterialTheme.typography.headlineMedium,
+      )
+
+      Text(
+          text = "Version 1.0.0",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+
+      Spacer(modifier = Modifier.height(32.dp))
+
+      Text(
+          text =
+              "ImTrace is your personal trace recording app. " +
+                  "Capture moments, organize thoughts, and track your journey " +
+                  "with rich media support including text, images, videos, and audio.",
+          style = MaterialTheme.typography.bodyMedium,
+          textAlign = TextAlign.Center,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+
+      Spacer(modifier = Modifier.height(32.dp))
+
+      Text(
+          text = "Made with Jetpack Compose",
+          style = MaterialTheme.typography.labelMedium,
+          color = MaterialTheme.colorScheme.outline,
+      )
     }
+  }
 }

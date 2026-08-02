@@ -24,122 +24,130 @@ import javax.inject.Inject
 
 private val thumbnailFormat = TIMELINE_THUMBNAIL_COMPRESS_FORMAT
 
-class GenerateThumbnailUseCase @Inject constructor(
+class GenerateThumbnailUseCase
+@Inject
+constructor(
     private val thumbnailService: ThumbnailService,
     private val storageRepository: StorageRepository,
     private val storagePathUseCase: StoragePathUseCase,
     private val messageRepository: MessageRepository,
 ) {
 
-    /**
-     * @param srcUriStr As Ui will first render with source uri, so first try this value
-     *                  to share the thumbnail result if possible, which is inherent supported by Coil
-     *
-     * @throws CancellationException don't need to cache it!
-     */
-    suspend operator fun invoke(
-        messageId: MessageId,
-        userId: UserId,
-        topicId: TopicId,
-        messageTimestampMs: Long,
-        messageType: MessageType,
-        srcUriStr: UriStr?,
-        cacheFilePath: StoragePathModel.InternalOnly,
-        fileMetadata: FileMetadataUnion,
-    ): GenerateThumbnailStageResult {
+  /**
+   * @param srcUriStr As Ui will first render with source uri, so first try this value to share the
+   *   thumbnail result if possible, which is inherent supported by Coil
+   * @throws CancellationException don't need to cache it!
+   */
+  suspend operator fun invoke(
+      messageId: MessageId,
+      userId: UserId,
+      topicId: TopicId,
+      messageTimestampMs: Long,
+      messageType: MessageType,
+      srcUriStr: UriStr?,
+      cacheFilePath: StoragePathModel.InternalOnly,
+      fileMetadata: FileMetadataUnion,
+  ): GenerateThumbnailStageResult {
 
-        val generateFunction = when (messageType) {
-            MessageType.Audio -> ::generateImageThumbnail
-            MessageType.Video -> ::generateVideoThumbnail
-            else -> return GenerateThumbnailStageResult.Skip
+    val generateFunction =
+        when (messageType) {
+          MessageType.Audio -> ::generateImageThumbnail
+          MessageType.Video -> ::generateVideoThumbnail
+          else -> return GenerateThumbnailStageResult.Skip
         }
-        val thumbnailBytes = try {
-            generateOnTowSources(
-                srcUriStr = srcUriStr,
-                cacheFilePath = cacheFilePath,
-                fileMetadata = fileMetadata,
-                executeGenerate = generateFunction
-            )
+    val thumbnailBytes =
+        try {
+          generateOnTowSources(
+              srcUriStr = srcUriStr,
+              cacheFilePath = cacheFilePath,
+              fileMetadata = fileMetadata,
+              executeGenerate = generateFunction,
+          )
         } catch (e: CancellationException) {
-            throw e
+          throw e
         } catch (e: Exception) {
-            Timber.w(e, "Failed to generate thumbnail on $messageId, type=$messageType")
-            return GenerateThumbnailStageResult.Failure(
-                GenerateThumbnailStageFailureType.Generate, true
-            )
+          Timber.w(e, "Failed to generate thumbnail on $messageId, type=$messageType")
+          return GenerateThumbnailStageResult.Failure(
+              GenerateThumbnailStageFailureType.Generate,
+              true,
+          )
         }
-        val thumbnailFilename = try {
-            saveThumbnail(
-                userId = userId, topicId = topicId,
-                messageTimestampMs = messageTimestampMs,
-                content = thumbnailBytes,
-            )
+    val thumbnailFilename =
+        try {
+          saveThumbnail(
+              userId = userId,
+              topicId = topicId,
+              messageTimestampMs = messageTimestampMs,
+              content = thumbnailBytes,
+          )
         } catch (e: CancellationException) {
-            throw e
+          throw e
         } catch (e: Exception) {
-            Timber.w(e, "Failed to save thumbnail on $messageId, $messageType")
-            return GenerateThumbnailStageResult.Failure(
-                GenerateThumbnailStageFailureType.SaveFile, true
-            )
+          Timber.w(e, "Failed to save thumbnail on $messageId, $messageType")
+          return GenerateThumbnailStageResult.Failure(
+              GenerateThumbnailStageFailureType.SaveFile,
+              true,
+          )
         }
-        val isSetSuccess = try {
-            messageRepository.setAttachmentMessageThumbnailFilename(
-                filename = thumbnailFilename, messageId = messageId
-            )
+    val isSetSuccess =
+        try {
+          messageRepository.setAttachmentMessageThumbnailFilename(
+              filename = thumbnailFilename,
+              messageId = messageId,
+          )
         } catch (e: CancellationException) {
-            throw e
+          throw e
         } catch (e: Exception) {
-            Timber.w(e, "Failed to set thumbnail file name to db: $messageId, $messageType")
-            return GenerateThumbnailStageResult.Failure(
-                GenerateThumbnailStageFailureType.SetFilenameToDb, true
-            )
+          Timber.w(e, "Failed to set thumbnail file name to db: $messageId, $messageType")
+          return GenerateThumbnailStageResult.Failure(
+              GenerateThumbnailStageFailureType.SetFilenameToDb,
+              true,
+          )
         }
-        return when (isSetSuccess) {
-            false -> GenerateThumbnailStageResult.Failure(
-                GenerateThumbnailStageFailureType.UpdateDbIllegalState, false
-            )
+    return when (isSetSuccess) {
+      false ->
+          GenerateThumbnailStageResult.Failure(
+              GenerateThumbnailStageFailureType.UpdateDbIllegalState,
+              false,
+          )
 
-            true -> GenerateThumbnailStageResult.Success
-        }
+      true -> GenerateThumbnailStageResult.Success
     }
+  }
 
-    /**
-     * @throws Exception
-     */
-    private suspend fun generateImageThumbnail(
-        input: AbsolutePathModel,
-        fileMetadata: FileMetadataUnion,
-    ): ByteArray {
-        val request = buildThumbnailRequest(input, fileMetadata)
-        return thumbnailService.generateImageThumbnail(request)
-    }
+  /** @throws Exception */
+  private suspend fun generateImageThumbnail(
+      input: AbsolutePathModel,
+      fileMetadata: FileMetadataUnion,
+  ): ByteArray {
+    val request = buildThumbnailRequest(input, fileMetadata)
+    return thumbnailService.generateImageThumbnail(request)
+  }
 
-    /**
-     * @throws Exception
-     */
-    private suspend fun generateVideoThumbnail(
-        input: AbsolutePathModel,
-        fileMetadata: FileMetadataUnion,
-    ): ByteArray {
-        val request = buildThumbnailRequest(input, fileMetadata)
-        return thumbnailService.generateVideoThumbnail(request)
-    }
+  /** @throws Exception */
+  private suspend fun generateVideoThumbnail(
+      input: AbsolutePathModel,
+      fileMetadata: FileMetadataUnion,
+  ): ByteArray {
+    val request = buildThumbnailRequest(input, fileMetadata)
+    return thumbnailService.generateVideoThumbnail(request)
+  }
 
-    /**
-     * Currently the request is the same
-     */
-    private fun buildThumbnailRequest(
-        input: AbsolutePathModel,
-        fileMetadata: FileMetadataUnion,
-    ): ThumbnailGenerateRequest {
-        val inputWidth = requireNotNull(fileMetadata.width) { "width in metadata is null" }
-        val inputHeight = requireNotNull(fileMetadata.height) { "height in metadata is null" }
-        val scale = ThumbnailScale.ScaleToFit(
+  /** Currently the request is the same */
+  private fun buildThumbnailRequest(
+      input: AbsolutePathModel,
+      fileMetadata: FileMetadataUnion,
+  ): ThumbnailGenerateRequest {
+    val inputWidth = requireNotNull(fileMetadata.width) { "width in metadata is null" }
+    val inputHeight = requireNotNull(fileMetadata.height) { "height in metadata is null" }
+    val scale =
+        ThumbnailScale.ScaleToFit(
             TIMELINE_THUMBNAIL_MAX_WIDTH,
-            TIMELINE_THUMBNAIL_MAX_HEIGHT
+            TIMELINE_THUMBNAIL_MAX_HEIGHT,
         )
-        val quality = TIMELINE_THUMBNAIL_COMPRESS_QUALITY
-        val request = ThumbnailGenerateRequest(
+    val quality = TIMELINE_THUMBNAIL_COMPRESS_QUALITY
+    val request =
+        ThumbnailGenerateRequest(
             input = input,
             inputWidth = inputWidth,
             inputHeight = inputHeight,
@@ -147,71 +155,75 @@ class GenerateThumbnailUseCase @Inject constructor(
             quality = quality,
             format = thumbnailFormat,
         )
-        return request
-    }
+    return request
+  }
 
-    /**
-     * @throws Exception
-     * @throws CancellationException
-     */
-    private suspend fun generateOnTowSources(
-        srcUriStr: UriStr?,
-        cacheFilePath: StoragePathModel.InternalOnly,
-        fileMetadata: FileMetadataUnion,
-        executeGenerate: suspend (AbsolutePathModel, FileMetadataUnion) -> ByteArray,
-    ): ByteArray {
-        // First try source, continue if none or fail
-        if (srcUriStr != null) {
-            try {
-                return executeGenerate(AbsolutePathModel.UriStrModel(srcUriStr), fileMetadata)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.w(e, "Generate Thumbnail failed on source uri: $srcUriStr")
-                // go to next
-            }
-        }
-        // then try cache as input, throw when fail
-        val cacheAbsolutePath =
-            storageRepository.resolveStoragePathToAbsolutePathsWithoutCreating(cacheFilePath)
-                .last()
-        return executeGenerate(cacheAbsolutePath, fileMetadata)
+  /**
+   * @throws Exception
+   * @throws CancellationException
+   */
+  private suspend fun generateOnTowSources(
+      srcUriStr: UriStr?,
+      cacheFilePath: StoragePathModel.InternalOnly,
+      fileMetadata: FileMetadataUnion,
+      executeGenerate: suspend (AbsolutePathModel, FileMetadataUnion) -> ByteArray,
+  ): ByteArray {
+    // First try source, continue if none or fail
+    if (srcUriStr != null) {
+      try {
+        return executeGenerate(AbsolutePathModel.UriStrModel(srcUriStr), fileMetadata)
+      } catch (e: CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        Timber.w(e, "Generate Thumbnail failed on source uri: $srcUriStr")
+        // go to next
+      }
     }
+    // then try cache as input, throw when fail
+    val cacheAbsolutePath =
+        storageRepository.resolveStoragePathToAbsolutePathsWithoutCreating(cacheFilePath).last()
+    return executeGenerate(cacheAbsolutePath, fileMetadata)
+  }
 
-    /**
-     * @return filename
-     * @throws Exception from writeFile
-     */
-    private suspend fun saveThumbnail(
-        userId: UserId,
-        topicId: TopicId,
-        messageTimestampMs: Long,
-        content: ByteArray,
-    ): String {
-        val filename = storagePathUseCase.buildUserFriendlyTimestampedFilename(
+  /**
+   * @return filename
+   * @throws Exception from writeFile
+   */
+  private suspend fun saveThumbnail(
+      userId: UserId,
+      topicId: TopicId,
+      messageTimestampMs: Long,
+      content: ByteArray,
+  ): String {
+    val filename =
+        storagePathUseCase.buildUserFriendlyTimestampedFilename(
             timestampMs = messageTimestampMs,
-            originalFilename = "thumbnail${thumbnailFormat.filenameSuffix}"
+            originalFilename = "thumbnail${thumbnailFormat.filenameSuffix}",
         )
-        val path = storagePathUseCase.buildMessageThumbnailStoragePath(
+    val path =
+        storagePathUseCase.buildMessageThumbnailStoragePath(
             userId = userId,
             topicId = topicId,
             timestampMs = messageTimestampMs,
             filename = filename,
         )
-        storageRepository.writeFile(path, content = content, mimeType = thumbnailFormat.mimeType)
-        return filename
-    }
+    storageRepository.writeFile(path, content = content, mimeType = thumbnailFormat.mimeType)
+    return filename
+  }
 }
 
-
 enum class GenerateThumbnailStageFailureType {
-    Generate, SaveFile, SetFilenameToDb, UpdateDbIllegalState
+  Generate,
+  SaveFile,
+  SetFilenameToDb,
+  UpdateDbIllegalState,
 }
 
 sealed interface GenerateThumbnailStageResult {
-    data object Success : GenerateThumbnailStageResult
-    data object Skip : GenerateThumbnailStageResult
-    data class Failure(val type: GenerateThumbnailStageFailureType, val retryable: Boolean) :
-        GenerateThumbnailStageResult
-}
+  data object Success : GenerateThumbnailStageResult
 
+  data object Skip : GenerateThumbnailStageResult
+
+  data class Failure(val type: GenerateThumbnailStageFailureType, val retryable: Boolean) :
+      GenerateThumbnailStageResult
+}

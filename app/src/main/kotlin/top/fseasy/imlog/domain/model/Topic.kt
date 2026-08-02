@@ -1,27 +1,25 @@
-package top.fseasy.imlog.domain.model;
+package top.fseasy.imlog.domain.model
 
 import kotlinx.serialization.Serializable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
-import kotlin.jvm.JvmInline
 
 @JvmInline
 @Serializable
 value class TopicId(val value: String) {
-    init {
-        require(value.startsWith(PREFIX)) { "Invalid TopicId prefix" }
-    }
+  init {
+    require(value.startsWith(PREFIX)) { "Invalid TopicId prefix" }
+  }
 
-    companion object {
-        private const val PREFIX = "top_"
+  companion object {
+    private const val PREFIX = "top_"
 
-        @OptIn(ExperimentalUuidApi::class)
-        fun random(): TopicId {
-            val uuid = Uuid.generateV7()
-                .toHexString()
-            return TopicId("${PREFIX}${uuid}")
-        }
+    @OptIn(ExperimentalUuidApi::class)
+    fun random(): TopicId {
+      val uuid = Uuid.generateV7().toHexString()
+      return TopicId("${PREFIX}${uuid}")
     }
+  }
 }
 
 data class Topic(
@@ -34,9 +32,7 @@ data class Topic(
     val attributesUpdatedAt: Long,
 )
 
-/**
- * Element to show in Home screen topic lists.
- */
+/** Element to show in Home screen topic lists. */
 data class HomeTopic(
     val id: TopicId,
     val name: String,
@@ -50,18 +46,19 @@ data class HomeTopic(
 )
 
 enum class TopicMemberRole(val value: String) {
-    Admin("admin"), Logger("logger"), Watcher("watcher");
+  Admin("admin"),
+  Logger("logger"),
+  Watcher("watcher");
 
-    companion object {
-        private val valueMap = entries.associateBy { it.value }
-        fun fromValue(value: String): TopicMemberRole? = valueMap[value]
+  companion object {
+    private val valueMap = entries.associateBy { it.value }
 
-        /**
-         * Default is local logging => admin
-         */
-        val default: TopicMemberRole
-            get() = TopicMemberRole.Admin
-    }
+    fun fromValue(value: String): TopicMemberRole? = valueMap[value]
+
+    /** Default is local logging => admin */
+    val default: TopicMemberRole
+      get() = TopicMemberRole.Admin
+  }
 }
 
 data class TopicMember(

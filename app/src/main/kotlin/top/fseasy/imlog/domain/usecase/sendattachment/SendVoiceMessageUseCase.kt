@@ -6,29 +6,36 @@ import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageFailureType
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingStageFailureType
 import javax.inject.Inject
 
-class SendVoiceMessageUseCase @Inject constructor(dependencies: SendCacheFileUseCaseBaseDependencies) :
+class SendVoiceMessageUseCase
+@Inject
+constructor(dependencies: SendCacheFileUseCaseBaseDependencies) :
     SendCacheFileUseCaseBase(dependencies) {
-    override val messageTypeFromSendAction: MessageType
-        get() = MessageType.Voice
+  override val messageTypeFromSendAction: MessageType
+    get() = MessageType.Voice
 
-    override val failureTypeMapper: ProcessingFailureTypeMapper
-        get() = voiceProcessingFailureTypeMapper
+  override val failureTypeMapper: ProcessingFailureTypeMapper
+    get() = voiceProcessingFailureTypeMapper
 }
 
 internal val voiceProcessingFailureTypeMapper =
     ProcessingFailureTypeMapper(
         mapCacheCopyFailure = { error("No cache copy stage in voice processing") },
         mapSharedStorageCopyFailure = { copyFailureType ->
-            when (copyFailureType) {
-                CopyStageFailureType.CopyFile -> VoiceMessageProcessingErrorStage.CopyToSharedStorage
-                CopyStageFailureType.SaveFilenameToDb -> VoiceMessageProcessingErrorStage.SetRawFilenameToDb
-                CopyStageFailureType.UpdateDbIllegalState -> VoiceMessageProcessingErrorStage.IllegalState
-            }
+          when (copyFailureType) {
+            CopyStageFailureType.CopyFile -> VoiceMessageProcessingErrorStage.CopyToSharedStorage
+            CopyStageFailureType.SaveFilenameToDb ->
+                VoiceMessageProcessingErrorStage.SetRawFilenameToDb
+            CopyStageFailureType.UpdateDbIllegalState ->
+                VoiceMessageProcessingErrorStage.IllegalState
+          }
         },
         mapThumbnailFailure = { error("No generate-thumbnail stage in voice processing") },
         mapFinishTaskFailure = { finishFailureType ->
-            when (finishFailureType) {
-                FinishProcessingStageFailureType.DeleteCacheFile -> VoiceMessageProcessingErrorStage.DeleteInternalFileCache
-                FinishProcessingStageFailureType.DeleteTaskStateFromDb -> VoiceMessageProcessingErrorStage.DeleteTaskStateFromDb
-            }
-        })
+          when (finishFailureType) {
+            FinishProcessingStageFailureType.DeleteCacheFile ->
+                VoiceMessageProcessingErrorStage.DeleteInternalFileCache
+            FinishProcessingStageFailureType.DeleteTaskStateFromDb ->
+                VoiceMessageProcessingErrorStage.DeleteTaskStateFromDb
+          }
+        },
+    )

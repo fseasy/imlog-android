@@ -19,28 +19,28 @@ import top.fseasy.imlog.domain.repository.UserRepository
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
 
-    @Binds
-    abstract fun bindTopicRepository(
-        topicRepositoryImpl: TopicRepositoryImpl,
-    ): TopicRepository
+  @Binds
+  abstract fun bindTopicRepository(
+      topicRepositoryImpl: TopicRepositoryImpl,
+  ): TopicRepository
 
-    @Binds
-    abstract fun bindUserRepository(
-        userRepositoryImpl: UserRepositoryImpl,
-    ): UserRepository
+  @Binds
+  abstract fun bindUserRepository(
+      userRepositoryImpl: UserRepositoryImpl,
+  ): UserRepository
 
-    @Binds
-    abstract fun bindMessageRepository(
-        messageRepositoryImpl: MessageRepositoryImpl,
-    ): MessageRepository
+  @Binds
+  abstract fun bindMessageRepository(
+      messageRepositoryImpl: MessageRepositoryImpl,
+  ): MessageRepository
 
-    @Binds
-    abstract fun bindAppStateRepository(
-        appStateRepositoryImpl: AppStateRepositoryImpl,
-    ): AppStateRepository
+  @Binds
+  abstract fun bindAppStateRepository(
+      appStateRepositoryImpl: AppStateRepositoryImpl,
+  ): AppStateRepository
 
-    @Binds
-    abstract fun bindResourceProvider(
-        resourceProviderImpl: ResourceProviderImpl,
-    ): ResourceProvider
+  @Binds
+  abstract fun bindResourceProvider(
+      resourceProviderImpl: ResourceProviderImpl,
+  ): ResourceProvider
 }

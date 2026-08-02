@@ -17,18 +17,18 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
-    @Provides
-    @Singleton
-    fun provideSqlDelightDb(@ApplicationContext context: Context): SqlDelightDb {
-        return createSqlDelightDb(context)
-    }
+  @Provides
+  @Singleton
+  fun provideSqlDelightDb(@ApplicationContext context: Context): SqlDelightDb {
+    return createSqlDelightDb(context)
+  }
 
-    @Provides
-    @Singleton
-    fun provideTransactionRunner(
-        database: SqlDelightDb,
-        dispatcher: CoroutineDispatcher,
-    ): DbRunner {
-        return SqlDelightRunner(database, dispatcher)
-    }
+  @Provides
+  @Singleton
+  fun provideTransactionRunner(
+      database: SqlDelightDb,
+      dispatcher: CoroutineDispatcher,
+  ): DbRunner {
+    return SqlDelightRunner(database, dispatcher)
+  }
 }

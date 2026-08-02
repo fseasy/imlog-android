@@ -19,22 +19,22 @@ fun AppInternalErrorContent(
     isRetryLoading: Boolean = false,
     isRetryEnabled: Boolean = true,
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            text = "${stringResource(R.string.internal_error_head)}: $errorMessage",
-            style = MaterialTheme.typography.bodyMedium
-        )
-        if (onRetry != null) {
-            AppTextButton(
-                onClick = onRetry,
-                text = stringResource(R.string.btn_retry),
-                enabled = isRetryEnabled,
-                isLoading = isRetryLoading
-            )
-        }
+  Column(
+      modifier = modifier,
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    Text(
+        text = "${stringResource(R.string.internal_error_head)}: $errorMessage",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    if (onRetry != null) {
+      AppTextButton(
+          onClick = onRetry,
+          text = stringResource(R.string.btn_retry),
+          enabled = isRetryEnabled,
+          isLoading = isRetryLoading,
+      )
     }
+  }
 }

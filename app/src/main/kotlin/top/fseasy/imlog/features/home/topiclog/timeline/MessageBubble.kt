@@ -42,220 +42,234 @@ import coil3.compose.AsyncImage
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.ResourceModel
-import top.fseasy.imlog.features.home.MessageUiState
 import top.fseasy.imlog.domain.util.secondsToMmSsFormat
+import top.fseasy.imlog.features.home.MessageUiState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-
 @Composable
 fun MessageBubble(
-    messageUiState: MessageUiState, isOwnMessage: Boolean, onCopy: () -> Unit,
+    messageUiState: MessageUiState,
+    isOwnMessage: Boolean,
+    onCopy: () -> Unit,
 ) {
-    val dateFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+  val dateFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isOwnMessage) Arrangement.End else Arrangement.Start
+  Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = if (isOwnMessage) Arrangement.End else Arrangement.Start,
+  ) {
+    Card(
+        modifier = Modifier.widthIn(max = 280.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    if (isOwnMessage) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceVariant
+            ),
     ) {
-        Card(
-            modifier = Modifier.widthIn(max = 280.dp), colors = CardDefaults.cardColors(
-                containerColor = if (isOwnMessage) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            val message = messageUiState.message
-            when (message.type) {
-                MessageType.Text, null -> {
-                    Text(
-                        text = message.content ?: "",
-                        modifier = Modifier.padding(12.dp),
-                        color = if (isOwnMessage) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                MessageType.Voice -> {
-                    AudioPlayer(
-                        resourceModel = messageUiState.thumbnailModel,
-                        duration = message.duration ?: 0,
-                        isOwnMessage = isOwnMessage
-                    )
-                }
-
-                MessageType.Image -> {
-                    AsyncImage(
-                        model = messageUiState.thumbnailModel,
-                        contentDescription = "Image",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { },
-                        contentScale = ContentScale.FillWidth
-                    )
-                }
-
-                MessageType.Video -> {
-                    VideoPlayer(
-                        resourceModel = messageUiState.thumbnailModel,
-                        duration = message.duration ?: 0,
-                        isOwnMessage = isOwnMessage
-                    )
-                }
-
-                MessageType.Audio -> {
-                    AudioPlayer(
-                        resourceModel = messageUiState.thumbnailModel,
-                        duration = message.duration ?: 0,
-                        isOwnMessage = isOwnMessage
-                    )
-                }
-
-                MessageType.GenericFile -> {
-                    Text(
-                        text = "File: ${message.originalFilename}",
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
-            Text(
-                text = dateFormat.format(Date(message.createdAt)),
-                modifier = Modifier
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .align(Alignment.End),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (isOwnMessage) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
-                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
+      val message = messageUiState.message
+      when (message.type) {
+        MessageType.Text,
+        null -> {
+          Text(
+              text = message.content ?: "",
+              modifier = Modifier.padding(12.dp),
+              color =
+                  if (isOwnMessage) MaterialTheme.colorScheme.onPrimary
+                  else MaterialTheme.colorScheme.onSurfaceVariant,
+          )
         }
+
+        MessageType.Voice -> {
+          AudioPlayer(
+              resourceModel = messageUiState.thumbnailModel,
+              duration = message.duration ?: 0,
+              isOwnMessage = isOwnMessage,
+          )
+        }
+
+        MessageType.Image -> {
+          AsyncImage(
+              model = messageUiState.thumbnailModel,
+              contentDescription = "Image",
+              modifier = Modifier.fillMaxWidth().clickable {},
+              contentScale = ContentScale.FillWidth,
+          )
+        }
+
+        MessageType.Video -> {
+          VideoPlayer(
+              resourceModel = messageUiState.thumbnailModel,
+              duration = message.duration ?: 0,
+              isOwnMessage = isOwnMessage,
+          )
+        }
+
+        MessageType.Audio -> {
+          AudioPlayer(
+              resourceModel = messageUiState.thumbnailModel,
+              duration = message.duration ?: 0,
+              isOwnMessage = isOwnMessage,
+          )
+        }
+
+        MessageType.GenericFile -> {
+          Text(
+              text = "File: ${message.originalFilename}",
+              modifier = Modifier.padding(12.dp),
+          )
+        }
+      }
+      Text(
+          text = dateFormat.format(Date(message.createdAt)),
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp).align(Alignment.End),
+          style = MaterialTheme.typography.labelSmall,
+          color =
+              if (isOwnMessage) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+              else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+      )
     }
+  }
 }
 
 @Composable
 fun VideoPlayer(
-    resourceModel: ResourceModel?, duration: Long, isOwnMessage: Boolean,
+    resourceModel: ResourceModel?,
+    duration: Long,
+    isOwnMessage: Boolean,
 ) {
-    var isPlaying by remember { mutableStateOf(false) }
-    var currentPosition by remember { mutableFloatStateOf(0f) }
-    var playbackSpeed by remember { mutableFloatStateOf(1f) }
+  var isPlaying by remember { mutableStateOf(false) }
+  var currentPosition by remember { mutableFloatStateOf(0f) }
+  var playbackSpeed by remember { mutableFloatStateOf(1f) }
 
-    Column(modifier = Modifier.padding(8.dp)) {
-        if (resourceModel != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(150.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black), contentAlignment = Alignment.Center
-            ) {
-                if (isPlaying) {
-                    // Video playback UI would go here with Media3
-                    Icon(
-                        Icons.Default.PlayArrow,
-                        contentDescription = "Playing",
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
-                    )
-                } else {
-                    IconButton(
-                        onClick = { isPlaying = true },
-                        modifier = Modifier
-                            .size(64.dp)
-                            .background(Color.White.copy(alpha = 0.3f), CircleShape)
-                    ) {
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = "Play",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                }
-            }
+  Column(modifier = Modifier.padding(8.dp)) {
+    if (resourceModel != null) {
+      Box(
+          modifier =
+              Modifier.fillMaxWidth()
+                  .height(150.dp)
+                  .clip(RoundedCornerShape(8.dp))
+                  .background(Color.Black),
+          contentAlignment = Alignment.Center,
+      ) {
+        if (isPlaying) {
+          // Video playback UI would go here with Media3
+          Icon(
+              Icons.Default.PlayArrow,
+              contentDescription = "Playing",
+              tint = Color.White,
+              modifier = Modifier.size(48.dp),
+          )
+        } else {
+          IconButton(
+              onClick = { isPlaying = true },
+              modifier =
+                  Modifier.size(64.dp).background(Color.White.copy(alpha = 0.3f), CircleShape),
+          ) {
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = "Play",
+                tint = Color.White,
+                modifier = Modifier.size(32.dp),
+            )
+          }
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = duration.secondsToMmSsFormat(), style = MaterialTheme.typography.labelSmall
-        )
-        Slider(
-            value = currentPosition,
-            onValueChange = { currentPosition = it },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { isPlaying = !isPlaying }) {
-                when (isPlaying) {
-                    true -> Icon(painterResource(R.drawable.icon_pause), "Pause")
-                    false -> Icon(Icons.Default.PlayArrow, "Play")
-                }
-            }
-            IconButton(onClick = {
-                playbackSpeed = when (playbackSpeed) {
-                    1f -> 1.5f
-                    1.5f -> 2f
-                    else -> 1f
-                }
-            }) {
-                Text("${playbackSpeed}x", style = MaterialTheme.typography.labelSmall)
-            }
-        }
+      }
     }
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        text = duration.secondsToMmSsFormat(),
+        style = MaterialTheme.typography.labelSmall,
+    )
+    Slider(
+        value = currentPosition,
+        onValueChange = { currentPosition = it },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+      IconButton(onClick = { isPlaying = !isPlaying }) {
+        when (isPlaying) {
+          true -> Icon(painterResource(R.drawable.icon_pause), "Pause")
+          false -> Icon(Icons.Default.PlayArrow, "Play")
+        }
+      }
+      IconButton(
+          onClick = {
+            playbackSpeed =
+                when (playbackSpeed) {
+                  1f -> 1.5f
+                  1.5f -> 2f
+                  else -> 1f
+                }
+          }
+      ) {
+        Text("${playbackSpeed}x", style = MaterialTheme.typography.labelSmall)
+      }
+    }
+  }
 }
 
 @Composable
 fun AudioPlayer(
-    resourceModel: ResourceModel?, duration: Long, isOwnMessage: Boolean,
+    resourceModel: ResourceModel?,
+    duration: Long,
+    isOwnMessage: Boolean,
 ) {
-    var isPlaying by remember { mutableStateOf(false) }
-    var currentPosition by remember { mutableFloatStateOf(0f) }
-    var playbackSpeed by remember { mutableFloatStateOf(1f) }
+  var isPlaying by remember { mutableStateOf(false) }
+  var currentPosition by remember { mutableFloatStateOf(0f) }
+  var playbackSpeed by remember { mutableFloatStateOf(1f) }
 
-    Column(modifier = Modifier.padding(8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = { isPlaying = !isPlaying }) {
-                when (isPlaying) {
-                    true -> Icon(painterResource(R.drawable.icon_pause), "Pause")
-                    false -> Icon(Icons.Default.PlayArrow, "Play")
-                }
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Slider(
-                    value = currentPosition,
-                    onValueChange = { currentPosition = it },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = (currentPosition * duration).toLong()
-                            .secondsToMmSsFormat(),
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                    Text(
-                        text = duration.secondsToMmSsFormat(),
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
+  Column(modifier = Modifier.padding(8.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+      IconButton(onClick = { isPlaying = !isPlaying }) {
+        when (isPlaying) {
+          true -> Icon(painterResource(R.drawable.icon_pause), "Pause")
+          false -> Icon(Icons.Default.PlayArrow, "Play")
         }
-        TextButton(onClick = {
-            playbackSpeed = when (playbackSpeed) {
+      }
+      Column(modifier = Modifier.weight(1f)) {
+        Slider(
+            value = currentPosition,
+            onValueChange = { currentPosition = it },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+          Text(
+              text = (currentPosition * duration).toLong().secondsToMmSsFormat(),
+              style = MaterialTheme.typography.labelSmall,
+          )
+          Text(
+              text = duration.secondsToMmSsFormat(),
+              style = MaterialTheme.typography.labelSmall,
+          )
+        }
+      }
+    }
+    TextButton(
+        onClick = {
+          playbackSpeed =
+              when (playbackSpeed) {
                 1f -> 1.5f
                 1.5f -> 2f
                 else -> 1f
-            }
-        }) {
-            Icon(painterResource(R.drawable.icon_speed), null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("${playbackSpeed}x")
+              }
         }
+    ) {
+      Icon(painterResource(R.drawable.icon_speed), null, modifier = Modifier.size(16.dp))
+      Spacer(modifier = Modifier.width(4.dp))
+      Text("${playbackSpeed}x")
     }
+  }
 }

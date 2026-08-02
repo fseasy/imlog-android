@@ -16,17 +16,19 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class AppDataStore @Inject constructor(
+class AppDataStore
+@Inject
+constructor(
     private val dataStore: DataStore<Preferences>,
 ) {
-    private object Keys {
-        val LAST_RUN_VERSION_CODE = intPreferencesKey("last_run_version_code")
-    }
+  private object Keys {
+    val LAST_RUN_VERSION_CODE = intPreferencesKey("last_run_version_code")
+  }
 
-
-    val lastRunVersionCode: Flow<Int> = dataStore.data.map { prefs ->
+  val lastRunVersionCode: Flow<Int> =
+      dataStore.data.map { prefs ->
         prefs[Keys.LAST_RUN_VERSION_CODE] ?: 1
-    }
+      }
 }
 
 // preferencesDataStore 必须依赖 Context （依赖 context.filesDir）.
@@ -36,9 +38,9 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "im
 @Module
 @InstallIn(SingletonComponent::class)
 object DataStoreModule {
-    @Provides
-    @Singleton
-    fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
-        return context.dataStore
-    }
+  @Provides
+  @Singleton
+  fun provideDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
+    return context.dataStore
+  }
 }

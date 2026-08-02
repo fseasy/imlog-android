@@ -11,103 +11,102 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 
-
 /**
- * Use this type to specify the attachment file source when insert initial file message.
- * WHY don't reuse the AbsolutePathModel?? -> To ensure the file follow the storage path rule.
+ * Use this type to specify the attachment file source when insert initial file message. WHY don't
+ * reuse the AbsolutePathModel?? -> To ensure the file follow the storage path rule.
  */
 sealed interface MessageAttachmentSource {
-    data class FromUriStr(val uriStr: UriStr) : MessageAttachmentSource
+  data class FromUriStr(val uriStr: UriStr) : MessageAttachmentSource
 
-    /***
-     * The cache file follows the Storage Path rule, so just pass the filename.
-     * Mainly used for recording.
-     * Use this to restrict the api.
-     */
-    data class FromMessageCache(val filename: String) : MessageAttachmentSource
+  /**
+   * The cache file follows the Storage Path rule, so just pass the filename. Mainly used for
+   * recording. Use this to restrict the api.
+   */
+  data class FromMessageCache(val filename: String) : MessageAttachmentSource
 }
 
 interface MessageRepository {
-    /***
-     * If exception, return flow<null>
-     */
-    fun observeTopicMessagesOrNull(topicId: TopicId): Flow<List<Message>?>
-    fun observeStatistics(senderId: UserId): Flow<Statistics>
+  /** If exception, return flow<null> */
+  fun observeTopicMessagesOrNull(topicId: TopicId): Flow<List<Message>?>
 
+  fun observeStatistics(senderId: UserId): Flow<Statistics>
 
-    suspend fun saveTextMessage(message: Message): Unit
-    suspend fun delete(messageId: MessageId): Boolean
+  suspend fun saveTextMessage(message: Message): Unit
 
-    // ==============
-    // File Message related Apis.
-    // ==============
-    /***
-     * SYNC create an initial file message (without raw-file and thumbnail), insert to db and
-     * return message id
-     *
-     * WRAP it in IO threads!
-     */
-    fun syncInsertInitialAttachmentMessage(
-        topicId: TopicId,
-        senderId: UserId,
-        type: MessageType,
-        timestampMs: Long,
-        fileMetadata: FileMetadataUnion,
-    ): MessageId
+  suspend fun delete(messageId: MessageId): Boolean
 
-    fun syncInsertInitialAttachmentProcessingTaskState(
-        messageId: MessageId,
-        fileSource: MessageAttachmentSource,
-        taskStartTime: Long,
-    )
+  // ==============
+  // File Message related Apis.
+  // ==============
+  /**
+   * SYNC create an initial file message (without raw-file and thumbnail), insert to db and return
+   * message id
+   *
+   * WRAP it in IO threads!
+   */
+  fun syncInsertInitialAttachmentMessage(
+      topicId: TopicId,
+      senderId: UserId,
+      type: MessageType,
+      timestampMs: Long,
+      fileMetadata: FileMetadataUnion,
+  ): MessageId
 
-    /**
-     * run IN IO.
-     *
-     * @param filename set to null to delete the filed in db
-     * @throws Throwable
-     * @return if set success (based on affected rows)
-     */
-    suspend fun setAttachmentProcessingInternalCacheFilename(
-        messageId: MessageId,
-        filename: String?,
-    ): Boolean
+  fun syncInsertInitialAttachmentProcessingTaskState(
+      messageId: MessageId,
+      fileSource: MessageAttachmentSource,
+      taskStartTime: Long,
+  )
 
-    /**
-     * run IN IO.
-     *
-     * @param filename set to null to delete the filed in db
-     * @throws Throwable
-     * @return if set success (based on affected rows)
-     */
-    suspend fun setAttachmentMessageRawFilename(
-        messageId: MessageId,
-        filename: String?,
-    ): Boolean
+  /**
+   * run IN IO.
+   *
+   * @param filename set to null to delete the filed in db
+   * @return if set success (based on affected rows)
+   * @throws Throwable
+   */
+  suspend fun setAttachmentProcessingInternalCacheFilename(
+      messageId: MessageId,
+      filename: String?,
+  ): Boolean
 
-    /**
-     * run IN IO.
-     * @param filename set to null to delete the filed in db
-     * @throws Throwable
-     * @return if set success (based on affected rows)
-     */
-    suspend fun setAttachmentMessageThumbnailFilename(
-        messageId: MessageId,
-        filename: String?,
-    ): Boolean
+  /**
+   * run IN IO.
+   *
+   * @param filename set to null to delete the filed in db
+   * @return if set success (based on affected rows)
+   * @throws Throwable
+   */
+  suspend fun setAttachmentMessageRawFilename(
+      messageId: MessageId,
+      filename: String?,
+  ): Boolean
 
-    /**
-     * run IN IO. update message_file_processing_task_states db.
-     * @throws Throwable
-     * @return if set success (based on affected rows)
-     */
-    suspend fun setAttachmentProcessingTaskFail(
-        messageId: MessageId,
-        stage: MessageProcessingErrorStage,
-        errorUserRetryable: Boolean,
-    ): Boolean
+  /**
+   * run IN IO.
+   *
+   * @param filename set to null to delete the filed in db
+   * @return if set success (based on affected rows)
+   * @throws Throwable
+   */
+  suspend fun setAttachmentMessageThumbnailFilename(
+      messageId: MessageId,
+      filename: String?,
+  ): Boolean
 
-    suspend fun deleteAttachmentProcessingTaskState(
-        messageId: MessageId,
-    ): Boolean
+  /**
+   * run IN IO. update message_file_processing_task_states db.
+   *
+   * @return if set success (based on affected rows)
+   * @throws Throwable
+   */
+  suspend fun setAttachmentProcessingTaskFail(
+      messageId: MessageId,
+      stage: MessageProcessingErrorStage,
+      errorUserRetryable: Boolean,
+  ): Boolean
+
+  suspend fun deleteAttachmentProcessingTaskState(
+      messageId: MessageId,
+  ): Boolean
 }

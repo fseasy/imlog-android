@@ -5,13 +5,12 @@ import java.io.File
 import java.nio.file.Paths
 import kotlin.io.path.absolutePathString
 
-/**
- * To java.io.File
- */
+/** To java.io.File */
 fun AppPath.toFile() = File(value)
 
 /**
  * To nio path
+ *
  * @throws InvalidPathException if the string can't be converted to Path.
  */
 fun AppPath.toNioPath() = Paths.get(value)

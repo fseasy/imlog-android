@@ -1,6 +1,5 @@
 package top.fseasy.imlog.domain.model
 
-
 data class AppInitData(
     val userId: UserId,
     val storageUriSelected: Boolean,

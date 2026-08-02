@@ -10,47 +10,51 @@ import top.fseasy.imlog.sqldelight.Topic_message_state.Adapter as TopicMessageSt
 import top.fseasy.imlog.sqldelight.Topic_preference.Adapter as TopicPreferenceAdapter
 import top.fseasy.imlog.sqldelight.Topics.Adapter as TopicsAdapter
 
-
-/**
- * It will be provided as singleton by Hilt Singleton Binds. see `di.DatabseModel`
- */
+/** It will be provided as singleton by Hilt Singleton Binds. see `di.DatabseModel` */
 fun createSqlDelightDb(context: Context): SqlDelightDb {
-    val driver = AndroidSqliteDriver(
-        schema = SqlDelightDb.Schema,
-        context = context,
-        name = "app.db",
-        // Enable foreign_keys to enable cascade delete
-        callback = object : AndroidSqliteDriver.Callback(SqlDelightDb.Schema) {
-            override fun onOpen(db: SupportSQLiteDatabase) {
-                super.onOpen(db)
-                // Enable foreign keys
-                db.setForeignKeyConstraintsEnabled(true)
-            }
-        }
-    )
-    return SqlDelightDb(
-        driver = driver,
-        messagesAdapter = MessageAdapter(
-            quote_messageAdapter = quoteMessageAdapter,
-        ),
-        topic_message_stateAdapter = TopicMessageStateAdapter(
-            latest_message_previewAdapter = messagePreviewAdapter,
-            draftAdapter = messageDraftAdapter,
-            topic_idAdapter = topicIdAdapter,
-            user_idAdapter = userIdAdapter,
-        ),
-        topic_membersAdapter = TopicMembersAdapter(
-            topic_idAdapter = topicIdAdapter,
-            user_idAdapter = userIdAdapter,
-            roleAdapter = topicMemberRoleAdapter
-        ),
-        topic_preferenceAdapter = TopicPreferenceAdapter(
-            topic_idAdapter = topicIdAdapter,
-            user_idAdapter = userIdAdapter
-        ),
-        topicsAdapter = TopicsAdapter(
-            idAdapter = topicIdAdapter,
-            creator_idAdapter = userIdAdapter
-        ),
-    )
+  val driver =
+      AndroidSqliteDriver(
+          schema = SqlDelightDb.Schema,
+          context = context,
+          name = "app.db",
+          // Enable foreign_keys to enable cascade delete
+          callback =
+              object : AndroidSqliteDriver.Callback(SqlDelightDb.Schema) {
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                  super.onOpen(db)
+                  // Enable foreign keys
+                  db.setForeignKeyConstraintsEnabled(true)
+                }
+              },
+      )
+  return SqlDelightDb(
+      driver = driver,
+      messagesAdapter =
+          MessageAdapter(
+              quote_messageAdapter = quoteMessageAdapter,
+          ),
+      topic_message_stateAdapter =
+          TopicMessageStateAdapter(
+              latest_message_previewAdapter = messagePreviewAdapter,
+              draftAdapter = messageDraftAdapter,
+              topic_idAdapter = topicIdAdapter,
+              user_idAdapter = userIdAdapter,
+          ),
+      topic_membersAdapter =
+          TopicMembersAdapter(
+              topic_idAdapter = topicIdAdapter,
+              user_idAdapter = userIdAdapter,
+              roleAdapter = topicMemberRoleAdapter,
+          ),
+      topic_preferenceAdapter =
+          TopicPreferenceAdapter(
+              topic_idAdapter = topicIdAdapter,
+              user_idAdapter = userIdAdapter,
+          ),
+      topicsAdapter =
+          TopicsAdapter(
+              idAdapter = topicIdAdapter,
+              creator_idAdapter = userIdAdapter,
+          ),
+  )
 }
