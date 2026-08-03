@@ -19,9 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,16 +31,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import top.fseasy.imlog.R
-import top.fseasy.imlog.features.appinit.MainViewModel
 
 @Composable
 fun SettingsDrawer(
     onNavigate: (String) -> Unit,
-    viewModel: MainViewModel = hiltViewModel(),
 ) {
-  val uiState by viewModel.uiState.collectAsState()
   var showEditProfile by remember { mutableStateOf(false) }
 
   ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.85f)) {
@@ -78,20 +72,6 @@ fun SettingsDrawer(
 
         Spacer(modifier = Modifier.width(16.dp))
 
-        Column(modifier = Modifier.weight(1f)) {
-          Text(
-              text = if (uiState.needsOnboarding) "Set up your profile" else "Your Profile",
-              style = MaterialTheme.typography.titleMedium,
-          )
-          if (uiState.needsOnboarding) {
-            Text(
-                text = "Tap to get started",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          }
-        }
-
         Icon(painterResource(R.drawable.icon_chevron_right), contentDescription = null)
       }
 
@@ -114,14 +94,6 @@ fun SettingsDrawer(
 
       Spacer(modifier = Modifier.height(24.dp))
 
-      if (uiState.needsOnboarding) {
-        TextButton(
-            onClick = { showEditProfile = true },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-          Text("Get Started")
-        }
-      }
     }
   }
 

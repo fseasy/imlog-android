@@ -41,20 +41,15 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.MessageType
-import top.fseasy.imlog.domain.model.ResourceModel
 import top.fseasy.imlog.domain.util.secondsToMmSsFormat
-import top.fseasy.imlog.features.home.MessageUiState
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.nio.file.Path
 
 @Composable
 fun MessageBubble(
-    messageUiState: MessageUiState,
+    message: MessageUiModel,
     isOwnMessage: Boolean,
     onCopy: () -> Unit,
 ) {
-  val dateFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
   Row(
       modifier = Modifier.fillMaxWidth(),
@@ -69,22 +64,11 @@ fun MessageBubble(
                     else MaterialTheme.colorScheme.surfaceVariant
             ),
     ) {
-      val message = messageUiState.message
       when (message.type) {
         MessageType.Text,
-        null -> {
-          Text(
-              text = message.content ?: "",
-              modifier = Modifier.padding(12.dp),
-              color =
-                  if (isOwnMessage) MaterialTheme.colorScheme.onPrimary
-                  else MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-        }
-
         MessageType.Voice -> {
           AudioPlayer(
-              resourceModel = messageUiState.thumbnailModel,
+              path = message.thumbnailPath,
               duration = message.duration ?: 0,
               isOwnMessage = isOwnMessage,
           )
@@ -92,7 +76,7 @@ fun MessageBubble(
 
         MessageType.Image -> {
           AsyncImage(
-              model = messageUiState.thumbnailModel,
+              model = message.thumbnailPath,
               contentDescription = "Image",
               modifier = Modifier.fillMaxWidth().clickable {},
               contentScale = ContentScale.FillWidth,
@@ -101,15 +85,14 @@ fun MessageBubble(
 
         MessageType.Video -> {
           VideoPlayer(
-              resourceModel = messageUiState.thumbnailModel,
+              path = message.thumbnailPath,
               duration = message.duration ?: 0,
-              isOwnMessage = isOwnMessage,
           )
         }
 
         MessageType.Audio -> {
           AudioPlayer(
-              resourceModel = messageUiState.thumbnailModel,
+              path = message.thumbnailPath,
               duration = message.duration ?: 0,
               isOwnMessage = isOwnMessage,
           )
@@ -123,7 +106,7 @@ fun MessageBubble(
         }
       }
       Text(
-          text = dateFormat.format(Date(message.createdAt)),
+          text = message.createdAt,
           modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp).align(Alignment.End),
           style = MaterialTheme.typography.labelSmall,
           color =
@@ -136,16 +119,15 @@ fun MessageBubble(
 
 @Composable
 fun VideoPlayer(
-    resourceModel: ResourceModel?,
+    path: Path?,
     duration: Long,
-    isOwnMessage: Boolean,
 ) {
   var isPlaying by remember { mutableStateOf(false) }
   var currentPosition by remember { mutableFloatStateOf(0f) }
   var playbackSpeed by remember { mutableFloatStateOf(1f) }
 
   Column(modifier = Modifier.padding(8.dp)) {
-    if (resourceModel != null) {
+    if (path != null) {
       Box(
           modifier =
               Modifier.fillMaxWidth()
@@ -217,7 +199,7 @@ fun VideoPlayer(
 
 @Composable
 fun AudioPlayer(
-    resourceModel: ResourceModel?,
+    path: Path?,
     duration: Long,
     isOwnMessage: Boolean,
 ) {

@@ -1,6 +1,7 @@
 package top.fseasy.imlog.data.repository
 
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import top.fseasy.imlog.R
 import top.fseasy.imlog.data.constants.APP_STATIC_NAME
 import top.fseasy.imlog.domain.repository.ResourceProvider
@@ -12,7 +13,7 @@ import javax.inject.Inject
 class ResourceProviderImpl
 @Inject
 constructor(
-    private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) : ResourceProvider {
   override fun getStringArray(id: StringArrayResId): Array<String> {
     return context.resources.getStringArray(

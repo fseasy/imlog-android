@@ -6,6 +6,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navigation
 import kotlinx.serialization.Serializable
 import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.features.home.createtopic.CreateTopicRoute
 import top.fseasy.imlog.features.home.main.HomeRoute
 import top.fseasy.imlog.features.home.topiclog.TopicLogScreen
 import top.fseasy.imlog.features.home.topicsettings.TopicSettingsSheet
@@ -23,9 +24,11 @@ sealed interface MainScreen {
 
   @Serializable data class TopicSettings(val topicId: TopicId) : MainScreen
 
+  @Serializable data object CreateTopic : MainScreen
+
   @Serializable data object Dashboard : MainScreen
 
-  @Serializable data object Settings : MainScreen
+  @Serializable data object AppSettings : MainScreen
 
   @Serializable data object Feedback : MainScreen
 
@@ -44,6 +47,10 @@ fun NavGraphBuilder.mainGraph(
             navController.navigate(MainScreen.TopicTimeline(topicId))
           },
           onNavigateToAppSettings = onOpenDrawer,
+          onNavigateToTopicSettings = { topicId ->
+            navController.navigate(MainScreen.TopicSettings(topicId))
+          },
+          onNavigateToCreateTopic = { navController.navigate(MainScreen.CreateTopic) },
       )
     }
     composable<MainScreen.TopicTimeline> {
@@ -62,6 +69,16 @@ fun NavGraphBuilder.mainGraph(
           onBack = { navController.popBackStack() },
           afterDeleteNavigate = {
             navController.popBackStack(MainScreen.Home, inclusive = false)
+          },
+      )
+    }
+    composable<MainScreen.CreateTopic> {
+      CreateTopicRoute(
+          onNavigateBack = { navController.popBackStack() },
+          onNavigateToNewTopic = { topicId ->
+            navController.navigate(MainScreen.TopicTimeline(topicId)) {
+              popUpTo(MainScreen.CreateTopic) { inclusive = true }
+            }
           },
       )
     }

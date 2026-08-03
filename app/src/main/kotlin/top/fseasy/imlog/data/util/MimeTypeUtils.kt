@@ -6,6 +6,7 @@ import android.webkit.MimeTypeMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import top.fseasy.imlog.data.mapper.toFile
 import top.fseasy.imlog.data.mapper.toUriOrNull
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import java.io.File
@@ -120,7 +121,7 @@ object MimeTypeUtils {
    */
   suspend fun getMimeTypeOrNull(absolutePathModel: AbsolutePathModel, context: Context): String? =
       when (absolutePathModel) {
-        is AbsolutePathModel.AppPathModel -> getMimeType(absolutePathModel.value)
+        is AbsolutePathModel.AppPathModel -> getMimeType(absolutePathModel.value.toFile())
 
         is AbsolutePathModel.UriStrModel ->
             absolutePathModel.value.toUriOrNull()?.let {

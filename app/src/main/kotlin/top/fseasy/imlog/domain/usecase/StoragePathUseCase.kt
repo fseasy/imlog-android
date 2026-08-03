@@ -22,6 +22,12 @@
  */
 package top.fseasy.imlog.domain.usecase
 
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.random.Random
 import top.fseasy.imlog.domain.model.InternalLocation
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.StoragePathModel
@@ -30,12 +36,6 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.ResourceProvider
 import top.fseasy.imlog.domain.repository.StringConstantId
 import top.fseasy.imlog.domain.util.splitNameAndExtension
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlin.random.Random
 
 /**
  * Why Singleton: Will be used frequently and widely; has member val
@@ -199,6 +199,16 @@ constructor(
           filename = filename,
       )
 
+  fun buildTemporaryCacheFileStoragePath(
+      userId: UserId,
+      filename: String,
+  ) =
+      buildInternalCacheStoragePath(
+          userId,
+          resourceName = ResourceName.TemporaryCache,
+          filename = filename,
+      )
+
   /** rule: `$user_root_name / message / $topic_id / $date-hierarchy / $filename` */
   fun buildMessageRawFileStoragePath(
       userId: UserId,
@@ -325,6 +335,7 @@ private enum class ResourceName(val value: String) {
   MessageFileRaw("message"),
   MessageThumbnail("thumbnail"),
   MessageCache("message_cache"),
+  TemporaryCache("temp_cache"),
 }
 
 private enum class AvatarTargetName(val value: String) {

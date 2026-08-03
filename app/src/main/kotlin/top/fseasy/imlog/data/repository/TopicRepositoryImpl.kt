@@ -18,10 +18,10 @@ import top.fseasy.imlog.domain.model.TopicPreference
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.defaultTopicPresetAvatar
 import top.fseasy.imlog.domain.model.serialize
-import top.fseasy.imlog.domain.model.toTopicAvatarModelOrNull
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.Topic_message_state
+import top.fseasy.imlog.ui.model.toAvatarModelOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.GetCurrentUserHomeScreenTopics as HomeTopicEntity
@@ -291,7 +291,7 @@ constructor(
       Topic(
           id = id,
           name = name,
-          avatarModel = avatar_model.toTopicAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
+          avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
           description = description,
           creatorId = creator_id,
           createdAt = created_at,
@@ -311,7 +311,7 @@ constructor(
       HomeTopic(
           id = id,
           name = name,
-          avatarModel = avatar_model.toTopicAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
+          avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
           description = description,
           isPinned = pinned == 1L,
           hasUnread = has_unread == 1L,

@@ -7,17 +7,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -33,11 +30,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.ui.components.AppCircularProgress
 
 sealed interface CreateTopicDialogAction {
   data object Dismiss : CreateTopicDialogAction
@@ -58,16 +52,8 @@ fun HomeRoute(
     onNavigateToTopicSettings: (TopicId) -> Unit,
     onNavigateToCreateTopic: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: HomeViewModel = hiltViewModel(),
 ) {
-  val uiState by viewModel.contextUiStateFlow.collectAsStateWithLifecycle()
-
-  if (uiState == null) {
-    return AppCircularProgress()
-  }
-
   TopicsScreenContent(
-      uiState = uiState as HomeContextUiState,
       onSelectTopic = onNavigateToTopic,
       onOpenTopicSettings = onNavigateToTopicSettings,
       moreOptionMenuAction =
@@ -82,7 +68,6 @@ fun HomeRoute(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopicsScreenContent(
-    uiState: HomeContextUiState,
     onSelectTopic: (TopicId) -> Unit,
     onOpenTopicSettings: (TopicId) -> Unit,
     moreOptionMenuAction: MoreOptionMenuAction,
@@ -115,15 +100,6 @@ fun TopicsScreenContent(
 @Composable
 private fun Logo() {
   Row(verticalAlignment = Alignment.CenterVertically) {
-    // or Image
-    //
-    // Image(
-    //     painter = painterResource(id = R.drawable.ic_your_logo),
-    //     contentDescription = "Logo",
-    //     modifier = Modifier.size(28.dp)
-    // )
-    // Spacer(modifier = Modifier.width(8.dp))
-
     Text(
         text = stringResource(R.string.app_name),
         style =
@@ -173,37 +149,4 @@ private fun TopBarAction(moreOptionMenuAction: MoreOptionMenuAction) {
         },
     )
   }
-}
-
-@Composable
-fun CreateTopicDialog(
-    onAction: (CreateTopicDialogAction) -> Unit,
-) {
-  var topicName by remember { mutableStateOf("") }
-
-  AlertDialog(
-      onDismissRequest = { onAction(CreateTopicDialogAction.Dismiss) },
-      title = { Text("Create Topic") },
-      text = {
-        OutlinedTextField(
-            value = topicName,
-            onValueChange = { topicName = it },
-            label = { Text("Topic Name") },
-            singleLine = true,
-        )
-      },
-      confirmButton = {
-        TextButton(
-            onClick = { onAction(CreateTopicDialogAction.Create(topicName)) },
-            enabled = topicName.isNotBlank(),
-        ) {
-          Text("Create")
-        }
-      },
-      dismissButton = {
-        TextButton(onClick = { onAction(CreateTopicDialogAction.Dismiss) }) {
-          Text("Cancel")
-        }
-      },
-  )
 }

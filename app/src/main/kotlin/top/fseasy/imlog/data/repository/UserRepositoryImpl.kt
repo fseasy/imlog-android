@@ -25,10 +25,10 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.UserPreference
 import top.fseasy.imlog.domain.model.defaultUserPresetAvatar
 import top.fseasy.imlog.domain.model.serialize
-import top.fseasy.imlog.domain.model.toUserAvatarModelOrNull
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
+import top.fseasy.imlog.ui.model.toAvatarModelOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.App_init_data as AppInitDataEntity
@@ -132,7 +132,7 @@ constructor(
       User(
           id = UserId(id),
           username = username,
-          avatarModel = avatar_model.toUserAvatarModelOrNull() ?: defaultUserPresetAvatar(),
+          avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultUserPresetAvatar(),
           lastSignInAt = last_signin_at,
           createdAt = created_at,
           attributesUpdatedAt = attributes_updated_at,

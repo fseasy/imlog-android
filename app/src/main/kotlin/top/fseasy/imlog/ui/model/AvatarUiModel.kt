@@ -3,6 +3,9 @@ package top.fseasy.imlog.ui.model
 import android.content.Context
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import timber.log.Timber
 import top.fseasy.imlog.R
 import top.fseasy.imlog.data.mapper.toNioPath
 import top.fseasy.imlog.domain.model.AvatarModel
@@ -11,7 +14,9 @@ import top.fseasy.imlog.domain.model.TopicPresetAvatar
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.UserPresetAvatar
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.util.defaultJson
 import java.nio.file.Path
+import java.nio.file.Paths
 import kotlin.io.path.name
 
 @Immutable
@@ -36,6 +41,11 @@ inline fun <reified T> AvatarUiModel.Preset.Companion.getAll(): List<AvatarUiMod
   return enumValues<T>().map { AvatarUiModel.Preset(it.resId, it) }
 }
 
+inline fun <reified T> AvatarUiModel.Preset.Companion.random(): AvatarUiModel.Preset<T>
+    where T : Enum<T>, T : PresetAvatar {
+  return enumValues<T>().random().let { AvatarUiModel.Preset(it.resId, it) }
+}
+
 @get:DrawableRes
 val PresetAvatar.resId: Int
   get() =
@@ -50,7 +60,7 @@ val PresetAvatar.resId: Int
       }
 
 fun <T : PresetAvatar> AvatarModel<T>.toUiModel(
-    nioPathBuilder: (fileName: String) -> Path,
+  nioPathBuilder: (filename: String) -> Path,
 ): AvatarUiModel<T> {
   return when (this) {
     is AvatarModel.Preset -> AvatarUiModel.Preset(value.resId, value)
@@ -95,3 +105,53 @@ fun <T : PresetAvatar> AvatarUiModel<T>.toCoilModel(): Any =
       is AvatarUiModel.Preset -> this.resId
       is AvatarUiModel.NioPath -> this.path.toFile() // Coil doesn't support nio path well?
     }
+
+inline fun <reified T : PresetAvatar> String.toAvatarModelOrNull(): AvatarModel<T>? = runCatching {
+  defaultJson.decodeFromString<AvatarModel<T>>(this)
+}
+    .getOrElse { e ->
+      Timber.w(e, "Deserialization AvatarModel failed, s=[$this]")
+      null
+    }
+
+/** For Saver in Composable */
+inline fun <reified T> avatarUiModelSaver(): Saver<AvatarUiModel<T>, Any>
+    where T : Enum<T>, T : PresetAvatar =
+    listSaver(
+        save = { model ->
+          when (model) {
+            is AvatarUiModel.Preset ->
+                listOf(
+                    "PRESET",
+                    model.backMapValue.name,
+                )
+            is AvatarUiModel.NioPath ->
+                listOf(
+                    "PATH",
+                    model.path.toString(),
+                )
+          }
+        },
+        restore = { list ->
+          if (list.isEmpty()) return@listSaver null
+
+          when (list[0] as? String) {
+            "PRESET" -> {
+              val name = list.getOrNull(1) as? String ?: return@listSaver null
+              runCatching {
+                val enumValue = enumValueOf<T>(name)
+                AvatarUiModel.Preset(enumValue.resId, enumValue)
+              }
+                  .getOrNull()
+            }
+            "PATH" -> {
+              val pathStr = list.getOrNull(1) as? String ?: return@listSaver null
+              runCatching {
+                AvatarUiModel.NioPath(Paths.get(pathStr))
+              }
+                  .getOrNull()
+            }
+            else -> null
+          }
+        },
+    )

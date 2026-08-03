@@ -14,9 +14,11 @@ import timber.log.Timber
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.usecase.SignInUpUseCase
+import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.ui.model.TaskExecuteState
 import top.fseasy.imlog.ui.model.UserAvatarUiModel
-import top.fseasy.imlog.ui.model.toUserAvatarUIModel
+import top.fseasy.imlog.ui.model.buildUserAvatarNioPath
+import top.fseasy.imlog.ui.model.toUiModel
 import javax.inject.Inject
 
 data class LocalUser(val id: UserId, val name: String, val avatar: UserAvatarUiModel)
@@ -34,6 +36,7 @@ class AuthSelectLocalUserViewModel
 constructor(
     @param:ApplicationContext private val context: Context,
     private val signInUpUseCase: SignInUpUseCase,
+    private val storagePathUseCase: StoragePathUseCase,
 ) : ViewModel() {
   private val _uiState = MutableStateFlow(AuthSelectLocalUserUiState())
   val uiState = _uiState.asStateFlow()
@@ -91,7 +94,15 @@ constructor(
                   LocalUser(
                       id = u.id,
                       name = u.username,
-                      avatar = u.avatarModel.toUserAvatarUIModel(),
+                      avatar =
+                          u.avatarModel.toUiModel { filename ->
+                            buildUserAvatarNioPath(
+                                signInUserId = u.id,
+                                storagePathUseCase = storagePathUseCase,
+                                context = context,
+                                filename = filename,
+                            )
+                          },
                   )
                 }
                 _uiState.update {

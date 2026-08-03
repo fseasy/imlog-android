@@ -6,10 +6,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.Statistics
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.UserRepository
@@ -30,10 +31,10 @@ constructor(
 
   @OptIn(ExperimentalCoroutinesApi::class)
   val uiState: StateFlow<ViewUiState> =
-      userRepository.observeUserIdOrNull
-          .filterNotNull()
-          .flatMapLatest { uid ->
-            messageRepository.observeStatistics(uid).map { stats ->
+      userRepository.authState
+          .filterIsInstance<AuthState.Authenticated>()
+          .flatMapLatest { state ->
+            messageRepository.observeStatistics(state.userId).map { stats ->
               ViewUiState(
                   isLoading = false,
                   statistics = stats,

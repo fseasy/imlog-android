@@ -29,6 +29,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.canhub.cropper.CropImageOptions
 import com.canhub.cropper.CropImageView
 import top.fseasy.imlog.R
+import top.fseasy.imlog.data.mapper.toBitmapCompressFormat
+import top.fseasy.imlog.domain.model.AppImageFormat
 
 @Composable
 fun ImageCropper(
@@ -76,11 +78,11 @@ fun ImageCropper(
 fun CropImageDialog(
     title: String,
     imageUri: Uri,
+    outputFormat: AppImageFormat,
     onDismiss: () -> Unit,
     onCropSuccess: (Uri) -> Unit,
     onCropFailure: (String) -> Unit,
 ) {
-  // 使用 rememberSaveable 防止屏幕旋转导致状态重置
   var triggerCrop by rememberSaveable { mutableStateOf(false) }
 
   val cropOptions = remember {
@@ -90,6 +92,7 @@ fun CropImageDialog(
       aspectRatioX = 1
       aspectRatioY = 1
       fixAspectRatio = true
+      outputCompressFormat = outputFormat.toBitmapCompressFormat()
     }
   }
 

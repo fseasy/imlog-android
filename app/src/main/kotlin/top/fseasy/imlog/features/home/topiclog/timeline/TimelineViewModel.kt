@@ -1,6 +1,7 @@
 package top.fseasy.imlog.features.home.topiclog.timeline
 
 import android.content.Context
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,6 +15,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import top.fseasy.imlog.domain.model.Message
+import top.fseasy.imlog.domain.model.MessageId
+import top.fseasy.imlog.domain.model.MessageType
+import top.fseasy.imlog.domain.model.QuoteMessage
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
@@ -21,6 +25,7 @@ import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.navigation.MainScreen
+import java.nio.file.Path
 import javax.inject.Inject
 
 sealed interface ContextState {
@@ -33,6 +38,27 @@ sealed interface ContextState {
       val currentUserId: UserId,
   ) : ContextState
 }
+
+@Immutable
+class MessageUiModel(
+    val id: MessageId,
+    val topicId: TopicId,
+    val senderId: UserId,
+    val type: MessageType,
+    val quoteMessage: QuoteMessage? = null,
+    val text: String? = null,
+    val thumbnailPath: Path? = null,
+    val createdAt: String,
+    // == media file fields
+    val originalFilename: String? = null,
+    val storedFilename: String? = null,
+    val fileSize: Long? = null,
+    val mimeType: String? = null,
+    val duration: Long? = null, // in MS
+    val width: Int? = null,
+    val height: Int? = null,
+    // == End of media file fields
+)
 
 @HiltViewModel
 class TimelineViewModel

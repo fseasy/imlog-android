@@ -7,11 +7,13 @@ import dagger.hilt.components.SingletonComponent
 import top.fseasy.imlog.data.repository.AppStateRepositoryImpl
 import top.fseasy.imlog.data.repository.MessageRepositoryImpl
 import top.fseasy.imlog.data.repository.ResourceProviderImpl
+import top.fseasy.imlog.data.repository.StorageRepositoryImpl
 import top.fseasy.imlog.data.repository.TopicRepositoryImpl
 import top.fseasy.imlog.data.repository.UserRepositoryImpl
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.ResourceProvider
+import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 
@@ -33,6 +35,11 @@ abstract class RepositoryModule {
   abstract fun bindMessageRepository(
       messageRepositoryImpl: MessageRepositoryImpl,
   ): MessageRepository
+
+  @Binds
+  abstract fun bindStorageRepository(
+      storageRepositoryImpl: StorageRepositoryImpl
+  ): StorageRepository
 
   @Binds
   abstract fun bindAppStateRepository(

@@ -1,7 +1,6 @@
 package top.fseasy.imlog.domain.model
 
 import kotlinx.serialization.Serializable
-import timber.log.Timber
 import top.fseasy.imlog.domain.util.defaultJson
 import kotlin.enums.enumEntries
 
@@ -47,11 +46,3 @@ fun defaultUserPresetAvatar(): UserAvatarModel = AvatarModel.Preset.default()
 fun defaultTopicPresetAvatar(): TopicAvatarModel = AvatarModel.Preset.default()
 
 fun <T : PresetAvatar> AvatarModel<T>.serialize(): String = defaultJson.encodeToString(this)
-
-inline fun <reified T : PresetAvatar> String.toAvatarModelOrNull(): AvatarModel<T>? = runCatching {
-  defaultJson.decodeFromString<AvatarModel<T>>(this)
-}
-    .getOrElse { e ->
-      Timber.w(e, "Deserialization AvatarModel failed, s=[$this]")
-      null
-    }

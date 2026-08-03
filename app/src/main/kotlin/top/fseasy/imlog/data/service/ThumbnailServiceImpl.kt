@@ -37,7 +37,7 @@ constructor(
 ) : ThumbnailService {
   override suspend fun generateImageThumbnail(request: ThumbnailGenerateRequest): ByteArray =
       withContext(Dispatchers.IO) {
-        val sourceFile = request.input.toActualFileOrUri(context)
+        val sourceFile = request.input.toActualFileOrUri()
         val (targetW, targetH) =
             request.scale.calculateScaledWidthHeight(
                 request.inputWidth,

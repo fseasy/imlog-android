@@ -9,6 +9,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import top.fseasy.imlog.data.mapper.toFile
 import top.fseasy.imlog.data.mapper.toUriOrNull
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
@@ -54,7 +55,7 @@ object MetadataResolveUtils {
         is AbsolutePathModel.UriStrModel ->
             filePath.value.toUriOrNull()?.let { resolveAudio(context, uri = it) }
 
-        is AbsolutePathModel.AppPathModel -> resolveAudio(filePath.value)
+        is AbsolutePathModel.AppPathModel -> resolveAudio(filePath.value.toFile())
       }
 
   /** If file not exists, return null. Run in IO thread for io parts. */
@@ -120,7 +121,7 @@ object MetadataResolveUtils {
         is AbsolutePathModel.UriStrModel ->
             filePath.value.toUriOrNull()?.let { resolveVideo(context, uri = it) }
 
-        is AbsolutePathModel.AppPathModel -> resolveVideo(context, file = filePath.value)
+        is AbsolutePathModel.AppPathModel -> resolveVideo(context, file = filePath.value.toFile())
       }
 
   /**
@@ -201,7 +202,7 @@ object MetadataResolveUtils {
         is AbsolutePathModel.UriStrModel ->
             filePath.value.toUriOrNull()?.let { resolveImage(context, uri = it) }
 
-        is AbsolutePathModel.AppPathModel -> resolveImage(filePath.value)
+        is AbsolutePathModel.AppPathModel -> resolveImage(filePath.value.toFile())
       }
 
   /** Run IN IO. No exceptions will be thrown. */
@@ -272,7 +273,7 @@ object MetadataResolveUtils {
         is AbsolutePathModel.UriStrModel ->
             filePath.value.toUriOrNull()?.let { resolveGenericFile(context, uri = it) }
 
-        is AbsolutePathModel.AppPathModel -> resolveGenericFile(filePath.value)
+        is AbsolutePathModel.AppPathModel -> resolveGenericFile(filePath.value.toFile())
       }
 
   /**

@@ -5,6 +5,7 @@ import android.net.Uri
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import top.fseasy.imlog.data.mapper.toAppPath
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.FileCopyResult
@@ -178,7 +179,7 @@ suspend fun copyUriToFile(
             val bytesCopied = input.copyTo(output)
             return@withContext FileCopyResult.Success(
                 bytesCopied,
-                AbsolutePathModel.AppPathModel(destination),
+                AbsolutePathModel.AppPathModel(destination.toAppPath()),
             )
           } catch (e: IOException) {
             return@withContext FileCopyResult.Error.CopyIOError(e)
