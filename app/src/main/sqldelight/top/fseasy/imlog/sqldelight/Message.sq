@@ -1,18 +1,25 @@
-import top.fseasy.imlog.domain.model.QuoteMessage;
-
+import top.fseasy.imlog.domain.model.MessageId;
+import top.fseasy.imlog.domain.model.MessageType;
+import top.fseasy.imlog.domain.model.TopicId;
+import top.fseasy.imlog.domain.model.UriStr;
+import top.fseasy.imlog.domain.model.UserId;
 
 CREATE TABLE messages (
-    id TEXT NOT NULL PRIMARY KEY,
+    id TEXT AS MessageId NOT NULL PRIMARY KEY,
     -- || Message main/basic fields ||
     -- 如果删除了 Topic，所有的内部 messages 全部要删掉！
-    topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    topic_id TEXT AS TopicId NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
     -- 这里不关联 UserId, 也不是 reference + set null;
     -- why: user 删除不代表数据就要抹掉！！
     --     在此基础设定上，不设置 reference + set null 的原因：
     --     1. 减少 reference 开销 2. 保留 id 值，还能显示出 id，有一定区分性
-    sender_id TEXT NOT NULL,
-    type TEXT NOT NULL, -- message type, audio/video/text, and so on
-    quote_message TEXT AS kotlin.Result<QuoteMessage>,
+    sender_id TEXT AS UserId NOT NULL,
+    type TEXT AS MessageType NOT NULL, -- message type, audio/video/text, and so on
+    -- id is enough! we previously store snapshot data, which increases complexity
+    --   No FOREIGN KEY constraints as the quoted message may be deleted, and we want to keep
+    --   the has-quoted status. Or we may have to add another field to keep foreign key semantic
+    --   when delete quoted message
+    quoted_message_id TEXT AS MessageId,
     text TEXT,
     created_at INTEGER NOT NULL,
     -- || Message file fields ||
@@ -23,8 +30,8 @@ CREATE TABLE messages (
     width INTEGER, -- used to decide the card ratio (before showing content)
     height INTEGER, -- card ratio
     duration INTEGER, -- ui element (when showing)
-    file_size INTEGER, -- ui element
-    original_filename TEXT, -- ui element / for download/share
+    file_size INTEGER, -- ui element, in bytes
+    display_filename TEXT, -- ui element / for download/share
     --   -> class 2: loading source candidates
     raw_filename TEXT, -- only store the file name. Absolute path is dynamically calculated and deterministic.
     thumbnail_filename TEXT,
@@ -33,26 +40,35 @@ CREATE TABLE messages (
     --               intended for 2-phase query.
     -- || record states ||
     attributes_updated_at INTEGER NOT NULL,
-    is_deleted INTEGER NOT NULL DEFAULT 0
+    is_deleted INTEGER AS kotlin.Boolean NOT NULL DEFAULT 0
 );
 
-CREATE INDEX idx_messages_topic_created ON messages(topic_id, created_at);
-CREATE INDEX idx_messages_sender_created ON messages(sender_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_sender_created ON messages(sender_id, created_at);
+-- For quoted-message join
+CREATE INDEX IF NOT EXISTS idx_messages_quoted_id
+ON messages(quoted_message_id)
+WHERE quoted_message_id IS NOT NULL;
+
+-- For 1. paging query on topic messages 2. get the latest message of given topic
+-- append the `id` in the key to avoid the edge case where created_at is same across some records
+CREATE INDEX IF NOT EXISTS idx_messages_topic_created
+ON messages(topic_id, created_at DESC, id DESC)
+WHERE is_deleted = 0;
 
 -- A table used to support Message Showup during processing media of the message
 -- the row will be deleted once media was processed done.
 CREATE TABLE message_attachment_processing_task_states (
-   message_id TEXT NOT NULL PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+   message_id TEXT AS MessageId NOT NULL PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
    -- || processing intermediate results ||  used for ui rendering, failed task retry
    --    used to show before thumnail and internal-raw data are prepared.
    --    one of src_uri and internal_cached_filename must be exists when initializing!
    --    Business logic needs to ensure it!
-   src_uri TEXT,
+   src_uri TEXT AS UriStr,
    internal_cached_filename TEXT,
    -- || stage processing task details || used for ui rendering, failed task retry
    task_tart_time INTEGER NOT NULL,
    error_stage TEXT DEFAULT NULL,      -- null means no errors happen
-   error_user_retryable INTEGER DEFAULT NULL
+   error_user_retryable INTEGER AS kotlin.Boolean DEFAULT NULL
 );
 
 getMessagesByTopic:

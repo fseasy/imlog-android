@@ -1,8 +1,10 @@
 package top.fseasy.imlog.domain.model
 
-import kotlinx.serialization.Serializable
+import kotlin.time.Duration
+import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.serialization.Serializable
 
 enum class MessageType(val value: String) {
   Text("text"),
@@ -38,51 +40,116 @@ value class MessageId(val value: String) {
   }
 }
 
-@Serializable
-data class QuoteMessageThumbnailFileBuildingArgs(
-    val messageCreatedAt: Long,
+data class Sender(
+    val id: UserId,
     val name: String,
+    val avatarModel: UserAvatarModel,
 )
 
-@Serializable
-data class QuoteMessage(
+sealed interface QuotedMessageContent {
+  sealed interface ImageLike : QuotedMessageContent {
+    // If thumbnail hasn't generated done, it's null. We don't use fileUri as fallback here,
+    // as it's an edge case and has minimal impact
+    val thumbnailFilename: String?
+    // used to build the thumbnail absolute path
+    val createdAt: Instant
+  }
+
+  data class Text(val text: String) : QuotedMessageContent
+
+  // audio, generic file
+  data class File(val filename: String, val mimeType: String) : QuotedMessageContent
+
+  data class Voice(val duration: Duration) : QuotedMessageContent
+
+  data class Image(override val thumbnailFilename: String?, override val createdAt: Instant) :
+      ImageLike
+
+  data class Video(override val thumbnailFilename: String?, override val createdAt: Instant) :
+      ImageLike
+}
+
+data class QuotedMessage(
     val id: MessageId,
-    val senderId: UserId,
-    val senderNameSnapshot: String,
     val messageType: MessageType,
-    val text: String,
-    val thumbnail: QuoteMessageThumbnailFileBuildingArgs?,
+    val sender: Sender,
+    val content: QuotedMessageContent,
 )
 
-/** Time/Duration all are in MS. */
+sealed interface CacheAttachmentSource {
+  val filename: String
+
+  data class Cache(override val filename: String) : CacheAttachmentSource
+
+  data class StorageUri(override val filename: String) : CacheAttachmentSource
+}
+
+sealed interface UriAttachmentSource {
+  data class SourceTemporary(val uriStr: UriStr) : UriAttachmentSource
+
+  data class Storage(val filename: String) : UriAttachmentSource
+}
+
+sealed interface MessageContent {
+  sealed interface UriAttachment : MessageContent {
+    val displayFilename: String
+
+    /** Could be either source-temporary-uri, or copied-storage-uri. MUST be existed */
+    val fileUri: UriAttachmentSource
+  }
+
+  sealed interface ImageLike : UriAttachment {
+    val thumbnailFilename: String?
+    val width: Int
+    val height: Int
+  }
+
+  data class Text(val text: String) : MessageContent
+
+  data class Image(
+      override val displayFilename: String,
+      override val fileUri: UriAttachmentSource,
+      override val thumbnailFilename: String?,
+      override val width: Int,
+      override val height: Int,
+  ) : ImageLike
+
+  data class Video(
+      override val displayFilename: String,
+      override val fileUri: UriAttachmentSource,
+      override val thumbnailFilename: String?,
+      override val width: Int,
+      override val height: Int,
+      val duration: Duration,
+  ) : ImageLike
+
+  data class Audio(
+      override val displayFilename: String,
+      override val fileUri: UriAttachmentSource,
+      val duration: Duration,
+  ) : UriAttachment
+
+  data class Voice(
+      val displayFilename: String,
+      val file: CacheAttachmentSource,
+      val duration: Duration,
+  ) : MessageContent
+}
+
 data class Message(
     val id: MessageId,
-    val topicId: TopicId,
-    val senderId: UserId,
-    val type: MessageType,
-    val quoteMessage: QuoteMessage? = null,
-    val text: String? = null,
-    // == media file fields
-    val originalFileUri: UriStr? = null,
-    val originalFilename: String? = null,
-    val storedFilename: String? = null,
-    val fileSize: Long? = null,
-    val mimeType: String? = null,
-    val duration: Long? = null, // in MS
-    val width: Int? = null,
-    val height: Int? = null,
-    val thumbnailName: String? = null,
-    // == End of media file fields
-    val createdAt: Long = System.currentTimeMillis(), // in MS
-    val attributesUpdatedAt: Long = createdAt,
+    val sender: Sender,
+    val quotedMessage: QuotedMessage?,
+    val createdAt: Instant,
+    val content: MessageContent,
 )
 
 /** For message preview */
-@Serializable
 data class MessagePreview(
     val type: MessageType,
-    val textSnapshot: String? = null,
-    val senderNameSnapshot: String? = null, // If null, = currentUser in business logic
+    val text: String?,
+    val senderId: UserId,
+    val senderName: String?,
 )
 
 @Serializable
@@ -96,28 +163,6 @@ enum class MessageInputMode(val value: String) {
 @Serializable
 data class MessageDraft(
     val inputMode: MessageInputMode? = null,
-    val quoteMessage: QuoteMessage? = null,
+    val quotedMessageId: MessageId? = null,
     val text: String = "",
 )
-
-object MessageFactory {
-  fun createText(
-      topicId: TopicId,
-      senderId: UserId,
-      text: String,
-      timestampMs: Long,
-      quoteMessage: QuoteMessage? = null,
-  ): Message {
-    require(text.isNotBlank()) { "Failed to create empty Text: $topicId, $senderId" }
-    return Message(
-        id = MessageId.random(),
-        topicId = topicId,
-        senderId = senderId,
-        type = MessageType.Text,
-        text = text,
-        createdAt = timestampMs,
-        attributesUpdatedAt = timestampMs,
-        quoteMessage = quoteMessage,
-    )
-  }
-}

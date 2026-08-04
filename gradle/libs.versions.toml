@@ -27,6 +27,7 @@ sqldelight = "2.3.2"
 timber = "5.0.1"
 version-catalog-update = "1.1.0"
 workRuntimeKtx = "2.11.2"
+androidxPaging3 = "3.5.0"
 
 [libraries]
 accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanist" }
@@ -60,6 +61,8 @@ androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", versi
 androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
 androidx-media3-inspector = { module = "androidx.media3:media3-inspector", version.ref = "media3" }
 androidx-media3-inspector-frame = { module = "androidx.media3:media3-inspector-frame", version.ref = "media3" }
+androidx-paging-common = {module = "androidx.paging:paging-common", version.ref = "androidxPaging3"}
+androidx-paging-compose = {module = "androidx.paging:paging-compose", version.ref = "androidxPaging3"}
 # Note: it's independent from compose-bom
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }
@@ -73,6 +76,7 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-c
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 sqldelight-android = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
+sqldelight-paging3 = { module = "app.cash.sqldelight:androidx-paging3-extensions", version.ref = "sqldelight" }
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
 
 [plugins]

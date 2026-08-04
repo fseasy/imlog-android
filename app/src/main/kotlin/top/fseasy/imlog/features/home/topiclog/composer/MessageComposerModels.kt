@@ -7,7 +7,7 @@ import kotlinx.parcelize.Parcelize
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageInputMode
 import top.fseasy.imlog.domain.model.MessageType
-import top.fseasy.imlog.domain.model.QuoteMessage
+import top.fseasy.imlog.domain.model.QuotedMessage
 import top.fseasy.imlog.domain.model.QuoteMessageThumbnailFileBuildingArgs
 import top.fseasy.imlog.domain.model.UserId
 
@@ -44,7 +44,7 @@ constructor(
     val thumbnail: @DataClass QuoteMessageThumbnailFileBuildingArgs?,
 ) : Parcelable
 
-fun QuoteMessage.toParcelable() =
+fun QuotedMessage.toParcelable() =
     QuoteMessageParcelable(
         id = id.value,
         senderId = senderId.value,
@@ -55,7 +55,7 @@ fun QuoteMessage.toParcelable() =
     )
 
 fun QuoteMessageParcelable.toDomain() =
-    QuoteMessage(
+    QuotedMessage(
         id = MessageId(id),
         senderId = UserId(senderId),
         senderNameSnapshot = senderNameSnapshot,

@@ -28,7 +28,7 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposer
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
 import top.fseasy.imlog.features.home.topiclog.timeline.ContextState
-import top.fseasy.imlog.features.home.topiclog.timeline.TimelineScreen
+import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimeline
 import top.fseasy.imlog.features.home.topiclog.timeline.TimelineViewModel
 
 @Composable
@@ -56,7 +56,7 @@ fun TopicLogScreen(
       onNavigateBack = onNavigateBack,
       onSettingsClick = onSettingsClick,
       timelineSection = {
-        TimelineScreen(
+        MessageTimeline(
             onTapOutside = handleComposerDismiss,
             onDragList = handleComposerDismiss,
             timelineViewModel = timelineViewModel,

@@ -1,5 +1,6 @@
 package top.fseasy.imlog.domain.repository
 
+import androidx.paging.PagingData
 import kotlinx.coroutines.flow.Flow
 import top.fseasy.imlog.domain.model.FileMetadataUnion
 import top.fseasy.imlog.domain.model.Message
@@ -26,8 +27,8 @@ sealed interface MessageAttachmentSource {
 }
 
 interface MessageRepository {
-  /** If exception, return flow<null> */
-  fun observeTopicMessagesOrNull(topicId: TopicId): Flow<List<Message>?>
+  /** NOTE: now we are dependent on paging-common, so it's ok for KMP */
+  fun pagedTopicMessages(topicId: TopicId): Flow<PagingData<Message>>
 
   fun observeStatistics(senderId: UserId): Flow<Statistics>
 

@@ -1,5 +1,7 @@
+import top.fseasy.imlog.domain.model.UserId;
+
 CREATE TABLE users (
-    id TEXT NOT NULL PRIMARY KEY,
+    id TEXT AS UserId NOT NULL PRIMARY KEY,
     username TEXT NOT NULL,
     avatar_model TEXT NOT NULL,
     last_signin_at INTEGER NOT NULL,
@@ -48,5 +50,5 @@ DELETE FROM users WHERE id = :user_id;
 getLocalSignedInUsers:
 SELECT u.*
 FROM users u
-INNER JOIN  app_init_data a ON a.user_id = u.id
+INNER JOIN app_init_data a ON a.user_id = u.id
 ORDER BY u.last_signin_at DESC;

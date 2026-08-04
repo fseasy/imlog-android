@@ -2,9 +2,13 @@ package top.fseasy.imlog.data.repository
 
 import android.content.Context
 import androidx.core.net.toUri
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.map
 import app.cash.sqldelight.coroutines.asFlow
-import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
+import app.cash.sqldelight.paging3.QueryPagingSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
@@ -26,7 +30,6 @@ import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import javax.inject.Inject
 import javax.inject.Singleton
-import top.fseasy.imlog.sqldelight.GetMessagesByTopic as GetMessagesByTopicRowEntity
 import top.fseasy.imlog.sqldelight.Message_attachment_processing_task_states as FileProcessingTaskStateEntity
 import top.fseasy.imlog.sqldelight.Messages as MessageEntity
 
@@ -40,14 +43,26 @@ constructor(
 ) : MessageRepository {
 
   /** To render the timeline message list. */
-  override fun observeTopicMessagesOrNull(topicId: TopicId): Flow<List<Message>?> =
-      safeObserveFlowOrNull({ "Failed to observe messages for topic: $topicId" }) {
-        database.messageQueries
-            .getMessagesByTopic(topicId.value)
-            .asFlow()
-            .mapToList(dispatcher)
-            .map { rows -> rows.mapNotNull { it.toDomain() } }
-      }
+  override fun pagedTopicMessages(topicId: TopicId): Flow<PagingData<Message>> =
+      Pager(
+              config = PagingConfig(pageSize = 20, enablePlaceholders = false),
+              pagingSourceFactory = {
+                QueryPagingSource(
+                    countQuery = database.messagePagingQueries.getTopicMessageCount(topicId),
+                    transacter = database.messagePagingQueries,
+                    context = dispatcher,
+                    queryProvider = { limit, offset ->
+                      database.messagePagingQueries.getPagedMessages(
+                          topicId = topicId,
+                          limit = limit,
+                          offset = offset,
+                      )
+                    },
+                )
+              },
+          )
+          .flow
+          .map { pagingData -> pagingData.map { messageEntity -> messageEntity.toDomain() } }
 
   override fun observeStatistics(senderId: UserId): Flow<Statistics> =
       database.messageStatQueries
@@ -238,7 +253,7 @@ constructor(
         topicId = TopicId(topic_id),
         senderId = UserId(sender_id),
         type = messageType,
-        quoteMessage = quote_message?.getOrNull(),
+        quotedMessage = quote_message?.getOrNull(),
         text = text,
         // media file fields
         originalFileUri = src_uri?.toUri()?.toUriStr(),
@@ -279,6 +294,6 @@ constructor(
           mime_type = mimeType,
           width = width?.toLong(),
           height = height?.toLong(),
-          quote_message = quoteMessage?.let { Result.success(it) },
+          quote_message = quotedMessage?.let { Result.success(it) },
       )
 }

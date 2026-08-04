@@ -25,7 +25,7 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.ui.components.AppCircularProgress
 
 @Composable
-internal fun HomeTopicItemList(
+internal fun TopicItemList(
     onClickTopic: (TopicId) -> Unit,
     onClickTopicSetting: (TopicId) -> Unit,
     modifier: Modifier = Modifier,
@@ -33,7 +33,7 @@ internal fun HomeTopicItemList(
 ) {
   val topicsState by viewModel.topicsUiStateFlow.collectAsStateWithLifecycle()
 
-  HomeTopicItemListDispatcherContent(
+  TopicItemListDispatcher(
       topicsState = topicsState,
       onClickTopic = onClickTopic,
       onTogglePin = { topicId, currentPinState -> viewModel.pinTopic(topicId, currentPinState) },
@@ -43,7 +43,7 @@ internal fun HomeTopicItemList(
 }
 
 @Composable
-private fun HomeTopicItemListDispatcherContent(
+private fun TopicItemListDispatcher(
     topicsState: TopicsUiState,
     modifier: Modifier = Modifier,
     onClickTopic: (TopicId) -> Unit,
@@ -60,7 +60,7 @@ private fun HomeTopicItemListDispatcherContent(
       Text(stringResource(R.string.topic_list_empty_text))
     }
   } else {
-    HomeTopicItemListContent(
+    TopicItemListContent(
         topics = topicsState.topics,
         onClickTopic = onClickTopic,
         onTogglePin = onTogglePin,
@@ -71,8 +71,8 @@ private fun HomeTopicItemListDispatcherContent(
 }
 
 @Composable
-private fun HomeTopicItemListContent(
-    topics: List<HomeTopicUiModel>,
+private fun TopicItemListContent(
+    topics: List<TopicUiModel>,
     onClickTopic: (TopicId) -> Unit,
     onTogglePin: (TopicId, Boolean) -> Unit,
     onClickTopicSetting: (TopicId) -> Unit,
@@ -96,7 +96,7 @@ private fun HomeTopicItemListContent(
   ) {
     // MUST use .value as it should be savable in bundle
     items(topics, key = { it.id.value }) { topic ->
-      HomeTopicItemCard(
+      TopicItemCard(
           topic = topic,
           isContextMenuVisible = activeMenuTopicId == topic.id,
           onDismissContextMenu = { activeMenuTopicId = null },

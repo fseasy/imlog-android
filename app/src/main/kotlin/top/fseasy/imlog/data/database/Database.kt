@@ -3,8 +3,8 @@ package top.fseasy.imlog.data.database
 import android.content.Context
 import androidx.sqlite.db.SupportSQLiteDatabase
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
-import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.Messages.Adapter as MessageAdapter
+import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.Topic_members.Adapter as TopicMembersAdapter
 import top.fseasy.imlog.sqldelight.Topic_message_state.Adapter as TopicMessageStateAdapter
 import top.fseasy.imlog.sqldelight.Topic_preference.Adapter as TopicPreferenceAdapter
@@ -31,7 +31,11 @@ fun createSqlDelightDb(context: Context): SqlDelightDb {
       driver = driver,
       messagesAdapter =
           MessageAdapter(
-              quote_messageAdapter = quoteMessageAdapter,
+              idAdapter = messageIdAdapter,
+              topic_idAdapter = topicIdAdapter,
+              sender_idAdapter = userIdAdapter,
+              typeAdapter = messageTypeAdapter,
+              quoted_message_idAdapter = messageIdAdapter,
           ),
       topic_message_stateAdapter =
           TopicMessageStateAdapter(

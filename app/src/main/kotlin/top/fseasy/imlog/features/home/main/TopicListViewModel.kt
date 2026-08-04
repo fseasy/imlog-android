@@ -24,8 +24,8 @@ import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import javax.inject.Inject
 
 data class TopicsUiState(
-    val loading: Boolean = true,
-    val topics: List<HomeTopicUiModel> = emptyList(),
+  val loading: Boolean = true,
+  val topics: List<TopicUiModel> = emptyList(),
 )
 
 @HiltViewModel

@@ -36,15 +36,15 @@ import top.fseasy.imlog.ui.model.TopicAvatarUiModel
 import top.fseasy.imlog.ui.model.toCoilModel
 
 @Composable
-fun HomeTopicItemCard(
-    topic: HomeTopicUiModel,
-    isContextMenuVisible: Boolean,
-    onDismissContextMenu: () -> Unit,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onPinClick: () -> Unit,
-    onSettingClick: () -> Unit,
-    modifier: Modifier = Modifier,
+fun TopicItemCard(
+  topic: TopicUiModel,
+  isContextMenuVisible: Boolean,
+  onDismissContextMenu: () -> Unit,
+  onClick: () -> Unit,
+  onLongClick: () -> Unit,
+  onPinClick: () -> Unit,
+  onSettingClick: () -> Unit,
+  modifier: Modifier = Modifier,
 ) {
 
   val backgroundColor =
@@ -195,11 +195,11 @@ private fun MessageSnippet.toAnnotatedString(): AnnotatedString {
 /** menu is short, so choose the Dropdown menu in each TopicCard. */
 @Composable
 private fun TopicDropdownMenuContent(
-    isContextMenuVisible: Boolean,
-    onDismissContextMenu: () -> Unit,
-    topic: HomeTopicUiModel,
-    onPinClick: () -> Unit,
-    onSettingClick: () -> Unit,
+  isContextMenuVisible: Boolean,
+  onDismissContextMenu: () -> Unit,
+  topic: TopicUiModel,
+  onPinClick: () -> Unit,
+  onSettingClick: () -> Unit,
 ) {
   val pinButtonRes =
       if (topic.isPinned) R.string.topic_settings_btn_unpin else R.string.topic_settings_btn_pin

@@ -4,7 +4,7 @@ import app.cash.sqldelight.ColumnAdapter
 import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessagePreview
-import top.fseasy.imlog.domain.model.QuoteMessage
+import top.fseasy.imlog.domain.model.QuotedMessage
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicMemberRole
 import top.fseasy.imlog.domain.model.UserId
@@ -39,13 +39,13 @@ val topicMemberRoleAdapter =
       override fun encode(value: TopicMemberRole) = value.value
     }
 
-val quoteMessageAdapter =
-    object : ColumnAdapter<Result<QuoteMessage>, String> {
+val quotedMessageAdapter =
+    object : ColumnAdapter<Result<QuotedMessage>, String> {
       override fun decode(databaseValue: String) = runCatching {
-        defaultJson.decodeFromString<QuoteMessage>(databaseValue)
+        defaultJson.decodeFromString<QuotedMessage>(databaseValue)
       }
 
-      override fun encode(value: Result<QuoteMessage>): String =
+      override fun encode(value: Result<QuotedMessage>): String =
           value.fold(
               onSuccess = { defaultJson.encodeToString(it) },
               onFailure = { error("Encode must pass the actual value!") },

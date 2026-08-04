@@ -88,7 +88,7 @@ fun TopicsScreenContent(
       },
   ) { paddingValues ->
     Column(modifier = modifier.fillMaxSize().padding(paddingValues)) {
-      HomeTopicItemList(
+      TopicItemList(
           onClickTopic = onSelectTopic,
           onClickTopicSetting = onOpenTopicSettings,
           modifier = modifier,

@@ -295,9 +295,9 @@ constructor(
     launchWithTopicUserId { topicId, userId ->
       val draft =
           MessageDraft(
-              inputMode = inputMode,
-              quoteMessage = null, // TODO: add quoteMessage impl
-              text = inputText,
+            inputMode = inputMode,
+            quotedMessage = null, // TODO: add quoteMessage impl
+            text = inputText,
           )
       try {
         topicRepository.setMessageDraft(

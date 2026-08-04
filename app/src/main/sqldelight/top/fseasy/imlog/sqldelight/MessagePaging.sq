@@ -1,0 +1,56 @@
+-- Paging for message timeline pagenation
+-- Extra fields:
+-- 1. quote message (sender name, type, thumbnail-name, created-at)
+-- 2. file processing task (temp file)
+-- 3. user (name, avatar)
+getPagedMessages:
+SELECT
+    m.id,
+    m.type,
+    m.created_at,
+    m.text,
+    m.quoted_message_id,
+    -- message sender user info (id + extra)
+    m.sender_id,
+    users.username AS sender_name,
+    users.avatar_model AS sender_avatar,
+    -- quoted message
+    quoted_messages.type AS quoted_type,
+    quoted_messages.text AS quoted_text,
+    quoted_messages.thumbnail_filename AS quoted_attachment_thumbnail_filename,
+    quoted_messages.created_at AS quoted_created_at,
+    -- quoted message user info (id + extra)
+    quoted_messages.sender_id AS quoted_sender_id,
+    quoted_users.username AS quoted_sender_name,
+    quoted_users.avatar_model AS quoted_sender_avatar,
+    -- attachment infos
+    m.display_filename AS attachment_display_filename,
+    processing.src_uri AS attachment_src_temporary_uri,
+    processing.internal_cached_filename AS attachment_internal_cache_filename,
+    m.raw_filename AS attachment_stored_filename,
+    m.thumbnail_filename AS attachment_thumbnail_filename,
+    processing.error_stage AS attachment_processing_error_stage,
+    processing.error_user_retryable AS attachment_processing_error_user_retryable,
+    m.width AS attachment_width,
+    m.height AS attachment_height,
+    m.duration AS attachment_duration,
+    m.file_size AS attachment_file_bytes_size,
+    m.mime_type AS attachment_mime_type
+FROM messages m
+LEFT JOIN users ON m.sender_id = users.id
+LEFT JOIN messages quoted_messages ON m.quoted_message_id = quoted_messages.id
+LEFT JOIN users quoted_users ON quoted_messages.sender_id = quoted_users.id
+LEFT JOIN message_attachment_processing_task_states processing ON m.id = processing.message_id
+WHERE
+    m.topic_id = :topicId
+    AND m.is_deleted = 0
+-- with id as sort key to make more stable
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT :limit OFFSET :offset;
+
+getTopicMessageCount:
+SELECT COUNT(*)
+FROM messages
+WHERE
+    topic_id = :topicId
+    AND is_deleted = 0;

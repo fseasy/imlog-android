@@ -5,7 +5,7 @@
 getTopicById:
 SELECT * FROM topics WHERE id = ?;
 
--- Home Screen Topic list
+-- Home Screen Topic list (get last messaage on the fly)
 getCurrentUserHomeScreenTopics:
 SELECT
     t.id,
@@ -13,41 +13,41 @@ SELECT
     t.avatar_model,
     COALESCE(tps.pinned, 0) AS pinned,
     CASE
-        WHEN tms.latest_message_at IS NULL THEN 0  -- 没有消息，不算未读
-        WHEN tms.last_read_at IS NULL THEN 1  -- 从未读过
-        WHEN tms.last_read_at < tms.latest_message_at THEN 1  -- 有新消息
+        WHEN m.created_at IS NULL THEN 0
+        WHEN tms.last_read_at IS NULL THEN 1
+        WHEN tms.last_read_at < m.created_at THEN 1
         ELSE 0
     END AS has_unread,
-    -- 1. if has message => last_message_at 2. no message => created_at (not updated_at)
-    COALESCE(tms.latest_message_at, t.created_at) AS topic_message_update_at,
-    -- Following 3 fields are both for message-preview field
+    -- for ui display and sort：if has message: m.created_at, else topic.created_at
+    COALESCE(m.created_at, t.created_at) AS topic_message_update_at,
+    -- for message snippet ui: 1. draft 2. last message 3. description
     tms.draft,
-    tms.latest_message_preview,
+    m.type AS last_message_type,
+    m.text AS last_message_text,
+    sender.username AS last_message_sender_name,
     t.description
 FROM topics t
-INNER JOIN topic_members tm ON t.id = tm.topic_id
--- LEFT JOIN 以应对没有消息的新主题
-LEFT JOIN topic_preference tps ON t.id = tps.topic_id AND tps.user_id = :current_user_id
-LEFT JOIN topic_message_state tms ON t.id = tms.topic_id AND tms.user_id = :current_user_id
+INNER JOIN topic_members tm ON t.id = tm.topic_id AND tm.user_id = :currentUserId
+LEFT JOIN topic_preference tps ON t.id = tps.topic_id AND tps.user_id = :currentUserId
+LEFT JOIN topic_message_state tms ON t.id = tms.topic_id AND tms.user_id = :currentUserId
+-- For last message (text part)
+LEFT JOIN messages m ON m.id = (
+    SELECT id FROM messages
+    -- following condition & order will match the index
+    WHERE
+        topic_id = t.id
+        AND is_deleted = 0
+    ORDER BY created_at DESC, id DESC
+    LIMIT 1
+)
+-- For last message (user part)
+LEFT JOIN users sender ON sender.id = m.sender_id
 WHERE
-    tm.user_id = :current_user_id
-    -- 过滤掉归档的 Topic
-    AND COALESCE(tps.archived, 0) = 0
+    COALESCE(tps.archived, 0) = 0
 ORDER BY
-    -- 1. pin 2. topic last message at + new topic 3. has unread msg
-    -- time > unread. just think if the user always not click the unread topic,
-    -- we don't need to prioritize them.
     COALESCE(tps.pinned, 0) DESC,
     topic_message_update_at DESC,
     has_unread DESC;
-
--- for CreateFirstTopic usecase. topics includes
--- 1. deleted 2. archived 3. other created 4. self created
-countAllRelatedTopicsForUser:
-SELECT COUNT(DISTINCT t.id)
-FROM topics t
-INNER JOIN topic_members m ON t.id = m.topic_id
-WHERE m.user_id = :userId;
 
 --| topic_members queries
 getMembersByTopicId:

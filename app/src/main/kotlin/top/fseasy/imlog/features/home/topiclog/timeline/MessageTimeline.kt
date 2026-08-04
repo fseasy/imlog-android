@@ -23,7 +23,7 @@ import top.fseasy.imlog.domain.model.Message
 
 /** TODO: add paging */
 @Composable
-fun TimelineScreen(
+fun MessageTimeline(
     onTapOutside: () -> Unit,
     onDragList: () -> Unit,
     modifier: Modifier = Modifier,

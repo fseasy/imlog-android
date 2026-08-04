@@ -2,6 +2,7 @@ package top.fseasy.imlog.features.home.main
 
 import android.content.Context
 import androidx.compose.runtime.Immutable
+import java.time.Instant
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.MessageDraft
@@ -14,12 +15,11 @@ import top.fseasy.imlog.ui.model.TopicAvatarUiModel
 import top.fseasy.imlog.ui.model.buildTopicAvatarNioPath
 import top.fseasy.imlog.ui.model.toUiModel
 import top.fseasy.imlog.ui.util.ImTimeUtils
-import java.time.Instant
 
 @Immutable data class MessageSnippet(val header: String, val content: String)
 
 @Immutable
-data class HomeTopicUiModel(
+data class TopicUiModel(
     val id: TopicId,
     val name: String,
     val avatarUiModel: TopicAvatarUiModel,
@@ -33,7 +33,7 @@ fun HomeTopic.toUiModel(
     currentUserId: UserId,
     storagePathUseCase: StoragePathUseCase,
     context: Context,
-): HomeTopicUiModel {
+): TopicUiModel {
   val avatarUiModel = avatarModel.toUiModel { filename ->
     buildTopicAvatarNioPath(
         signInUserId = currentUserId,
@@ -49,7 +49,7 @@ fun HomeTopic.toUiModel(
           description = description,
           context = context,
       )
-  return HomeTopicUiModel(
+  return TopicUiModel(
       id = id,
       name = name,
       avatarUiModel = avatarUiModel,
@@ -84,7 +84,7 @@ private fun buildMessageSnippet(
 fun MessageDraft.toMessageSnippet(context: Context): MessageSnippet? {
   val header = "[${context.getString(R.string.home_topic_message_snippet_draft_header)}]"
   return if (text.isBlank()) {
-    if (quoteMessage != null) {
+    if (quotedMessage != null) {
       MessageSnippet(header = header, content = "")
     } else {
       null
@@ -97,8 +97,8 @@ fun MessageDraft.toMessageSnippet(context: Context): MessageSnippet? {
 /** Logically, it can't generate an empty snippet */
 fun MessagePreview.toMessageSnippet(context: Context): MessageSnippet {
   val content = buildString {
-    if (senderNameSnapshot != null) {
-      append(senderNameSnapshot)
+    if (senderName != null) {
+      append(senderName)
       append(":")
     }
     val typeNoteResId =
@@ -113,8 +113,8 @@ fun MessagePreview.toMessageSnippet(context: Context): MessageSnippet {
     if (typeNoteResId != null) {
       append(" [${context.getString(typeNoteResId)}]")
     }
-    if (textSnapshot != null) {
-      append(" $textSnapshot")
+    if (text != null) {
+      append(" $text")
     }
   }
   return MessageSnippet(header = "", content = content)
