@@ -17,12 +17,14 @@ SELECT
     -- quoted message
     quoted_messages.type AS quoted_type,
     quoted_messages.text AS quoted_text,
+    quoted_messages.display_filename AS quoted_attachment_display_filename,
+    quoted_messages.mime_type AS quoted_attachment_mime_type,
+    quoted_messages.duration AS quoted_attachment_duration,
     quoted_messages.thumbnail_filename AS quoted_attachment_thumbnail_filename,
     quoted_messages.created_at AS quoted_created_at,
     -- quoted message user info (id + extra)
-    quoted_messages.sender_id AS quoted_sender_id,
+    quoted_messages.sender_id AS quoted_sender_id, -- use messages'id to handle user-delete condition
     quoted_users.username AS quoted_sender_name,
-    quoted_users.avatar_model AS quoted_sender_avatar,
     -- attachment infos
     m.display_filename AS attachment_display_filename,
     processing.src_uri AS attachment_src_temporary_uri,

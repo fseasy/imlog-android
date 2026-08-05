@@ -1,10 +1,11 @@
 package top.fseasy.imlog.domain.model
 
+import kotlinx.serialization.Serializable
+import timber.log.Timber
 import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
-import kotlinx.serialization.Serializable
 
 enum class MessageType(val value: String) {
   Text("text"),
@@ -17,8 +18,14 @@ enum class MessageType(val value: String) {
 
   companion object {
     private val valueMap = entries.associateBy(MessageType::value)
+    val defaultType = MessageType.Text
 
-    fun fromValue(value: String) = valueMap[value]
+    fun fromValueOrDefault(value: String) =
+        valueMap[value]
+            ?: run {
+              Timber.w("Invalid message type: $value, fallback to default value = $defaultType")
+              defaultType
+            }
   }
 }
 
@@ -40,7 +47,9 @@ value class MessageId(val value: String) {
   }
 }
 
-data class Sender(
+data class QuotedMessageSender(val id: UserId?, val name: String)
+
+data class MessageSender(
     val id: UserId,
     val name: String,
     val avatarModel: UserAvatarModel,
@@ -58,7 +67,7 @@ sealed interface QuotedMessageContent {
   data class Text(val text: String) : QuotedMessageContent
 
   // audio, generic file
-  data class File(val filename: String, val mimeType: String) : QuotedMessageContent
+  data class File(val displayFilename: String, val mimeType: String) : QuotedMessageContent
 
   data class Voice(val duration: Duration) : QuotedMessageContent
 
@@ -69,32 +78,40 @@ sealed interface QuotedMessageContent {
       ImageLike
 }
 
-data class QuotedMessage(
-    val id: MessageId,
-    val messageType: MessageType,
-    val sender: Sender,
-    val content: QuotedMessageContent,
-)
+sealed interface QuotedMessage {
+  data object Deleted : QuotedMessage
+
+  data class Matched(
+      val id: MessageId,
+      val sender: QuotedMessageSender,
+      val content: QuotedMessageContent,
+  ) : QuotedMessage
+}
 
 sealed interface CacheAttachmentSource {
-  val filename: String
 
-  data class Cache(override val filename: String) : CacheAttachmentSource
+  data class Cache(val filename: String) : CacheAttachmentSource
 
-  data class StorageUri(override val filename: String) : CacheAttachmentSource
+  data class StorageUri(val filename: String) : CacheAttachmentSource
+
+  /** shouldn't exist but in case */
+  data object IllegalState : CacheAttachmentSource
 }
 
 sealed interface UriAttachmentSource {
   data class SourceTemporary(val uriStr: UriStr) : UriAttachmentSource
 
   data class Storage(val filename: String) : UriAttachmentSource
+
+  /** We don't want to raise error, just set it to illegal */
+  data object IllegalState : UriAttachmentSource
 }
 
 sealed interface MessageContent {
   sealed interface UriAttachment : MessageContent {
     val displayFilename: String
 
-    /** Could be either source-temporary-uri, or copied-storage-uri. MUST be existed */
+    /** Could be either source-temporary-uri, or copied-storage-uri. or Illegal */
     val fileUri: UriAttachmentSource
   }
 
@@ -129,6 +146,12 @@ sealed interface MessageContent {
       val duration: Duration,
   ) : UriAttachment
 
+  data class GenericFile(
+      override val displayFilename: String,
+      override val fileUri: UriAttachmentSource,
+      val mimeType: String,
+  ) : UriAttachment
+
   data class Voice(
       val displayFilename: String,
       val file: CacheAttachmentSource,
@@ -136,9 +159,10 @@ sealed interface MessageContent {
   ) : MessageContent
 }
 
-data class Message(
+/** For Timeline UI */
+data class TimelineMessage(
     val id: MessageId,
-    val sender: Sender,
+    val sender: MessageSender,
     val quotedMessage: QuotedMessage?,
     val createdAt: Instant,
     val content: MessageContent,

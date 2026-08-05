@@ -31,11 +31,11 @@ constructor(
       dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
         val messageId =
             messageRepository.syncInsertInitialAttachmentMessage(
-                topicId = topicId,
-                senderId = senderId,
-                type = messageType,
-                timestampMs = messageTimestampMs,
-                fileMetadata = fileMetadata,
+              topicId = topicId,
+              senderId = senderId,
+              type = messageType,
+              createdAt = messageTimestampMs,
+              fileMetadata = fileMetadata,,
             )
         messageRepository.syncInsertInitialAttachmentProcessingTaskState(
             messageId = messageId,
@@ -60,11 +60,11 @@ constructor(
       dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
         val messageId =
             messageRepository.syncInsertInitialAttachmentMessage(
-                topicId = topicId,
-                senderId = senderId,
-                type = messageType,
-                timestampMs = messageTimestampMs,
-                fileMetadata = fileMetadata,
+              topicId = topicId,
+              senderId = senderId,
+              type = messageType,
+              createdAt = messageTimestampMs,
+              fileMetadata = fileMetadata,,
             )
         messageRepository.syncInsertInitialAttachmentProcessingTaskState(
             messageId = messageId,

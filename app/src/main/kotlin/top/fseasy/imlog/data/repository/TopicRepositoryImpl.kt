@@ -10,20 +10,20 @@ import kotlinx.coroutines.withContext
 import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
 import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.MessageDraft
+import top.fseasy.imlog.domain.model.MessagePreview
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicAvatarModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicMemberRole
 import top.fseasy.imlog.domain.model.TopicPreference
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.model.defaultTopicPresetAvatar
-import top.fseasy.imlog.domain.model.serialize
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.Topic_message_state
-import top.fseasy.imlog.ui.model.toAvatarModelOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.Clock
+import kotlin.time.Instant
 import top.fseasy.imlog.sqldelight.GetCurrentUserHomeScreenTopics as HomeTopicEntity
 import top.fseasy.imlog.sqldelight.Topic_members as TopicMemberEntity
 import top.fseasy.imlog.sqldelight.Topic_preference as TopicPreferenceEntity
@@ -82,49 +82,47 @@ constructor(
       name: String,
       avatarModel: TopicAvatarModel,
       description: String?,
-      createdAtTimestampMs: Long,
+      createdAt: Instant,
   ): TopicId {
     val topicId = TopicId.random()
+    val createdAtMs = createdAt.toEpochMilliseconds()
 
     // needs to insert to 3 tables: 1. topic 2. personal state 3. topic-members
     database.topicQueries.insertTopic(
         TopicEntity(
             id = topicId,
             name = name,
-            avatar_model = avatarModel.serialize(),
+            avatar_model = avatarModel,
             description = description,
             creator_id = creatorId,
-            created_at = createdAtTimestampMs,
-            attributes_updated_at = createdAtTimestampMs,
+            created_at = createdAtMs,
+            attributes_updated_at = createdAtMs,
+            archived = false,
         )
     )
     database.topicQueries.insertPersonalPreference(
         TopicPreferenceEntity(
             topic_id = topicId,
             user_id = creatorId,
-            archived = false,
             pinned = false,
             background = null,
-            attributes_updated_at = createdAtTimestampMs,
+            attributes_updated_at = createdAtMs,
         )
     )
     database.topicQueries.insertMember(
         TopicMemberEntity(
             topic_id = topicId,
             user_id = creatorId,
-            user_nickname = null, // use null so it can adapt to the latest name
             role = TopicMemberRole.Admin,
-            joined_at = createdAtTimestampMs,
-            attributes_updated_at = createdAtTimestampMs,
+            joined_at = createdAtMs,
+            attributes_updated_at = createdAtMs,
         )
     )
     database.topicQueries.insertMessageState(
         Topic_message_state(
             topic_id = topicId,
             user_id = creatorId,
-            last_read_at = createdAtTimestampMs,
-            latest_message_at = createdAtTimestampMs,
-            latest_message_preview = null,
+            last_read_at = createdAtMs,
             draft = null,
         )
     )
@@ -136,7 +134,7 @@ constructor(
       name: String,
       avatarModel: TopicAvatarModel,
       description: String?,
-      createdAtTimestampMs: Long,
+      createdAt: Instant,
   ): TopicId =
       withContext(dispatcher) {
         retrySQLiteOnKeyConflict {
@@ -146,7 +144,7 @@ constructor(
                 name = name,
                 avatarModel = avatarModel,
                 description = description,
-                createdAtTimestampMs = createdAtTimestampMs,
+                createdAt = createdAt,
             )
           }
         }
@@ -182,7 +180,7 @@ constructor(
         val rowsAffected =
             database.topicUpdateQueries
                 .updateTopicAvatarModel(
-                    newAvatarModel = newAvatarModel.serialize(),
+                    newAvatarModel = newAvatarModel,
                     updatedAt = now,
                     topicId = topicId,
                     triggerUserId = userId,
@@ -232,14 +230,14 @@ constructor(
       archived: Boolean,
   ): Boolean =
       withContext(dispatcher) {
-        val now = System.currentTimeMillis()
         val rowsAffected =
             database.topicUpdateQueries
-                .updateTopicPersonalArchived(
+                .updateTopicArchived(
                     newArchived = archived,
-                    updatedAt = now,
+                    updatedAt = Clock.System.now().toEpochMilliseconds(),
                     topicId = topicId,
                     triggerUserId = userId,
+                    adminRoleValue = TopicMemberRole.Admin,
                 )
                 .value
         rowsAffected > 0L
@@ -291,32 +289,43 @@ constructor(
       Topic(
           id = id,
           name = name,
-          avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
+          avatarModel = avatar_model,
           description = description,
           creatorId = creator_id,
-          createdAt = created_at,
-          attributesUpdatedAt = attributes_updated_at,
+          createdAt = Instant.fromEpochMilliseconds(created_at),
+          archived = archived,
       )
 
   private fun TopicPreferenceEntity.toDomain() =
       TopicPreference(
           topicId = topic_id,
           userId = user_id,
-          isArchived = archived,
           isPinned = pinned,
           background = background,
       )
 
-  private fun HomeTopicEntity.toDomain() =
-      HomeTopic(
-          id = id,
-          name = name,
-          avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultTopicPresetAvatar(),
-          description = description,
-          isPinned = pinned == 1L,
-          hasUnread = has_unread == 1L,
-          messageUpdatedAt = topic_message_update_at,
-          latestMessagePreview = latest_message_preview?.getOrNull(),
-          draft = draft?.getOrNull(),
-      )
+  private fun HomeTopicEntity.toDomain(): HomeTopic {
+    val lastMessagePreview =
+        if (last_message_type != null && last_message_sender_id != null) {
+          MessagePreview(
+              type = last_message_type,
+              text = last_message_text,
+              senderId = last_message_sender_id,
+              senderName = last_message_sender_name,
+          )
+        } else {
+          null
+        }
+    return HomeTopic(
+        id = id,
+        name = name,
+        avatarModel = avatar_model,
+        description = description,
+        isPinned = pinned == 1L,
+        hasUnread = has_unread == 1L,
+        messageUpdatedAt = Instant.fromEpochMilliseconds(topic_message_update_at),
+        lastMessagePreview = lastMessagePreview,
+        draft = draft?.getOrNull(),
+    )
+  }
 }

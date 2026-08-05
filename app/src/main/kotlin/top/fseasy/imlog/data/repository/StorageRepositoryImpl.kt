@@ -2,8 +2,13 @@ package top.fseasy.imlog.data.repository
 
 import android.content.Context
 import android.net.Uri
-import androidx.core.net.toUri
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.FileNotFoundException
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.io.path.createDirectories
+import kotlin.io.path.createParentDirectories
+import kotlin.io.path.writeBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -24,6 +29,7 @@ import top.fseasy.imlog.data.util.UriPathUtil
 import top.fseasy.imlog.data.util.WriteDataResult
 import top.fseasy.imlog.data.util.copyBetweenUri
 import top.fseasy.imlog.data.util.copyUriToFile
+import top.fseasy.imlog.data.util.syncDeleteFile as syncDeleteJavaFile
 import top.fseasy.imlog.data.util.writeData2Uri
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
@@ -37,13 +43,6 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VideoMetadata
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
-import java.io.FileNotFoundException
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlin.io.path.createDirectories
-import kotlin.io.path.createParentDirectories
-import kotlin.io.path.writeBytes
-import top.fseasy.imlog.data.util.syncDeleteFile as syncDeleteJavaFile
 
 @Singleton
 class StorageRepositoryImpl
@@ -69,10 +68,10 @@ constructor(
     val uri =
         withContext(dispatcher) {
           database.userPreferenceQueries
-              .getSharedStorageRootUri(userId.value)
+              .getSharedStorageRootUri(userId)
               .executeAsOneOrNull()
               ?.shared_storage_root_uri
-              ?.toUri()
+              ?.toUriOrNull()
         }
     storageUriCache[userId] = uri
     return uri
@@ -86,12 +85,12 @@ constructor(
     withContext(dispatcher) {
       database.transaction {
         database.userPreferenceQueries.upsertSharedStorageRootUri(
-            userId = userId.value,
-            storageRootUri = uriStr?.value,
+            userId = userId,
+            storageRootUri = uriStr,
         )
         database.appInitDataQueries.updateStorageUriSelected(
-            isSelected = if (uriStr != null) 1L else 0L,
-            userId = userId.value,
+            isSelected = uriStr != null,
+            userId = userId,
         )
       }
     }

@@ -8,6 +8,8 @@ import top.fseasy.imlog.domain.model.TopicAvatarModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicPreference
 import top.fseasy.imlog.domain.model.UserId
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 interface TopicRepository {
   /**
@@ -32,7 +34,7 @@ interface TopicRepository {
       name: String,
       avatarModel: TopicAvatarModel,
       description: String?,
-      createdAtTimestampMs: Long = System.currentTimeMillis(),
+      createdAt: Instant = Clock.System.now(),
   ): TopicId
 
   /**
@@ -46,7 +48,7 @@ interface TopicRepository {
       name: String,
       avatarModel: TopicAvatarModel,
       description: String?,
-      createdAtTimestampMs: Long = System.currentTimeMillis(),
+      createdAt: Instant = Clock.System.now(),
   ): TopicId
 
   suspend fun countAllRelatedTopicsForUser(userId: UserId): Long

@@ -102,4 +102,6 @@
     <string name="create_topic_crop_image_title">Crop Image for Topic Avatar</string>
     <string name="create_topic_crop_image_failed_due_to">Crop image failed due to %1$s</string>
     <string name="term_custom_topic_avatar">Custom Topic Avatar</string>
+    <string name="term_deleted_user">Deleted User</string>
+    <string name="term_unknown_filename">Unknown File</string>
 </resources>

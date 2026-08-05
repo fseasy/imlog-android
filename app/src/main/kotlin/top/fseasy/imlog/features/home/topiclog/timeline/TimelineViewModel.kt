@@ -6,16 +6,21 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import androidx.paging.map
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageId
+import top.fseasy.imlog.domain.model.TimelineMessage
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
@@ -80,16 +85,17 @@ constructor(
           )
 
   @OptIn(ExperimentalCoroutinesApi::class)
-  val messagesStateFlow: StateFlow<List<Message>?> =
+  val pagedMessagesStateFlow: Flow<PagingData<MessageUiModel>> =
       messageRepository
-          .observeTopicMessagesOrNull(topicId)
-          .stateIn(
-              scope = viewModelScope,
-              started = SharingStarted.WhileSubscribed(5000),
-              initialValue = emptyList(),
-          )
+          .pagedTopicMessages(topicId)
+          .map { pagingData ->
+            pagingData.map { timelineMessage ->
+              timelineMessage.toUiModel()
+            }
+          }
+          .cachedIn(viewModelScope)
 
-  fun copyMessage(message: Message) {
+  fun copyMessage(message: TimelineMessage) {
     // TODO: 实现剪贴板复制
   }
 }

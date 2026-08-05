@@ -21,15 +21,15 @@ CREATE TABLE messages (
     --   when delete quoted message
     quoted_message_id TEXT AS MessageId,
     text TEXT,
-    created_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL, -- Epoch Milliseconds
     -- || Message file fields ||
     --    DESIGN-Concept: We put them to the main table to decrease the code complexity.
     --                    at the cost of increased db size.
     --   -> class 1: ui card rendering(before/when showing content)
     mime_type TEXT,
-    width INTEGER, -- used to decide the card ratio (before showing content)
-    height INTEGER, -- card ratio
-    duration INTEGER, -- ui element (when showing)
+    width INTEGER AS kotlin.Int, -- used to decide the card ratio (before showing content)
+    height INTEGER AS kotlin.Int, -- card ratio
+    duration INTEGER, -- ui element (when showing), Milliseconds
     file_size INTEGER, -- ui element, in bytes
     display_filename TEXT, -- ui element / for download/share
     --   -> class 2: loading source candidates

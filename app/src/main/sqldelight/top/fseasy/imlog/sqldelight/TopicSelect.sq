@@ -1,9 +1,7 @@
---|==========
---| Plain Select
---|==========
 --| topics queries
 getTopicById:
 SELECT * FROM topics WHERE id = ?;
+
 
 -- Home Screen Topic list (get last messaage on the fly)
 getCurrentUserHomeScreenTopics:
@@ -24,6 +22,7 @@ SELECT
     tms.draft,
     m.type AS last_message_type,
     m.text AS last_message_text,
+    m.sender_id AS last_message_sender_id, -- prefer message source to escape user deletion case
     sender.username AS last_message_sender_name,
     t.description
 FROM topics t
@@ -43,7 +42,7 @@ LEFT JOIN messages m ON m.id = (
 -- For last message (user part)
 LEFT JOIN users sender ON sender.id = m.sender_id
 WHERE
-    COALESCE(tps.archived, 0) = 0
+    archived = 0
 ORDER BY
     COALESCE(tps.pinned, 0) DESC,
     topic_message_update_at DESC,
@@ -52,6 +51,12 @@ ORDER BY
 --| topic_members queries
 getMembersByTopicId:
 SELECT * FROM topic_members WHERE topic_id = ?;
+
+-- NOTE: no matter if the topic is archived.
+countAllRelatedTopicsForUser:
+SELECT COUNT(*)
+FROM topic_members
+WHERE topic_members.user_id = :userId;
 
 --| topic_preference queries
 getPreference:

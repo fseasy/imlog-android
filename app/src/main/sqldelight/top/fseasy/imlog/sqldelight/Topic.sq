@@ -1,7 +1,9 @@
 import kotlin.Boolean;
+import top.fseasy.imlog.domain.model.AvatarModel;
 import top.fseasy.imlog.domain.model.MessageDraft;
 import top.fseasy.imlog.domain.model.TopicId;
 import top.fseasy.imlog.domain.model.TopicMemberRole;
+import top.fseasy.imlog.domain.model.TopicPresetAvatar;
 import top.fseasy.imlog.domain.model.UserId;
 
 -- TODO
@@ -18,12 +20,13 @@ import top.fseasy.imlog.domain.model.UserId;
 CREATE TABLE topics (
     id TEXT AS TopicId NOT NULL PRIMARY KEY,
     name TEXT NOT NULL,
-    avatar_model TEXT NOT NULL,
+    avatar_model TEXT AS AvatarModel<TopicPresetAvatar> NOT NULL,
     description TEXT,
     -- 注意！这里可以为空：因为当 creator 注销账户后，不能直接删除这个 Topic!
     -- 只有群成员全部注销后才能删除这个 Topic；对应到 Trigger 里基于 topic_members 的删除
     creator_id TEXT AS UserId REFERENCES users(id) ON DELETE SET NULL,
     created_at INTEGER NOT NULL,
+    archived INTEGER AS Boolean NOT NULL DEFAULT 0,
     attributes_updated_at INTEGER NOT NULL
 );
 
@@ -47,7 +50,6 @@ CREATE TABLE topic_preference (
     -- 删除了 user / topic, 关联的个性化设置全部删掉！
     topic_id TEXT AS TopicId NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
     user_id TEXT AS UserId NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    archived INTEGER AS Boolean NOT NULL DEFAULT 0,
     pinned INTEGER AS Boolean NOT NULL DEFAULT 0,
     background TEXT,
     attributes_updated_at INTEGER NOT NULL,
@@ -64,7 +66,6 @@ CREATE TABLE topic_message_state (
 );
 
 --
-
 
 insertTopic:
 INSERT INTO topics

@@ -44,10 +44,10 @@ fun HomeTopic.toUiModel(
   }
   val messageSnippet =
       buildMessageSnippet(
-          latestMessagePreview,
-          draft = draft,
-          description = description,
-          context = context,
+        lastMessagePreview,
+        draft = draft,
+        description = description,
+        context = context,
       )
   return TopicUiModel(
       id = id,

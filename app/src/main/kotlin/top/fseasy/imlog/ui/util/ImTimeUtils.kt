@@ -1,6 +1,5 @@
 package top.fseasy.imlog.ui.util
 
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -36,15 +35,18 @@ object ImTimeUtils {
    * 3. Same week → weekday name
    * 4. Same year → month + day
    * 5. Other years → medium date
+   *
+   * @param instant must be java.time.Instant, or transform following code to kotlin.datatime.xxx
+   *   (not kotlin.time.Instant)
    */
   fun formatImTime(
-      instant: Instant,
+      instant: java.time.Instant,
       zoneId: ZoneId = ZoneId.systemDefault(),
       locale: Locale = Locale.getDefault(),
   ): String {
     val targetZdt = instant.atZone(zoneId)
     val targetDate = targetZdt.toLocalDate()
-    val nowDate = Instant.now().atZone(zoneId).toLocalDate()
+    val nowDate = java.time.Instant.now().atZone(zoneId).toLocalDate()
     val daysBetween = ChronoUnit.DAYS.between(targetDate, nowDate)
 
     val formatters = getFormatters(locale, zoneId)

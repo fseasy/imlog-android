@@ -29,18 +29,25 @@ AND EXISTS (
     AND role = :adminRoleValue
 );
 
+
+updateTopicArchived:
+UPDATE topics
+SET
+    archived = :newArchived,
+    attributes_updated_at = :updatedAt
+WHERE id = :topicId
+AND EXISTS (
+    SELECT 1
+    FROM topic_members
+    WHERE topic_id = :topicId
+    AND user_id = :triggerUserId
+    AND role = :adminRoleValue
+);
+
 updateTopicPersonalBackground:
 UPDATE topic_preference
 SET
     background = :newBackground,
-    attributes_updated_at = :updatedAt
-WHERE topic_id = :topicId
-AND user_id = :triggerUserId;
-
-updateTopicPersonalArchived:
-UPDATE topic_preference
-SET
-    archived = :newArchived,
     attributes_updated_at = :updatedAt
 WHERE topic_id = :topicId
 AND user_id = :triggerUserId;

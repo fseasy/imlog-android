@@ -22,8 +22,8 @@ fun FileMessageBubble(
           style = MaterialTheme.typography.bodyMedium,
       )
       Text(
-          text = "${content.fileSize / 1024} KB",
-          style = MaterialTheme.typography.labelSmall,
+        text = "${content.formatedFileSize / 1024} KB",
+        style = MaterialTheme.typography.labelSmall,
       )
     }
   }

@@ -1,6 +1,5 @@
 package top.fseasy.imlog.data.repository
 
-import androidx.core.net.toUri
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import kotlinx.coroutines.CoroutineDispatcher
@@ -23,12 +22,9 @@ import top.fseasy.imlog.domain.model.User
 import top.fseasy.imlog.domain.model.UserAvatarModel
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.UserPreference
-import top.fseasy.imlog.domain.model.defaultUserPresetAvatar
-import top.fseasy.imlog.domain.model.serialize
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.sqldelight.SqlDelightDb
-import top.fseasy.imlog.ui.model.toAvatarModelOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.App_init_data as AppInitDataEntity
@@ -64,7 +60,7 @@ constructor(
   override fun observeUserOrNull(): Flow<User?> =
       safeObserveFlowOrNull({ "Observe User Get exception" }) {
         appStateRepository.observeCurrentUserIdOrNull().flatMapLatest { userId ->
-          val id = userId?.value ?: return@flatMapLatest flowOf(null)
+          val id = userId ?: return@flatMapLatest flowOf(null)
           database.userQueries.getUserById(id).asFlow().mapToOneOrNull(dispatcher).map {
             it?.toDomain()
           }
@@ -74,7 +70,7 @@ constructor(
   override fun observeUserAppInitDataOrNull(userId: UserId): Flow<AppInitData?> =
       safeObserveFlowOrNull({ "Failed to observe AppInit data" }) {
         database.appInitDataQueries
-            .selectByUserId(userId.value)
+            .selectByUserId(userId)
             .asFlow()
             .mapToOneOrNull(dispatcher)
             .map { row -> row?.toDomain() }
@@ -83,13 +79,13 @@ constructor(
 
   /** SYNC fun. expected to be used in withContext(IO) */
   override fun syncMarkAppInitFirstTopicCreated(userId: UserId): Boolean {
-    val affectedLine = database.appInitDataQueries.markFirstTopicCreated(userId.value).value
+    val affectedLine = database.appInitDataQueries.markFirstTopicCreated(userId).value
     return affectedLine > 0L
   }
 
   /** SYNC fun. expected to be used in withContext(IO) */
   override fun syncMarkAppInitWelcomeShown(userId: UserId): Boolean {
-    val affectedLine = database.appInitDataQueries.markWelcomeShown(userId.value).value
+    val affectedLine = database.appInitDataQueries.markWelcomeShown(userId).value
     return affectedLine > 0L
   }
 
@@ -123,16 +119,16 @@ constructor(
   // === User Preference data
   override suspend fun getUserPreference(userId: UserId): UserPreference? =
       withContext(dispatcher) {
-        database.userPreferenceQueries.getByUserId(userId.value).executeAsOneOrNull()?.toDomain()
+        database.userPreferenceQueries.getByUserId(userId).executeAsOneOrNull()?.toDomain()
       }
 
   // === END of User Preference
 
   private fun UserEntity.toDomain() =
       User(
-          id = UserId(id),
+          id = id,
           username = username,
-          avatarModel = avatar_model.toAvatarModelOrNull() ?: defaultUserPresetAvatar(),
+          avatarModel = avatar_model,
           lastSignInAt = last_signin_at,
           createdAt = created_at,
           attributesUpdatedAt = attributes_updated_at,
@@ -140,17 +136,17 @@ constructor(
 
   private fun UserPreferenceEntity.toDomain(): UserPreference =
       UserPreference(
-          userId = UserId(user_id),
-          mediaStorageRootUri = shared_storage_root_uri?.toUri(),
+          userId = user_id,
+          mediaStorageRootUri = shared_storage_root_uri,
           themeMode = theme_mode,
       )
 
   private fun AppInitDataEntity.toDomain(): AppInitData {
     return AppInitData(
-        userId = UserId(user_id),
-        storageUriSelected = storage_uri_selected == 1L,
-        firstTopicCreated = first_topic_created == 1L,
-        welcomeShown = welcome_shown == 1L,
+        userId = user_id,
+        storageUriSelected = storage_uri_selected,
+        firstTopicCreated = first_topic_created,
+        welcomeShown = welcome_shown,
     )
   }
 
@@ -162,9 +158,9 @@ constructor(
   ) {
     database.userQueries.insertUser(
         UserEntity(
-            id = userId.value,
+            id = userId,
             username = username,
-            avatar_model = avatarModel.serialize(),
+            avatar_model = avatarModel,
             last_signin_at = now,
             created_at = now,
             attributes_updated_at = now,
@@ -175,10 +171,10 @@ constructor(
   private fun syncInsertNewUserIntoAppInitDataTable(userId: UserId) {
     database.appInitDataQueries.insert(
         AppInitDataEntity(
-            user_id = userId.value,
-            storage_uri_selected = 0,
-            first_topic_created = 0,
-            welcome_shown = 0,
+            user_id = userId,
+            storage_uri_selected = false,
+            first_topic_created = false,
+            welcome_shown = false,
         )
     )
   }

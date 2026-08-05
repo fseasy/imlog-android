@@ -1,8 +1,9 @@
+import top.fseasy.imlog.domain.model.UriStr;
 import top.fseasy.imlog.domain.model.UserId;
 
 CREATE TABLE user_preference (
     user_id TEXT AS UserId NOT NULL PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    shared_storage_root_uri TEXT,
+    shared_storage_root_uri TEXT AS UriStr,
     theme_mode TEXT
 );
 

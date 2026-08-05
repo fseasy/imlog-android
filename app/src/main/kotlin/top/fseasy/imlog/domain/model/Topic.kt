@@ -1,6 +1,7 @@
 package top.fseasy.imlog.domain.model
 
 import kotlinx.serialization.Serializable
+import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -28,8 +29,8 @@ data class Topic(
     val avatarModel: TopicAvatarModel,
     val description: String?,
     val creatorId: UserId?, // Can be null if creator is deleted
-    val createdAt: Long,
-    val attributesUpdatedAt: Long,
+    val createdAt: Instant,
+    val archived: Boolean,
 )
 
 /** Element to show in Home screen topic lists. */
@@ -39,8 +40,8 @@ data class HomeTopic(
     val avatarModel: TopicAvatarModel,
     val isPinned: Boolean,
     val hasUnread: Boolean,
-    val messageUpdatedAt: Long,
-    val latestMessagePreview: MessagePreview?,
+    val messageUpdatedAt: Instant,
+    val lastMessagePreview: MessagePreview?,
     val draft: MessageDraft?,
     val description: String?,
 )

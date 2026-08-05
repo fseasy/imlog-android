@@ -19,7 +19,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import top.fseasy.imlog.domain.model.Message
+import top.fseasy.imlog.domain.model.TimelineMessage
 
 /** TODO: add paging */
 @Composable
@@ -41,10 +41,10 @@ fun MessageTimeline(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimelineContent(
-    messages: List<Message>,
-    modifier: Modifier = Modifier,
-    onTapOutside: () -> Unit,
-    onDragList: () -> Unit,
+  messages: List<TimelineMessage>,
+  modifier: Modifier = Modifier,
+  onTapOutside: () -> Unit,
+  onDragList: () -> Unit,
 ) {
   val listState = rememberLazyListState()
 

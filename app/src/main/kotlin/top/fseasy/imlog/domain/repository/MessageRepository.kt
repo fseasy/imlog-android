@@ -3,14 +3,15 @@ package top.fseasy.imlog.domain.repository
 import androidx.paging.PagingData
 import kotlinx.coroutines.flow.Flow
 import top.fseasy.imlog.domain.model.FileMetadataUnion
-import top.fseasy.imlog.domain.model.Message
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Statistics
+import top.fseasy.imlog.domain.model.TimelineMessage
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
+import kotlin.time.Instant
 
 /**
  * Use this type to specify the attachment file source when insert initial file message. WHY don't
@@ -28,16 +29,22 @@ sealed interface MessageAttachmentSource {
 
 interface MessageRepository {
   /** NOTE: now we are dependent on paging-common, so it's ok for KMP */
-  fun pagedTopicMessages(topicId: TopicId): Flow<PagingData<Message>>
+  fun pagedTopicMessages(topicId: TopicId): Flow<PagingData<TimelineMessage>>
 
   fun observeStatistics(senderId: UserId): Flow<Statistics>
 
-  suspend fun saveTextMessage(message: Message): Unit
+  suspend fun insertTextMessage(
+      topicId: TopicId,
+      senderId: UserId,
+      quotedMessageId: MessageId?,
+      text: String,
+      createdAt: Instant,
+  ): MessageId
 
   suspend fun delete(messageId: MessageId): Boolean
 
   // ==============
-  // File Message related Apis.
+  // Attachment Message related Apis.
   // ==============
   /**
    * SYNC create an initial file message (without raw-file and thumbnail), insert to db and return
@@ -49,7 +56,8 @@ interface MessageRepository {
       topicId: TopicId,
       senderId: UserId,
       type: MessageType,
-      timestampMs: Long,
+      quotedMessageId: MessageId?,
+      createdAt: Instant,
       fileMetadata: FileMetadataUnion,
   ): MessageId
 

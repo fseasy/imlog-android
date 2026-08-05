@@ -114,10 +114,10 @@ constructor(
           }
       runSuspendCatching {
             topicRepository.createNewTopic(
-                userId,
-                name = name,
-                avatarModel = savedAvatarUiModel.toDomain(),
-                description = description,
+              userId,
+              name = name,
+              avatarModel = savedAvatarUiModel.toDomain(),
+              description = description,
             )
           }
           .fold(

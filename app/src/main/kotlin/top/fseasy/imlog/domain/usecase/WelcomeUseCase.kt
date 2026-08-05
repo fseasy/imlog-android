@@ -42,10 +42,10 @@ constructor(
           // 1. create new topic 2. mark first topic created
           dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
             topicRepository.syncCreateNewTopic(
-                creatorId = userId,
-                name = name,
-                avatarModel = avatar,
-                description = description,
+              creatorId = userId,
+              name = name,
+              avatarModel = avatar,
+              description = description,
             )
             val markSuccess = userRepository.syncMarkAppInitFirstTopicCreated(userId)
             if (!markSuccess) {
