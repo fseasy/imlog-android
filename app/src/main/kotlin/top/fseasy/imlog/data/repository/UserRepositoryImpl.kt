@@ -2,6 +2,8 @@ package top.fseasy.imlog.data.repository
 
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToOneOrNull
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -24,10 +26,8 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.UserPreference
 import top.fseasy.imlog.domain.repository.AppStateRepository
 import top.fseasy.imlog.domain.repository.UserRepository
-import top.fseasy.imlog.sqldelight.SqlDelightDb
-import javax.inject.Inject
-import javax.inject.Singleton
 import top.fseasy.imlog.sqldelight.App_init_data as AppInitDataEntity
+import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.User_preference as UserPreferenceEntity
 import top.fseasy.imlog.sqldelight.Users as UserEntity
 
@@ -46,6 +46,7 @@ constructor(
           .map { uid ->
             if (uid == null) AuthState.Unauthenticated else AuthState.Authenticated(userId = uid)
           }
+          .distinctUntilChanged()
           .stateIn(
               scope = applicationIoScope,
               started = SharingStarted.WhileSubscribed(5_000),

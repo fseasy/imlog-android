@@ -29,17 +29,17 @@ import top.fseasy.imlog.features.home.topiclog.composer.MessageComposer
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
 import top.fseasy.imlog.features.home.topiclog.timeline.ContextState
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimeline
-import top.fseasy.imlog.features.home.topiclog.timeline.TimelineViewModel
+import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimelineViewModel
 
 @Composable
 fun TopicLogScreen(
-    onNavigateBack: () -> Unit,
-    onSettingsClick: (TopicId) -> Unit,
-    timelineViewModel: TimelineViewModel = hiltViewModel(),
-    composerViewModel: MessageComposerViewModel = hiltViewModel(),
+  onNavigateBack: () -> Unit,
+  onSettingsClick: (TopicId) -> Unit,
+  messageTimelineViewModel: MessageTimelineViewModel = hiltViewModel(),
+  composerViewModel: MessageComposerViewModel = hiltViewModel(),
 ) {
   val topicName =
-      (timelineViewModel.contextStateFlow.collectAsStateWithLifecycle().value
+      (messageTimelineViewModel.contextStateFlow.collectAsStateWithLifecycle().value
               as? ContextState.Success)
           ?.topic
           ?.name
@@ -51,24 +51,24 @@ fun TopicLogScreen(
   }
 
   TopicLogContent(
-      topicId = timelineViewModel.topicId,
-      topicName = topicName,
-      onNavigateBack = onNavigateBack,
-      onSettingsClick = onSettingsClick,
-      timelineSection = {
+    topicId = messageTimelineViewModel.topicId,
+    topicName = topicName,
+    onNavigateBack = onNavigateBack,
+    onSettingsClick = onSettingsClick,
+    timelineSection = {
         MessageTimeline(
-            onTapOutside = handleComposerDismiss,
-            onDragList = handleComposerDismiss,
-            timelineViewModel = timelineViewModel,
+          onTapOutside = handleComposerDismiss,
+          onDragList = handleComposerDismiss,
+          messageTimelineViewModel = messageTimelineViewModel,
         )
       },
-      composerSection = {
+    composerSection = {
         MessageComposer(
             onNavigateBack = onNavigateBack,
             viewModel = composerViewModel,
         )
       },
-      handleComposerDismiss = handleComposerDismiss,
+    handleComposerDismiss = handleComposerDismiss,
   )
 }
 

@@ -16,17 +16,19 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.MessageId
-import top.fseasy.imlog.domain.model.TimelineMessage
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
+import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.navigation.MainScreen
 import javax.inject.Inject
 
@@ -41,23 +43,16 @@ sealed interface ContextState {
   ) : ContextState
 }
 
-@Immutable
-data class AudioPlaybackState(
-    val playingMessageId: MessageId? = null,
-    val currentPositionMs: Long = 0L,
-    val playbackSpeed: Float = 1.0f,
-) {
-  fun isPlaying(messageId: MessageId): Boolean = playingMessageId == messageId
-}
 
 @HiltViewModel
-class TimelineViewModel
+class MessageTimelineViewModel
 @Inject
 constructor(
     savedStateHandle: SavedStateHandle,
     userRepository: UserRepository,
     private val topicRepository: TopicRepository,
     private val messageRepository: MessageRepository,
+    private val storagePathUseCase: StoragePathUseCase,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -66,14 +61,14 @@ constructor(
   @OptIn(ExperimentalCoroutinesApi::class)
   val contextStateFlow: StateFlow<ContextState> =
       combine(
-              userRepository.observeCurrentUserIdOrNull().filterNotNull(),
+              userRepository.authState.filterIsInstance<AuthState.Authenticated>(),
               topicRepository.observeTopicOrNull(topicId),
-          ) { uid, topic ->
+          ) { authState, topic ->
             when (topic) {
               null -> ContextState.Error("Failed to load Topic for id: $topicId")
               else ->
                   ContextState.Success(
-                      currentUserId = uid,
+                      currentUserId = authState.userId,
                       topic = topic,
                   )
             }
@@ -86,16 +81,19 @@ constructor(
 
   @OptIn(ExperimentalCoroutinesApi::class)
   val pagedMessagesStateFlow: Flow<PagingData<MessageUiModel>> =
-      messageRepository
-          .pagedTopicMessages(topicId)
-          .map { pagingData ->
-            pagingData.map { timelineMessage ->
-              timelineMessage.toUiModel()
+      userRepository.authState.filterIsInstance<AuthState.Authenticated>().flatMapLatest { state ->
+        messageRepository
+            .pagedTopicMessages(topicId)
+            .map { pagingData ->
+              pagingData.map { timelineMessage ->
+                timelineMessage.toUiModel(
+                    signInUserId = state.userId,
+                    topicId = topicId,
+                    storagePathUseCase = storagePathUseCase,
+                    context = context,
+                )
+              }
             }
-          }
-          .cachedIn(viewModelScope)
-
-  fun copyMessage(message: TimelineMessage) {
-    // TODO: 实现剪贴板复制
-  }
+            .cachedIn(viewModelScope)
+      }
 }

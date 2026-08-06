@@ -404,9 +404,10 @@ constructor(
               )
           MessageType.GenericFile ->
               MessageContent.GenericFile(
-                  displayFilename = getAttachmentDisplayFilename(),
-                  fileUri = buildUriAttachmentSource(),
-                  mimeType = attachment_mime_type ?: MimeTypeUtils.getErrorDefaultMimeType(),
+                displayFilename = getAttachmentDisplayFilename(),
+                fileUri = buildUriAttachmentSource(),
+                mimeType = attachment_mime_type ?: MimeTypeUtils.getErrorDefaultMimeType(),
+                fileByteSize = attachment_file_bytes_size ?: 0L,
               )
         }
     return TimelineMessage(

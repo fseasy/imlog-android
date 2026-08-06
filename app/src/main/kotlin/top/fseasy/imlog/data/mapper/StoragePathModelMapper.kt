@@ -2,6 +2,9 @@ package top.fseasy.imlog.data.mapper
 
 import android.content.Context
 import android.net.Uri
+import java.io.File
+import java.io.FileNotFoundException
+import java.nio.file.Path
 import top.fseasy.imlog.data.util.FindOrCreateFileUriResult
 import top.fseasy.imlog.data.util.UriPathUtil
 import top.fseasy.imlog.data.util.resolve
@@ -10,9 +13,6 @@ import top.fseasy.imlog.domain.model.InternalLocation
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UserId
-import java.io.File
-import java.io.FileNotFoundException
-import java.nio.file.Path
 
 fun InternalLocation.toFile(context: Context): File {
   return when (this) {
@@ -24,6 +24,10 @@ fun InternalLocation.toFile(context: Context): File {
 /** pure cpu operations. */
 fun StoragePathModel.InternalOnly.toNioPath(context: Context): Path =
     internalLocation.toFile(context).resolve(fullRelativePath).toPath()
+
+/** To absolute path model without creating dirs/files. pure cpu operations. */
+fun StoragePathModel.InternalOnly.toAbsolutePathWithoutCreating(context: Context) =
+    AbsolutePathModel.AppPathModel(toNioPath(context).toAppPath())
 
 /**
  * Run in IO thread for io parts.
@@ -119,6 +123,18 @@ suspend fun StoragePathModel.SharedStorageOnly.findUriOrThrow(
 }
 
 /**
+ * Transform @StoragePathModel to absolute path model without creating non-existed uri.
+ *
+ * io parts run in IO.
+ *
+ * @throws Exception came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
+ */
+suspend fun StoragePathModel.SharedStorageOnly.toAbsolutePathWithoutCreating(
+    userRootUriProvider: suspend (UserId) -> Uri?,
+    context: Context,
+) = AbsolutePathModel.UriStrModel(findUriOrThrow(userRootUriProvider, context = context).toUriStr())
+
+/**
  * Transform @StoragePathModel to absolute path models (DuralWrite will get 2 models!) without
  * creating non-existed uri or files. if this is a StoragePathModel.DuralWrite, will return a list
  * ordering in `[UriStrModel, FileModel]`
@@ -135,21 +151,14 @@ suspend fun StoragePathModel.toAbsolutePathModelsWithoutCreating(
     context: Context,
 ): List<AbsolutePathModel> {
 
-  suspend fun fromShared(m: StoragePathModel.SharedStorageOnly) =
-      AbsolutePathModel.UriStrModel(
-          m.findUriOrThrow(userRootUriProvider, context = context).toUriStr()
-      )
-
-  fun fromInternal(m: StoragePathModel.InternalOnly) =
-      AbsolutePathModel.AppPathModel(m.toNioPath(context).toAppPath())
-
   return when (this) {
-    is StoragePathModel.SharedStorageOnly -> listOf(fromShared(this))
-    is StoragePathModel.InternalOnly -> listOf(fromInternal(this))
+    is StoragePathModel.SharedStorageOnly ->
+        listOf(toAbsolutePathWithoutCreating(userRootUriProvider, context))
+    is StoragePathModel.InternalOnly -> listOf(toAbsolutePathWithoutCreating(context))
     is StoragePathModel.DualWrite ->
         listOf(
-            fromShared(this.toSharedStorageOnly()),
-            fromInternal(this.toInternalOnly()),
+            this.toSharedStorageOnly().toAbsolutePathWithoutCreating(userRootUriProvider, context),
+            this.toInternalOnly().toAbsolutePathWithoutCreating(context),
         )
   }
 }

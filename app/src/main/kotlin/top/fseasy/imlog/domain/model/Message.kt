@@ -150,6 +150,7 @@ sealed interface MessageContent {
       override val displayFilename: String,
       override val fileUri: UriAttachmentSource,
       val mimeType: String,
+      val fileByteSize: Long,
   ) : UriAttachment
 
   data class Voice(
