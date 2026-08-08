@@ -1,7 +1,6 @@
 package top.fseasy.imlog.features.home.topiclog.timeline
 
 import android.content.Context
-import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,6 +10,8 @@ import androidx.paging.cachedIn
 import androidx.paging.map
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,7 +31,6 @@ import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.navigation.MainScreen
-import javax.inject.Inject
 
 sealed interface ContextState {
   object Loading : ContextState
@@ -42,7 +42,6 @@ sealed interface ContextState {
       val currentUserId: UserId,
   ) : ContextState
 }
-
 
 @HiltViewModel
 class MessageTimelineViewModel
@@ -57,6 +56,17 @@ constructor(
 ) : ViewModel() {
 
   val topicId: TopicId = savedStateHandle.toRoute<MainScreen.TopicTimeline>().topicId
+
+  // For audio/voice message playing position cache
+  private val playPositionCache = mutableMapOf<MessageId, kotlin.time.Duration>()
+  val audioPlayer =
+      AudioPlayerStateHolder(
+              context = context,
+              onPlayingStopped = { state, playPosition ->
+                state.playingMessageId?.let { playPositionCache[it] = playPosition }
+              },
+          )
+          .also(::addCloseable)
 
   @OptIn(ExperimentalCoroutinesApi::class)
   val contextStateFlow: StateFlow<ContextState> =
@@ -96,4 +106,6 @@ constructor(
             }
             .cachedIn(viewModelScope)
       }
+
+  fun getCachedPlayPosition(messageId: MessageId) = playPositionCache[messageId] ?: 0.milliseconds
 }

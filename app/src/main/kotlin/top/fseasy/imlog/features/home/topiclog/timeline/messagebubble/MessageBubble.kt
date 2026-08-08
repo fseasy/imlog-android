@@ -11,25 +11,31 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.features.home.topiclog.timeline.AudioPlaybackState
+import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
+import top.fseasy.imlog.features.home.topiclog.timeline.MessageSenderUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
 import java.nio.file.Path
 
 @Composable
 fun MessageBubble(
-  message: MessageUiModel,
-  playbackState: AudioPlaybackState,
-  onVoicePlayPauseClick: (messageId: String, path: Path) -> Unit,
-  onVoiceSeek: (messageId: String, positionRatio: Float) -> Unit,
-  onVoiceSpeedChange: (messageId: String) -> Unit,
-  onImageClick: (path: Path) -> Unit,
-  onVideoClick: (path: Path) -> Unit,
-  modifier: Modifier = Modifier,
+    message: MessageUiModel,
+    audioPlaybackStateHolder: State<AudioPlaybackState>,
+    audioPlayPositionHolder: State<kotlin.time.Duration>,
+    inactivePlayPositionGetter: (MessageId) -> kotlin.time.Duration,
+    onToggleAudioPlay: (message: MessageUiModel) -> Unit,
+    onSeekAudio: (message: MessageUiModel, positionRatio: Float) -> Unit,
+    onChangeAudioPlaySpeed: (MessageId) -> Unit,
+    onShowImage: (path: Path) -> Unit,
+    onShowVideo: (path: Path) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-  val isOwn = message.isOwnMessage
+  val isOwn = message.sender is MessageSenderUiModel.Own
 
   Row(
       modifier = modifier.fillMaxWidth(),
@@ -45,50 +51,59 @@ fun MessageBubble(
             ),
     ) {
       Column {
-        // 根据类型分发到不同组件
         when (val content = message.content) {
-          is MessageContent.Text -> {
+          is MessageContentUiModel.Text -> {
             TextMessageBubble(text = content.text, isOwnMessage = isOwn)
           }
 
-          is MessageContent.Image -> {
+          is MessageContentUiModel.Image -> {
             ImageMessageBubble(
                 content = content,
-                onClick = { onImageClick(content.path) },
+                onClick = { onShowImage(content.path) },
             )
           }
 
-          is MessageContent.Video -> {
+          is MessageContentUiModel.Video -> {
             VideoMessageBubble(
                 content = content,
-                onClick = { onVideoClick(content.path) },
+                onClick = { onShowVideo(content.path) },
             )
           }
 
-          is MessageContent.Voice -> {
+          is MessageContentUiModel.Voice -> {
+            // When target change, those will be re-composition.
+            val audioPlaybackState = audioPlaybackStateHolder.value
+            val isActive = audioPlaybackState.isThisMessageActive(message.id)
+            val currentPlaybackState =
+                if (isActive) {
+                  audioPlaybackState
+                } else {
+                  AudioPlaybackState(duration = content.duration)
+                }
+            // cache value will be recorded before switching to next one
+            val cachedPlayPosition = inactivePlayPositionGetter(message.id)
             VoiceMessageBubble(
                 messageId = message.id,
+                sender = message.sender,
                 content = content,
                 isOwnMessage = isOwn,
-                isPlaying = playbackState.isPlaying(message.id),
-                currentPositionMs =
-                    if (playbackState.isPlaying(message.id)) playbackState.currentPositionMs
-                    else 0L,
-                playbackSpeed = playbackState.playbackSpeed,
-                onPlayPauseClick = { onVoicePlayPauseClick(message.id, content.path) },
-                onSeek = { ratio -> onVoiceSeek(message.id, ratio) },
-                onSpeedChange = { onVoiceSpeedChange(message.id) },
+                playbackState = currentPlaybackState,
+                activePlayPositionHolder = audioPlayPositionHolder,
+                inactivePlayPosition = cachedPlayPosition,
+                onTogglePlay = { onToggleAudioPlay(message) },
+                onSeek = { ratio -> onSeekAudio(message, ratio) },
+                onSpeedChange = { onChangeAudioPlaySpeed(message.id) },
             )
           }
+          is MessageContentUiModel.Audio -> TODO()
 
-          is MessageContent.GenericFile -> {
+          is MessageContentUiModel.GenericFile -> {
             FileMessageBubble(content = content)
           }
         }
 
-        // 统一的时间戳样式
         Text(
-            text = message.createdAt,
+            text = message.formatedCreatedAt,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).align(Alignment.End),
             style = MaterialTheme.typography.labelSmall,
             color =

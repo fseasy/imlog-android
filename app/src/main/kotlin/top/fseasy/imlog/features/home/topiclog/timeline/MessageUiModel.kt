@@ -96,6 +96,7 @@ sealed interface MessageContentUiModel {
       override val storedFilename: String?,
       val cachePath: Path?,
       val duration: Duration,
+      val amplitudes: List<Float>,
   ) : Attachment
 
   @Immutable
@@ -104,6 +105,7 @@ sealed interface MessageContentUiModel {
       val sourceTemporaryUri: Uri?,
       val displayFilename: String,
       val duration: Duration,
+      val amplitudes: List<Float>,
   ) : Attachment
 
   @Immutable

@@ -23,6 +23,9 @@ import top.fseasy.imlog.ui.util.ImTimeUtils
 import top.fseasy.imlog.ui.util.byteSizeToHumanReadable
 import top.fseasy.imlog.ui.util.mimeTypeToIconResId
 import java.nio.file.Path
+import kotlin.math.PI
+import kotlin.math.absoluteValue
+import kotlin.math.sin
 import kotlin.time.Instant
 import kotlin.time.toJavaInstant
 
@@ -215,16 +218,18 @@ fun MessageContent.toUiModel(
         )
     is MessageContent.Voice ->
         MessageContentUiModel.Voice(
-            storedFilename = (file as? CacheAttachmentSource.StorageUri)?.filename,
-            cachePath = buildCacheFilePath(file),
-            duration = duration,
+          storedFilename = (file as? CacheAttachmentSource.StorageUri)?.filename,
+          cachePath = buildCacheFilePath(file),
+          duration = duration,
+          amplitudes = generateDummyAmplitudes(duration)
         )
     is MessageContent.Audio ->
         MessageContentUiModel.Audio(
-            storedFilename = getStorageFilename(fileUri),
-            sourceTemporaryUri = getSourceTemporaryUri(fileUri),
-            displayFilename = displayFilename,
-            duration = duration,
+          storedFilename = getStorageFilename(fileUri),
+          sourceTemporaryUri = getSourceTemporaryUri(fileUri),
+          displayFilename = displayFilename,
+          duration = duration,
+          amplitudes = generateDummyAmplitudes(duration)
         )
   }
 }
@@ -261,4 +266,15 @@ fun TimelineMessage.toUiModel(
       createdAt = createdAt,
       formatedCreatedAt = ImTimeUtils.formatImTime(createdAt.toJavaInstant()),
   )
+}
+
+private fun generateDummyAmplitudes(duration: kotlin.time.Duration): List<Float> {
+  val size =  (duration.inWholeSeconds * 4).toInt()
+  val salt = duration.inWholeMilliseconds % PI
+  return (0 until size).map { i ->
+    val position = i.toFloat() / size + salt
+    val envelope = sin(position * PI).toFloat().absoluteValue * 0.8f + 0.2f
+    val detail = sin(position * 15 * PI).toFloat().absoluteValue * 0.5f + 0.5f
+    (envelope * detail * 0.8f + 0.2f).coerceIn(0.1f, 1f)
+  }
 }

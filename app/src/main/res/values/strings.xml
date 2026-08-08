@@ -104,4 +104,7 @@
     <string name="term_custom_topic_avatar">Custom Topic Avatar</string>
     <string name="term_deleted_user">Deleted User</string>
     <string name="term_unknown_filename">Unknown File</string>
+    <string name="term_media_pause">Pause</string>
+    <string name="term_media_play">Play</string>
+    <string name="term_voice_message">Voice Message</string>
 </resources>
