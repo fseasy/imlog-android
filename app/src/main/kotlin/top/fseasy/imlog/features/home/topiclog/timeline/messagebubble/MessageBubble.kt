@@ -21,16 +21,17 @@ import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageSenderUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
 import java.nio.file.Path
+import kotlin.time.Duration
 
 @Composable
 fun MessageBubble(
     message: MessageUiModel,
     audioPlaybackStateHolder: State<AudioPlaybackState>,
-    audioPlayPositionHolder: State<kotlin.time.Duration>,
-    inactivePlayPositionGetter: (MessageId) -> kotlin.time.Duration,
+    audioPlayPositionHolder: State<Duration>,
+    inactivePlayPositionGetter: (MessageId) -> Duration,
     onToggleAudioPlay: (message: MessageUiModel) -> Unit,
     onSeekAudio: (message: MessageUiModel, positionRatio: Float) -> Unit,
-    onChangeAudioPlaySpeed: (MessageId) -> Unit,
+    onChangeAudioPlaybackSpeed: (MessageId) -> Unit,
     onShowImage: (path: Path) -> Unit,
     onShowVideo: (path: Path) -> Unit,
     modifier: Modifier = Modifier,
@@ -92,10 +93,34 @@ fun MessageBubble(
                 inactivePlayPosition = cachedPlayPosition,
                 onTogglePlay = { onToggleAudioPlay(message) },
                 onSeek = { ratio -> onSeekAudio(message, ratio) },
-                onSpeedChange = { onChangeAudioPlaySpeed(message.id) },
+                onSpeedChange = { onChangeAudioPlaybackSpeed(message.id) },
+                modifier = modifier,
             )
           }
-          is MessageContentUiModel.Audio -> TODO()
+          is MessageContentUiModel.Audio -> {
+            val audioPlaybackState = audioPlaybackStateHolder.value
+            val isActive = audioPlaybackState.isThisMessageActive(message.id)
+            val currentPlaybackState =
+                if (isActive) {
+                  audioPlaybackState
+                } else {
+                  AudioPlaybackState(duration = content.duration)
+                }
+            // cache value will be recorded before switching to next one
+            val cachedPlayPosition = inactivePlayPositionGetter(message.id)
+            AudioMessageBubble(
+                messageId = message.id,
+                content = content,
+                isOwnMessage = isOwn,
+                playbackState = currentPlaybackState,
+                activePlayPositionHolder = audioPlayPositionHolder,
+                inactivePlayPosition = cachedPlayPosition,
+                onTogglePlay = { onToggleAudioPlay(message) },
+                onSeek = { ratio -> onSeekAudio(message, ratio) },
+                onSpeedChange = { onChangeAudioPlaybackSpeed(message.id) },
+                modifier = modifier,
+            )
+          }
 
           is MessageContentUiModel.GenericFile -> {
             FileMessageBubble(content = content)

@@ -395,6 +395,7 @@ constructor(
                   displayFilename = getAttachmentDisplayFilename(),
                   fileUri = buildUriAttachmentSource(),
                   duration = attachment_duration?.milliseconds ?: 0.milliseconds,
+                  mimeType = attachment_mime_type ?: "audio/*",
               )
           MessageType.Voice ->
               MessageContent.Voice(
@@ -404,10 +405,10 @@ constructor(
               )
           MessageType.GenericFile ->
               MessageContent.GenericFile(
-                displayFilename = getAttachmentDisplayFilename(),
-                fileUri = buildUriAttachmentSource(),
-                mimeType = attachment_mime_type ?: MimeTypeUtils.getErrorDefaultMimeType(),
-                fileByteSize = attachment_file_bytes_size ?: 0L,
+                  displayFilename = getAttachmentDisplayFilename(),
+                  fileUri = buildUriAttachmentSource(),
+                  mimeType = attachment_mime_type ?: MimeTypeUtils.getErrorDefaultMimeType(),
+                  fileByteSize = attachment_file_bytes_size ?: 0L,
               )
         }
     return TimelineMessage(

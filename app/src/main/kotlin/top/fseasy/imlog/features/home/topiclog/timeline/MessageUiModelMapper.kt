@@ -5,6 +5,7 @@ import android.net.Uri
 import top.fseasy.imlog.data.mapper.toAbsolutePathWithoutCreating
 import top.fseasy.imlog.data.mapper.toNioPath
 import top.fseasy.imlog.data.mapper.toUriOrNull
+import top.fseasy.imlog.data.mapper.toUriOrThrow
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.CacheAttachmentSource
 import top.fseasy.imlog.domain.model.MessageContent
@@ -16,6 +17,7 @@ import top.fseasy.imlog.domain.model.TimelineMessage
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriAttachmentSource
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.ui.model.buildUserAvatarNioPath
 import top.fseasy.imlog.ui.model.toUiModel
@@ -23,6 +25,7 @@ import top.fseasy.imlog.ui.util.ImTimeUtils
 import top.fseasy.imlog.ui.util.byteSizeToHumanReadable
 import top.fseasy.imlog.ui.util.mimeTypeToIconResId
 import java.nio.file.Path
+import kotlin.io.path.exists
 import kotlin.math.PI
 import kotlin.math.absoluteValue
 import kotlin.math.sin
@@ -218,18 +221,19 @@ fun MessageContent.toUiModel(
         )
     is MessageContent.Voice ->
         MessageContentUiModel.Voice(
-          storedFilename = (file as? CacheAttachmentSource.StorageUri)?.filename,
-          cachePath = buildCacheFilePath(file),
-          duration = duration,
-          amplitudes = generateDummyAmplitudes(duration)
+            storedFilename = (file as? CacheAttachmentSource.StorageUri)?.filename,
+            cachePath = buildCacheFilePath(file),
+            duration = duration,
+            amplitudes = generateDummyAmplitudes(duration),
         )
     is MessageContent.Audio ->
         MessageContentUiModel.Audio(
-          storedFilename = getStorageFilename(fileUri),
-          sourceTemporaryUri = getSourceTemporaryUri(fileUri),
-          displayFilename = displayFilename,
-          duration = duration,
-          amplitudes = generateDummyAmplitudes(duration)
+            storedFilename = getStorageFilename(fileUri),
+            sourceTemporaryUri = getSourceTemporaryUri(fileUri),
+            displayFilename = displayFilename,
+            duration = duration,
+            amplitudes = generateDummyAmplitudes(duration),
+            mimeType = mimeType,
         )
   }
 }
@@ -268,8 +272,59 @@ fun TimelineMessage.toUiModel(
   )
 }
 
+/** @throws Exception when resolve Uri */
+internal suspend fun MessageContentUiModel.Attachment.buildStorageUri(
+    signInUserId: UserId,
+    topicId: TopicId,
+    messageCreatedAt: kotlin.time.Instant,
+    storagePathUseCase: StoragePathUseCase,
+    storageRepository: StorageRepository,
+): Uri? {
+  val filename = storedFilename ?: return null
+  val storagePath =
+      storagePathUseCase.buildMessageRawFileStoragePath(
+          userId = signInUserId,
+          topicId = topicId,
+          timestampMs = messageCreatedAt.toEpochMilliseconds(),
+          filename = filename,
+      )
+  val uriModel =
+      storageRepository.resolveSharedStoragePathToAbsolutePathWithoutCreating(storagePath)
+  return uriModel.value.toUriOrThrow()
+}
+
+/** @throws Exception when resolve Uri */
+internal suspend fun MessageContentUiModel.AudioPlaySupported.buildUri(
+    signInUserId: UserId,
+    topicId: TopicId,
+    messageCreatedAt: kotlin.time.Instant,
+    audioSupportedContent: MessageContentUiModel.AudioPlaySupported,
+    storagePathUseCase: StoragePathUseCase,
+    storageRepository: StorageRepository,
+): Uri? {
+  suspend fun buildStorageUri() =
+      audioSupportedContent.buildStorageUri(
+          signInUserId = signInUserId,
+          topicId = topicId,
+          messageCreatedAt = messageCreatedAt,
+          storagePathUseCase = storagePathUseCase,
+          storageRepository = storageRepository,
+      )
+  return when (audioSupportedContent) {
+    is MessageContentUiModel.Voice -> {
+      // Prefer to cache path if it exists.
+      val cachePath = audioSupportedContent.cachePath
+      if (cachePath != null && cachePath.exists()) {
+        Uri.fromFile(cachePath.toFile())
+      } else buildStorageUri()
+    }
+    // Prefer source temporary uri
+    is MessageContentUiModel.Audio -> audioSupportedContent.sourceTemporaryUri ?: buildStorageUri()
+  }
+}
+
 private fun generateDummyAmplitudes(duration: kotlin.time.Duration): List<Float> {
-  val size =  (duration.inWholeSeconds * 4).toInt()
+  val size = (duration.inWholeSeconds * 4).toInt()
   val salt = duration.inWholeMilliseconds % PI
   return (0 until size).map { i ->
     val position = i.toFloat() / size + salt

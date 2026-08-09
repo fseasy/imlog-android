@@ -4,7 +4,6 @@ import kotlinx.serialization.Serializable
 import top.fseasy.imlog.domain.util.defaultJson
 import kotlin.enums.enumEntries
 
-// 1. 抽象公共预设接口
 interface PresetAvatar
 
 enum class UserPresetAvatar : PresetAvatar {

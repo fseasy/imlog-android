@@ -107,4 +107,6 @@
     <string name="term_media_pause">Pause</string>
     <string name="term_media_play">Play</string>
     <string name="term_voice_message">Voice Message</string>
+    <string name="home_timeline_audio_not_found">Audio Not Found</string>
+    <string name="term_audio_message">Audio Message</string>
 </resources>

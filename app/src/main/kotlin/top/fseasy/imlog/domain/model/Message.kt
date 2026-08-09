@@ -144,6 +144,7 @@ sealed interface MessageContent {
       override val displayFilename: String,
       override val fileUri: UriAttachmentSource,
       val duration: Duration,
+      val mimeType: String,
   ) : UriAttachment
 
   data class GenericFile(

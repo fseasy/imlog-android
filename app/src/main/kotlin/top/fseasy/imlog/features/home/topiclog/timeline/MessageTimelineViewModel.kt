@@ -10,9 +10,8 @@ import androidx.paging.cachedIn
 import androidx.paging.map
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,17 +19,26 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import timber.log.Timber
+import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.MessageRepository
+import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.util.runSuspendCatching
 import top.fseasy.imlog.navigation.MainScreen
+import javax.inject.Inject
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 sealed interface ContextState {
   object Loading : ContextState
@@ -43,23 +51,30 @@ sealed interface ContextState {
   ) : ContextState
 }
 
+sealed interface MessageTimelineUiEffect {
+  data class ShowSnackBar(val message: String) : MessageTimelineUiEffect
+}
+
 @HiltViewModel
 class MessageTimelineViewModel
 @Inject
 constructor(
     savedStateHandle: SavedStateHandle,
-    userRepository: UserRepository,
+    private val userRepository: UserRepository,
     private val topicRepository: TopicRepository,
     private val messageRepository: MessageRepository,
     private val storagePathUseCase: StoragePathUseCase,
+    private val storageRepository: StorageRepository,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
   val topicId: TopicId = savedStateHandle.toRoute<MainScreen.TopicTimeline>().topicId
+  private val _uiEffect = Channel<MessageTimelineUiEffect>()
+  val uiEffect = _uiEffect.receiveAsFlow()
 
   // For audio/voice message playing position cache
-  private val playPositionCache = mutableMapOf<MessageId, kotlin.time.Duration>()
-  val audioPlayer =
+  private val playPositionCache = mutableMapOf<MessageId, Duration>()
+  private val audioPlayer =
       AudioPlayerStateHolder(
               context = context,
               onPlayingStopped = { state, playPosition ->
@@ -67,6 +82,8 @@ constructor(
               },
           )
           .also(::addCloseable)
+  val audioPlaybackState = audioPlayer.playbackState
+  val audioPlayPosition = audioPlayer.playPositionState
 
   @OptIn(ExperimentalCoroutinesApi::class)
   val contextStateFlow: StateFlow<ContextState> =
@@ -108,4 +125,89 @@ constructor(
       }
 
   fun getCachedPlayPosition(messageId: MessageId) = playPositionCache[messageId] ?: 0.milliseconds
+
+  fun changeAudioPlaybackSpeed(messageId: MessageId) = viewModelScope.launch {
+    audioPlayer.changeSpeed(messageId)
+  }
+
+  /** Build AudioInput without cache as the db data may change */
+  fun seekAudio(message: MessageUiModel, ratio: Float) {
+    when (val content = message.content) {
+      is MessageContentUiModel.AudioPlaySupported ->
+          launchWithUserId { userId ->
+            val uri =
+                runSuspendCatching {
+                  content.buildUri(
+                      signInUserId = userId,
+                      topicId = topicId,
+                      messageCreatedAt = message.createdAt,
+                      audioSupportedContent = content,
+                      storagePathUseCase = storagePathUseCase,
+                      storageRepository = storageRepository,
+                  )
+                }
+                    .getOrNull()
+                    ?: run {
+                      _uiEffect.send(
+                          MessageTimelineUiEffect.ShowSnackBar(
+                              context.getString(R.string.home_timeline_audio_not_found)
+                          )
+                      )
+                      return@launchWithUserId
+                    }
+            val audioInput =
+                AudioInput(
+                    id = message.id,
+                    uri = uri,
+                    fileDuration = content.duration,
+                )
+            audioPlayer.seekToRatio(audioInput, ratio = ratio)
+          }
+      else -> Timber.w("Call seek audio for content-type: ${message.content::class.qualifiedName}")
+    }
+  }
+
+  /** Build AudioInput without cache as the db data may change */
+  fun toggleAudioPlay(message: MessageUiModel) {
+    when (val content = message.content) {
+      is MessageContentUiModel.AudioPlaySupported ->
+          launchWithUserId { userId ->
+            val uri =
+                runSuspendCatching {
+                  content.buildUri(
+                      signInUserId = userId,
+                      topicId = topicId,
+                      messageCreatedAt = message.createdAt,
+                      audioSupportedContent = content,
+                      storagePathUseCase = storagePathUseCase,
+                      storageRepository = storageRepository,
+                  )
+                }
+                    .getOrNull()
+                    ?: run {
+                      _uiEffect.send(
+                          MessageTimelineUiEffect.ShowSnackBar(
+                              context.getString(R.string.home_timeline_audio_not_found)
+                          )
+                      )
+                      return@launchWithUserId
+                    }
+
+            audioPlayer.togglePlayPause(
+                AudioInput(
+                    id = message.id,
+                    uri = uri,
+                    fileDuration = content.duration,
+                )
+            )
+          }
+      else -> Timber.w("Call seek audio for content-type: ${message.content::class.qualifiedName}")
+    }
+  }
+
+  private fun launchWithUserId(block: suspend (userId: UserId) -> Unit) {
+    (userRepository.authState.value as? AuthState.Authenticated)?.userId?.let { uid ->
+      viewModelScope.launch { block(uid) }
+    }
+  }
 }

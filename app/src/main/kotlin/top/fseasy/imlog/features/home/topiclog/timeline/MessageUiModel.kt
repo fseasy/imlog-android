@@ -3,12 +3,12 @@ package top.fseasy.imlog.features.home.topiclog.timeline
 import android.net.Uri
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
+import java.nio.file.Path
+import kotlin.time.Duration
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.ui.model.UserAvatarUiModel
-import java.nio.file.Path
-import kotlin.time.Duration
 
 sealed interface QuotedMessageSenderUiModel {
   data object Own : QuotedMessageSenderUiModel
@@ -64,6 +64,11 @@ sealed interface MessageContentUiModel {
   }
 
   @Immutable
+  sealed interface AudioPlaySupported : Attachment {
+    val duration: kotlin.time.Duration
+  }
+
+  @Immutable
   sealed interface ImageLike : Attachment {
     // 1. from src uri 2. from real thumbnail path 3. illegal state (null)
     val thumbnailPath: AbsolutePathModel?
@@ -95,18 +100,19 @@ sealed interface MessageContentUiModel {
   data class Voice(
       override val storedFilename: String?,
       val cachePath: Path?,
-      val duration: Duration,
+      override val duration: Duration,
       val amplitudes: List<Float>,
-  ) : Attachment
+  ) : AudioPlaySupported
 
   @Immutable
   data class Audio(
       override val storedFilename: String?,
       val sourceTemporaryUri: Uri?,
       val displayFilename: String,
-      val duration: Duration,
+      override val duration: Duration,
       val amplitudes: List<Float>,
-  ) : Attachment
+      val mimeType: String,
+  ) : AudioPlaySupported
 
   @Immutable
   data class GenericFile(
@@ -126,4 +132,6 @@ data class MessageUiModel(
     val content: MessageContentUiModel,
     val createdAt: kotlin.time.Instant,
     val formatedCreatedAt: String,
-)
+) {
+  fun supportAudioPlay() = content is MessageContentUiModel.AudioPlaySupported
+}

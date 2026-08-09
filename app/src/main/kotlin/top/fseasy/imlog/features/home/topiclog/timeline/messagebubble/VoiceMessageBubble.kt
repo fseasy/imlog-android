@@ -1,13 +1,11 @@
 package top.fseasy.imlog.features.home.topiclog.timeline.messagebubble
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,8 +30,6 @@ import androidx.compose.ui.unit.dp
 import kotlin.time.Duration
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.MessageId
-import top.fseasy.imlog.domain.util.safeDivision
-import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
 import top.fseasy.imlog.features.home.topiclog.timeline.AudioPlaybackState
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageSenderUiModel
@@ -145,57 +141,6 @@ private fun LeftMostArea(
                       y = 4.dp,
                   ),
       )
-    }
-  }
-}
-
-@Composable
-private fun WaveformWithProgressColumn(
-    amplitudes: List<Float>,
-    isActive: Boolean,
-    duration: Duration,
-    activePlayPositionHolder: State<Duration>,
-    inactivePlayPosition: Duration,
-    onSeek: (Float) -> Unit,
-    tintColor: Color,
-) {
-  val playPosition = if (isActive) activePlayPositionHolder.value else inactivePlayPosition
-
-  Column(modifier = Modifier.padding(8.dp)) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Column(modifier = Modifier.weight(1f)) {
-        val progress = playPosition.safeDivision(duration).coerceIn(0f, 1f)
-
-        WaveformSlider(
-            progress = progress,
-            amplitudes = amplitudes,
-            tintColor = tintColor,
-            onSeek = onSeek,
-            modifier = Modifier.fillMaxWidth().height(48.dp), // waveform height
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-          if (playPosition > Duration.ZERO) {
-            Text(
-                text = playPosition.toAppMessageTimeFormat(),
-                style = MaterialTheme.typography.labelSmall,
-                color = tintColor.copy(alpha = 0.6f),
-            )
-          }
-
-          Text(
-              text = duration.toAppMessageTimeFormat(),
-              style = MaterialTheme.typography.labelSmall,
-              color = tintColor.copy(alpha = 0.6f),
-          )
-        }
-      }
     }
   }
 }

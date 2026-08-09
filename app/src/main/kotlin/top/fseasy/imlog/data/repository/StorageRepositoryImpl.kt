@@ -15,7 +15,8 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.data.mapper.ensureDirectorUri
 import top.fseasy.imlog.data.mapper.ensureFileUri
-import top.fseasy.imlog.data.mapper.toAbsolutePathModelsWithoutCreating
+import top.fseasy.imlog.data.mapper.toAbsolutePathWithoutCreating
+import top.fseasy.imlog.data.mapper.toAbsolutePathsWithoutCreating
 import top.fseasy.imlog.data.mapper.toFile
 import top.fseasy.imlog.data.mapper.toNioPath
 import top.fseasy.imlog.data.mapper.toUri
@@ -99,12 +100,20 @@ constructor(
 
   override suspend fun resolveStoragePathToAbsolutePathsWithoutCreating(
       storagePath: StoragePathModel
-  ): List<AbsolutePathModel> {
-    return storagePath.toAbsolutePathModelsWithoutCreating(
-        ::getSharedStorageRootUriWithCache,
-        context,
-    )
-  }
+  ): List<AbsolutePathModel> =
+      storagePath.toAbsolutePathsWithoutCreating(
+          ::getSharedStorageRootUriWithCache,
+          context,
+      )
+
+  override fun resolveInternalStoragePathToAbsolutePathWithoutCreating(
+      internalStoragePath: StoragePathModel.InternalOnly
+  ): AbsolutePathModel.AppPathModel = internalStoragePath.toAbsolutePathWithoutCreating(context)
+
+  override suspend fun resolveSharedStoragePathToAbsolutePathWithoutCreating(
+      sharedStoragePath: StoragePathModel.SharedStorageOnly
+  ): AbsolutePathModel.UriStrModel =
+      sharedStoragePath.toAbsolutePathWithoutCreating(::getSharedStorageRootUriWithCache, context)
 
   override suspend fun getDisplayNameOrDefault(uriStr: UriStr, defaultName: String): String =
       uriStr.toUriOrNull()?.let {

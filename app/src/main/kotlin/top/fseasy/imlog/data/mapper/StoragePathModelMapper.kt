@@ -2,9 +2,6 @@ package top.fseasy.imlog.data.mapper
 
 import android.content.Context
 import android.net.Uri
-import java.io.File
-import java.io.FileNotFoundException
-import java.nio.file.Path
 import top.fseasy.imlog.data.util.FindOrCreateFileUriResult
 import top.fseasy.imlog.data.util.UriPathUtil
 import top.fseasy.imlog.data.util.resolve
@@ -13,6 +10,9 @@ import top.fseasy.imlog.domain.model.InternalLocation
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UserId
+import java.io.File
+import java.io.FileNotFoundException
+import java.nio.file.Path
 
 fun InternalLocation.toFile(context: Context): File {
   return when (this) {
@@ -146,7 +146,7 @@ suspend fun StoragePathModel.SharedStorageOnly.toAbsolutePathWithoutCreating(
  *   top.fseasy.imlog.domain.repository.StorageRepository.resolveStoragePathToAbsolutePathsWithoutCreating
  *   it wraps this function and export it to domain level
  */
-suspend fun StoragePathModel.toAbsolutePathModelsWithoutCreating(
+suspend fun StoragePathModel.toAbsolutePathsWithoutCreating(
     userRootUriProvider: suspend (UserId) -> Uri?,
     context: Context,
 ): List<AbsolutePathModel> {

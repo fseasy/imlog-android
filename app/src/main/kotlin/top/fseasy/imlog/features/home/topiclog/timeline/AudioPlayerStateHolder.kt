@@ -10,7 +10,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import java.nio.file.Path
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
@@ -29,7 +28,7 @@ import top.fseasy.imlog.domain.model.MessageId
 
 data class AudioInput(
     val id: MessageId,
-    val path: Path,
+    val uri: android.net.Uri,
     val fileDuration: Duration, // it's the prior duration.
 )
 
@@ -83,7 +82,7 @@ class AudioPlayerStateHolder(
           .setUsage(C.USAGE_MEDIA)
           .build()
 
-  private val exoPlayer =
+  val exoPlayer =
       ExoPlayer.Builder(appContext)
           .setAudioAttributes(audioAttributes, /* handleAudioFocus= */ true)
           .setHandleAudioBecomingNoisy(true)
@@ -163,10 +162,10 @@ class AudioPlayerStateHolder(
    * - If operation on current selected media: pause / replay;
    * - else, stop current and switch to the new input
    */
-  fun togglePlayPause(item: AudioInput) {
+  fun togglePlayPause(input: AudioInput) {
     val currentState = _playbackState.value
 
-    if (currentState.playingMessageId == item.id) {
+    if (currentState.playingMessageId == input.id) {
       if (exoPlayer.isPlaying) {
         exoPlayer.pause()
       } else {
@@ -176,7 +175,7 @@ class AudioPlayerStateHolder(
         exoPlayer.play()
       }
     } else {
-      playNewTrack(item, initialPositionMs = 0L)
+      playNewTrack(input, initialPositionMs = 0L)
     }
   }
 
@@ -244,7 +243,7 @@ class AudioPlayerStateHolder(
     progressJob = null
   }
 
-  private fun playNewTrack(item: AudioInput, initialPositionMs: Long = 0L) {
+  private fun playNewTrack(input: AudioInput, initialPositionMs: Long = 0L) {
     val currentSpeed = _playbackState.value.speed
 
     exoPlayer.stop()
@@ -252,9 +251,9 @@ class AudioPlayerStateHolder(
 
     val mediaItem =
         MediaItem.Builder()
-            .setMediaId(item.id.toString())
-            .setTag(item)
-            .setUri(item.path.toString())
+            .setMediaId(input.id.toString())
+            .setTag(input)
+            .setUri(input.uri.toString())
             .build()
 
     exoPlayer.setMediaItem(mediaItem)

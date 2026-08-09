@@ -24,6 +24,7 @@ import androidx.paging.compose.itemKey
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.MessageBubble
 import java.nio.file.Path
+import kotlin.time.Duration
 
 @Composable
 fun MessageTimeline(
@@ -33,15 +34,21 @@ fun MessageTimeline(
     viewModel: MessageTimelineViewModel = hiltViewModel(),
 ) {
   val lazyPagingMessages = viewModel.pagedMessagesStateFlow.collectAsLazyPagingItems()
-  val playbackStateHolder = viewModel.audioPlayer.playbackState.collectAsStateWithLifecycle()
-  val playPositionHolder = viewModel.audioPlayer.playPositionState.collectAsStateWithLifecycle()
+  val audioPlaybackStateHolder = viewModel.audioPlaybackState.collectAsStateWithLifecycle()
+  val audioPlayPositionHolder = viewModel.audioPlayPosition.collectAsStateWithLifecycle()
 
   TimelineContent(
       pagedMessages = lazyPagingMessages,
       onTapOutside = onTapOutside,
       onDragList = onDragList,
-      audioPlaybackState = audioPlaybackState,
-      onToggleAudioPlay = {},
+      audioPlaybackStateHolder = audioPlaybackStateHolder,
+      audioPlayPositionHolder = audioPlayPositionHolder,
+      inactivePlayPositionGetter = { messageId -> viewModel.getCachedPlayPosition(messageId) },
+      onToggleAudioPlay = viewModel::toggleAudioPlay,
+      onSeekAudio = viewModel::seekAudio,
+      onChangeAudioPlaybackSpeed = viewModel::changeAudioPlaybackSpeed,
+      onShowImage = TODO(),
+      onShowVideo = TODO(),
       modifier = modifier,
   )
 }
@@ -53,11 +60,11 @@ fun TimelineContent(
     onTapOutside: () -> Unit,
     onDragList: () -> Unit,
     audioPlaybackStateHolder: State<AudioPlaybackState>,
-    audioPlayPositionHolder: State<kotlin.time.Duration>,
-    inactivePlayPositionGetter: (MessageId) -> kotlin.time.Duration,
+    audioPlayPositionHolder: State<Duration>,
+    inactivePlayPositionGetter: (MessageId) -> Duration,
     onToggleAudioPlay: (MessageUiModel) -> Unit,
     onSeekAudio: (MessageUiModel, positionRatio: Float) -> Unit,
-    onChangeAudioSpeed: (MessageId) -> Unit,
+    onChangeAudioPlaybackSpeed: (MessageId) -> Unit,
     onShowImage: (path: Path) -> Unit,
     onShowVideo: (path: Path) -> Unit,
     modifier: Modifier = Modifier,
@@ -99,7 +106,7 @@ fun TimelineContent(
               inactivePlayPositionGetter = inactivePlayPositionGetter,
               onToggleAudioPlay = onToggleAudioPlay,
               onSeekAudio = onSeekAudio,
-              onChangeAudioPlaySpeed = onChangeAudioSpeed,
+              onChangeAudioPlaybackSpeed = onChangeAudioPlaybackSpeed,
               onShowImage = onShowImage,
               onShowVideo = onShowVideo,
               modifier = modifier,

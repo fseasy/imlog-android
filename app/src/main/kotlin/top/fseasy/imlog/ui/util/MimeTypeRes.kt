@@ -12,7 +12,7 @@ fun mimeTypeToIconResId(mimeType: String?): Int {
 
     mimeType.startsWith("video/") -> R.drawable.icon_video_file
 
-    mimeType.startsWith("audio/") -> R.drawable.icon_audio_file
+    mimeType.isAudioMime() -> getAudioIconResId(mimeType)
     mimeType == "application/pdf" -> R.drawable.icon_file_pdf
 
     mimeType == "application/msword" ||
@@ -45,4 +45,39 @@ fun mimeTypeToIconResId(mimeType: String?): Int {
 
     else -> R.drawable.icon_file_present
   }
+}
+
+private fun getAudioIconResId(mimeType: String): Int {
+  return when (mimeType) {
+    "audio/x-mpegurl",
+    "audio/x-scpls",
+    "application/vnd.apple.mpegurl" -> {
+      R.drawable.icon_library_music
+    }
+
+    "audio/flac",
+    "audio/x-flac",
+    "audio/alac",
+    "audio/ape" -> {
+      R.drawable.icon_album
+    }
+
+    "audio/amr",
+    "audio/3gpp",
+    "audio/opus" -> {
+      R.drawable.icon_audio_capture
+    }
+
+    else -> R.drawable.icon_audio_file
+  }
+}
+
+private fun String.isAudioMime(): Boolean {
+  return startsWith("audio/") ||
+      this in
+          setOf(
+              "application/ogg",
+              "application/x-mpegurl", // m3u list
+              "application/vnd.apple.mpegurl",
+          )
 }

@@ -3,7 +3,17 @@ package top.fseasy.imlog.features.home.topiclog.timeline.messagebubble
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -12,6 +22,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.time.Duration
+import top.fseasy.imlog.domain.util.safeDivision
+import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
 
 /**
  * @param progress [0, 1]
@@ -93,6 +106,58 @@ fun WaveformSlider(
           strokeWidth = barWidthPx,
           cap = StrokeCap.Round,
       )
+    }
+  }
+}
+
+/** Used for Audio/Voice bubble */
+@Composable
+fun WaveformWithProgressColumn(
+    amplitudes: List<Float>,
+    isActive: Boolean,
+    duration: Duration,
+    activePlayPositionHolder: State<Duration>,
+    inactivePlayPosition: Duration,
+    onSeek: (Float) -> Unit,
+    tintColor: Color,
+) {
+  val playPosition = if (isActive) activePlayPositionHolder.value else inactivePlayPosition
+
+  Column(modifier = Modifier.padding(8.dp)) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Column(modifier = Modifier.weight(1f)) {
+        val progress = playPosition.safeDivision(duration).coerceIn(0f, 1f)
+
+        WaveformSlider(
+            progress = progress,
+            amplitudes = amplitudes,
+            tintColor = tintColor,
+            onSeek = onSeek,
+            modifier = Modifier.fillMaxWidth().height(48.dp), // waveform height
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+          if (playPosition > Duration.ZERO) {
+            Text(
+                text = playPosition.toAppMessageTimeFormat(),
+                style = MaterialTheme.typography.labelSmall,
+                color = tintColor.copy(alpha = 0.6f),
+            )
+          }
+
+          Text(
+              text = duration.toAppMessageTimeFormat(),
+              style = MaterialTheme.typography.labelSmall,
+              color = tintColor.copy(alpha = 0.6f),
+          )
+        }
+      }
     }
   }
 }

@@ -71,6 +71,32 @@ interface StorageRepository {
   ): List<AbsolutePathModel>
 
   /**
+   * Transform @StoragePathModel.InternalOnly to absolute path model without creating non-existed
+   * file. The input and return is more explicit compared to the version of param=StoragePathModel
+   * one.
+   *
+   * Pure CPU working without io.
+   *
+   * @throws Exception all exceptions came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
+   */
+  fun resolveInternalStoragePathToAbsolutePathWithoutCreating(
+      internalStoragePath: StoragePathModel.InternalOnly
+  ): AbsolutePathModel.AppPathModel
+
+  /**
+   * Transform @StoragePathModel.SharedStorageOnly to absolute path model without creating
+   * non-existed uri. The input and return is more explicit compared to the version of
+   * param=StoragePathModel one.
+   *
+   * io parts run in IO.
+   *
+   * @throws Exception all exceptions came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
+   */
+  suspend fun resolveSharedStoragePathToAbsolutePathWithoutCreating(
+      sharedStoragePath: StoragePathModel.SharedStorageOnly
+  ): AbsolutePathModel.UriStrModel
+
+  /**
    * Run in IO thread in io parts.
    *
    * @param mimeType: set it properly when filePathModel includes Uri.
