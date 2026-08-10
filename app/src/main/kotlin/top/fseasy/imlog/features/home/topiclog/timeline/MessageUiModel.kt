@@ -3,12 +3,13 @@ package top.fseasy.imlog.features.home.topiclog.timeline
 import android.net.Uri
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
-import java.nio.file.Path
-import kotlin.time.Duration
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel.ImageLike
 import top.fseasy.imlog.ui.model.UserAvatarUiModel
+import java.nio.file.Path
+import kotlin.time.Duration
 
 sealed interface QuotedMessageSenderUiModel {
   data object Own : QuotedMessageSenderUiModel
@@ -76,9 +77,6 @@ sealed interface MessageContentUiModel {
     val height: Int
   }
 
-  val ImageLike.ratio: Double
-    get() = if (width == 0) 0.0 else height.toDouble() / width
-
   @Immutable
   data class Image(
       override val storedFilename: String?,
@@ -135,3 +133,6 @@ data class MessageUiModel(
 ) {
   fun supportAudioPlay() = content is MessageContentUiModel.AudioPlaySupported
 }
+
+val ImageLike.aspectRatio: Float
+  get() = if (height == 0) 1.0f else width.toFloat() / height

@@ -53,6 +53,12 @@ sealed interface ContextState {
 
 sealed interface MessageTimelineUiEffect {
   data class ShowSnackBar(val message: String) : MessageTimelineUiEffect
+
+  data class OpenFileChooser(
+      val uri: android.net.Uri,
+      val mimeType: String?,
+      val displayName: String,
+  ) : MessageTimelineUiEffect
 }
 
 @HiltViewModel
@@ -202,6 +208,27 @@ constructor(
             )
           }
       else -> Timber.w("Call seek audio for content-type: ${message.content::class.qualifiedName}")
+    }
+  }
+
+  fun onFileClicked(messageId: String) {
+    viewModelScope.launch {
+      // 1. 在协程中查询 SAF URI (例如查数据库或本地存储)
+      val fileEntity = fileRepository.querySafUriByMessageId(messageId)
+
+      if (fileEntity != null && fileEntity.safUri != null) {
+        // 2. 查询成功，抛出打开文件的 UI 事件
+        _uiEvent.send(
+            ChatUiEvent.OpenFileChooser(
+                uri = fileEntity.safUri,
+                mimeType = fileEntity.mimeType,
+                filename = fileEntity.displayFilename,
+            )
+        )
+      } else {
+        // 查询失败处理
+        _uiEvent.send(ChatUiEvent.ShowToast("本地文件不存在或已被删除"))
+      }
     }
   }
 

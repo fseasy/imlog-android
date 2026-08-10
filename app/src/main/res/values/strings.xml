@@ -109,4 +109,8 @@
     <string name="term_voice_message">Voice Message</string>
     <string name="home_timeline_audio_not_found">Audio Not Found</string>
     <string name="term_audio_message">Audio Message</string>
+    <string name="term_image">Image</string>
+    <string name="term_video">Video</string>
+    <string name="term_file">File</string>
+    <string name="open_file_by_chooser">Choose app to open file %1$s</string>
 </resources>

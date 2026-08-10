@@ -15,13 +15,13 @@ import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import java.nio.file.Path
+import kotlin.time.Duration
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.features.home.topiclog.timeline.AudioPlaybackState
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageSenderUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
-import java.nio.file.Path
-import kotlin.time.Duration
 
 @Composable
 fun MessageBubble(
@@ -123,7 +123,11 @@ fun MessageBubble(
           }
 
           is MessageContentUiModel.GenericFile -> {
-            FileMessageBubble(content = content)
+            GenericFileMessageBubble(
+                content = content,
+                onClick = TODO(),
+                modifier = modifier,
+            )
           }
         }
 
