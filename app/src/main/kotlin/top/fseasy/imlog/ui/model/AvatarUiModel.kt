@@ -1,13 +1,17 @@
 package top.fseasy.imlog.ui.model
 
 import android.content.Context
+import android.os.Parcel
+import android.os.Parcelable
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.listSaver
+import kotlinx.parcelize.Parceler
+import kotlinx.parcelize.Parcelize
+import kotlinx.parcelize.WriteWith
 import timber.log.Timber
 import top.fseasy.imlog.R
 import top.fseasy.imlog.data.mapper.toNioPath
+import top.fseasy.imlog.data.util.NioPathParceler
 import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.PresetAvatar
 import top.fseasy.imlog.domain.model.TopicPresetAvatar
@@ -16,20 +20,23 @@ import top.fseasy.imlog.domain.model.UserPresetAvatar
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.util.defaultJson
 import java.nio.file.Path
-import java.nio.file.Paths
 import kotlin.io.path.name
 
+@Parcelize
 @Immutable
-sealed interface AvatarUiModel<out T : PresetAvatar> {
+sealed interface AvatarUiModel<out T : PresetAvatar> : Parcelable {
+  @Parcelize
   @Immutable
   data class Preset<T : PresetAvatar>(
       @param:DrawableRes val resId: Int,
-      val backMapValue: T,
+      val backMapValue: @WriteWith<PresetAvatarParceler> T,
   ) : AvatarUiModel<T> {
     companion object
   }
 
-  @Immutable data class NioPath(val path: Path) : AvatarUiModel<Nothing>
+  @Parcelize
+  @Immutable
+  data class NioPath(val path: @WriteWith<NioPathParceler> Path) : AvatarUiModel<Nothing>
 }
 
 typealias UserAvatarUiModel = AvatarUiModel<UserPresetAvatar>
@@ -60,7 +67,7 @@ val PresetAvatar.resId: Int
       }
 
 fun <T : PresetAvatar> AvatarModel<T>.toUiModel(
-  nioPathBuilder: (filename: String) -> Path,
+    nioPathBuilder: (filename: String) -> Path,
 ): AvatarUiModel<T> {
   return when (this) {
     is AvatarModel.Preset -> AvatarUiModel.Preset(value.resId, value)
@@ -114,44 +121,37 @@ inline fun <reified T : PresetAvatar> String.toAvatarModelOrNull(): AvatarModel<
       null
     }
 
-/** For Saver in Composable */
-inline fun <reified T> avatarUiModelSaver(): Saver<AvatarUiModel<T>, Any>
-    where T : Enum<T>, T : PresetAvatar =
-    listSaver(
-        save = { model ->
-          when (model) {
-            is AvatarUiModel.Preset ->
-                listOf(
-                    "PRESET",
-                    model.backMapValue.name,
-                )
-            is AvatarUiModel.NioPath ->
-                listOf(
-                    "PATH",
-                    model.path.toString(),
-                )
-          }
-        },
-        restore = { list ->
-          if (list.isEmpty()) return@listSaver null
+/** For Savable (rememberSavable) in Composable */
+object PresetAvatarParceler : Parceler<PresetAvatar> {
 
-          when (list[0] as? String) {
-            "PRESET" -> {
-              val name = list.getOrNull(1) as? String ?: return@listSaver null
-              runCatching {
-                val enumValue = enumValueOf<T>(name)
-                AvatarUiModel.Preset(enumValue.resId, enumValue)
-              }
-                  .getOrNull()
-            }
-            "PATH" -> {
-              val pathStr = list.getOrNull(1) as? String ?: return@listSaver null
-              runCatching {
-                AvatarUiModel.NioPath(Paths.get(pathStr))
-              }
-                  .getOrNull()
-            }
-            else -> null
-          }
-        },
-    )
+  private const val TYPE_USER = 1
+  private const val TYPE_TOPIC = 2
+
+  override fun create(parcel: Parcel): PresetAvatar {
+    val presetType = parcel.readInt()
+    val name = parcel.readString().orEmpty()
+
+    return when (presetType) {
+      TYPE_USER -> {
+        UserPresetAvatar.entries.find { it.name == name } ?: UserPresetAvatar.entries.first()
+      }
+      TYPE_TOPIC -> {
+        TopicPresetAvatar.entries.find { it.name == name } ?: TopicPresetAvatar.entries.first()
+      }
+      else -> error("Unknown parcel type: $presetType")
+    }
+  }
+
+  override fun PresetAvatar.write(parcel: Parcel, flags: Int) {
+    when (this) {
+      is UserPresetAvatar -> {
+        parcel.writeInt(TYPE_USER)
+        parcel.writeString(this.name)
+      }
+      is TopicPresetAvatar -> {
+        parcel.writeInt(TYPE_TOPIC)
+        parcel.writeString(this.name)
+      }
+    }
+  }
+}

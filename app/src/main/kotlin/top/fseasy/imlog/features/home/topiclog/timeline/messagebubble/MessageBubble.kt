@@ -15,13 +15,13 @@ import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import java.nio.file.Path
-import kotlin.time.Duration
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.features.home.topiclog.timeline.AudioPlaybackState
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageSenderUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
+import java.nio.file.Path
+import kotlin.time.Duration
 
 @Composable
 fun MessageBubble(
@@ -34,6 +34,7 @@ fun MessageBubble(
     onChangeAudioPlaybackSpeed: (MessageId) -> Unit,
     onShowImage: (path: Path) -> Unit,
     onShowVideo: (path: Path) -> Unit,
+    onOpenFile: (MessageUiModel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
   val isOwn = message.sender is MessageSenderUiModel.Own
@@ -125,7 +126,7 @@ fun MessageBubble(
           is MessageContentUiModel.GenericFile -> {
             GenericFileMessageBubble(
                 content = content,
-                onClick = TODO(),
+                onClick = { onOpenFile(message) },
                 modifier = modifier,
             )
           }

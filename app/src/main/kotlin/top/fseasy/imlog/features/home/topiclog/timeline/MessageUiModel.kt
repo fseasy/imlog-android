@@ -1,48 +1,67 @@
 package top.fseasy.imlog.features.home.topiclog.timeline
 
 import android.net.Uri
+import android.os.Parcelable
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
+import java.nio.file.Path
+import kotlin.time.Duration
+import kotlinx.parcelize.Parcelize
+import kotlinx.parcelize.TypeParceler
+import top.fseasy.imlog.data.mapper.AbsolutePathModelParceler
+import top.fseasy.imlog.data.mapper.MessageIdParceler
+import top.fseasy.imlog.data.mapper.UserIdParceler
+import top.fseasy.imlog.data.util.NioPathParceler
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel.ImageLike
 import top.fseasy.imlog.ui.model.UserAvatarUiModel
-import java.nio.file.Path
-import kotlin.time.Duration
 
-sealed interface QuotedMessageSenderUiModel {
-  data object Own : QuotedMessageSenderUiModel
+@Parcelize
+sealed interface QuotedMessageSenderUiModel : Parcelable {
+  @Parcelize data object Own : QuotedMessageSenderUiModel
 
-  data class Other(val name: String) : QuotedMessageSenderUiModel
+  @Parcelize data class Other(val name: String) : QuotedMessageSenderUiModel
 }
 
-sealed interface MessageSenderUiModel {
+@Parcelize
+sealed interface MessageSenderUiModel : Parcelable {
   val avatar: UserAvatarUiModel
 
-  data class Own(override val avatar: UserAvatarUiModel) : MessageSenderUiModel
+  @Parcelize data class Own(override val avatar: UserAvatarUiModel) : MessageSenderUiModel
 
+  @Parcelize
+  @TypeParceler<UserId, UserIdParceler>
   data class Other(val id: UserId, val name: String, override val avatar: UserAvatarUiModel) :
       MessageSenderUiModel
 }
 
-sealed interface QuotedMessageContentUiModel {
-  data class Text(val text: String) : QuotedMessageContentUiModel
+@Parcelize
+sealed interface QuotedMessageContentUiModel : Parcelable {
+  @Parcelize data class Text(val text: String) : QuotedMessageContentUiModel
 
   // audio, generic file
+  @Parcelize
   data class File(val displayFilename: String, @DrawableRes val iconRes: Int) :
       QuotedMessageContentUiModel
 
-  data class Voice(val duration: Duration) : QuotedMessageContentUiModel
+  @Parcelize data class Voice(val duration: Duration) : QuotedMessageContentUiModel
 
+  @Parcelize
+  @TypeParceler<Path?, NioPathParceler>()
   data class Image(val path: Path?) : QuotedMessageContentUiModel
 
+  @Parcelize
+  @TypeParceler<Path?, NioPathParceler>()
   data class Video(val path: Path?) : QuotedMessageContentUiModel
 }
 
-sealed interface QuotedMessageUiModel {
-  data object Deleted : QuotedMessageUiModel
+@Parcelize
+sealed interface QuotedMessageUiModel : Parcelable {
+  @Parcelize data object Deleted : QuotedMessageUiModel
 
+  @Parcelize
   data class Matched(
       val sender: QuotedMessageSenderUiModel,
       val content: QuotedMessageContentUiModel,
@@ -50,11 +69,13 @@ sealed interface QuotedMessageUiModel {
 }
 
 @Immutable
-sealed interface MessageContentUiModel {
+@Parcelize
+sealed interface MessageContentUiModel : Parcelable {
 
-  @Immutable data class Text(val text: String) : MessageContentUiModel
+  @Immutable @Parcelize data class Text(val text: String) : MessageContentUiModel
 
   @Immutable
+  @Parcelize
   sealed interface Attachment : MessageContentUiModel {
     // We parse the stored file Uri lazily, so here just store the file name again.
     // NOTE: When Rendering message bubble, we don't need the storage Uri at all.
@@ -65,11 +86,13 @@ sealed interface MessageContentUiModel {
   }
 
   @Immutable
+  @Parcelize
   sealed interface AudioPlaySupported : Attachment {
     val duration: kotlin.time.Duration
   }
 
   @Immutable
+  @Parcelize
   sealed interface ImageLike : Attachment {
     // 1. from src uri 2. from real thumbnail path 3. illegal state (null)
     val thumbnailPath: AbsolutePathModel?
@@ -78,6 +101,8 @@ sealed interface MessageContentUiModel {
   }
 
   @Immutable
+  @Parcelize
+  @TypeParceler<AbsolutePathModel?, AbsolutePathModelParceler>()
   data class Image(
       override val storedFilename: String?,
       override val thumbnailPath: AbsolutePathModel?,
@@ -86,6 +111,8 @@ sealed interface MessageContentUiModel {
   ) : ImageLike
 
   @Immutable
+  @Parcelize
+  @TypeParceler<AbsolutePathModel?, AbsolutePathModelParceler>()
   data class Video(
       override val storedFilename: String?,
       override val thumbnailPath: AbsolutePathModel?,
@@ -95,6 +122,8 @@ sealed interface MessageContentUiModel {
   ) : ImageLike
 
   @Immutable
+  @Parcelize
+  @TypeParceler<Path?, NioPathParceler>
   data class Voice(
       override val storedFilename: String?,
       val cachePath: Path?,
@@ -103,6 +132,7 @@ sealed interface MessageContentUiModel {
   ) : AudioPlaySupported
 
   @Immutable
+  @Parcelize
   data class Audio(
       override val storedFilename: String?,
       val sourceTemporaryUri: Uri?,
@@ -113,6 +143,7 @@ sealed interface MessageContentUiModel {
   ) : AudioPlaySupported
 
   @Immutable
+  @Parcelize
   data class GenericFile(
       override val storedFilename: String?,
       val sourceTemporaryUri: Uri?,
@@ -123,6 +154,8 @@ sealed interface MessageContentUiModel {
 }
 
 @Immutable
+@Parcelize
+@TypeParceler<MessageId, MessageIdParceler>
 data class MessageUiModel(
     val id: MessageId,
     val sender: MessageSenderUiModel,
@@ -130,7 +163,7 @@ data class MessageUiModel(
     val content: MessageContentUiModel,
     val createdAt: kotlin.time.Instant,
     val formatedCreatedAt: String,
-) {
+) : Parcelable {
   fun supportAudioPlay() = content is MessageContentUiModel.AudioPlaySupported
 }
 

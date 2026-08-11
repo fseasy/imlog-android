@@ -20,7 +20,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -36,6 +40,7 @@ import top.fseasy.imlog.features.home.topiclog.timeline.ContextState
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimeline
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimelineUiEffect
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimelineViewModel
+import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
 import top.fseasy.imlog.ui.util.openFileWithChooser
 
 @Composable
@@ -100,6 +105,12 @@ fun TopicLogScreen(
       handleComposerDismiss = handleComposerDismiss,
       snackbarHostState = snackbarHostState,
   )
+}
+
+@Composable
+private fun TopicLogContainer() {
+  // MessageUiModel supports parcelable, so it's ok to use rememberSavable!
+  var fullScreenViewMessage by rememberSaveable() { mutableStateOf<MessageUiModel?>(null) }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

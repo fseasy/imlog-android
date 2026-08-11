@@ -67,6 +67,7 @@ fun TimelineContent(
     onChangeAudioPlaybackSpeed: (MessageId) -> Unit,
     onShowImage: (path: Path) -> Unit,
     onShowVideo: (path: Path) -> Unit,
+    onOpenFile: (MessageUiModel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
   val listState = rememberLazyListState()
@@ -109,6 +110,7 @@ fun TimelineContent(
               onChangeAudioPlaybackSpeed = onChangeAudioPlaybackSpeed,
               onShowImage = onShowImage,
               onShowVideo = onShowVideo,
+              onOpenFile = onOpenFile,
               modifier = modifier,
           )
         }
