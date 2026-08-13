@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import top.fseasy.imlog.R
+import top.fseasy.imlog.features.home.topiclog.LocalTopicLogVisibilityScope
+import top.fseasy.imlog.features.home.topiclog.LocalTopicLogSharedTransitionScope
 
 object IMMediaDefaults {
   val MinWidth = 80.dp
@@ -40,14 +42,34 @@ fun Modifier.imMediaConstraints(
 
 @Composable
 fun MediaThumbnailBubble(
+    id: String,
     thumbnailUrl: Any?,
     aspectRatio: Float,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     overlayContent: (@Composable BoxScope.() -> Unit)? = null,
 ) {
+  val sharedTransitionScope = LocalTopicLogSharedTransitionScope.current
+  val visibilityScope = LocalTopicLogVisibilityScope.current
+
+  val sharedTransitionModifier =
+      if (sharedTransitionScope != null && visibilityScope != null) {
+        with(sharedTransitionScope) {
+          Modifier.sharedElement(
+              rememberSharedContentState(key = "media_${id}"),
+              animatedVisibilityScope = visibilityScope,
+          )
+        }
+      } else {
+        Modifier
+      }
+
   Box(
-      modifier = modifier.imMediaConstraints(aspectRatio).clickable(onClick = onClick),
+      modifier =
+          modifier
+              .imMediaConstraints(aspectRatio)
+              .clickable(onClick = onClick)
+              .then(sharedTransitionModifier),
       contentAlignment = Alignment.Center,
   ) {
     // 1.unified thumbnail

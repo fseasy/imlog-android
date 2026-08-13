@@ -1,6 +1,7 @@
 package top.fseasy.imlog.features.home.topiclog.timeline
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -36,6 +37,7 @@ import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.util.runSuspendCatching
 import top.fseasy.imlog.navigation.MainScreen
+import top.fseasy.imlog.ui.util.openFileWithChooser
 import javax.inject.Inject
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -55,7 +57,7 @@ sealed interface MessageTimelineUiEffect {
   data class ShowSnackBar(val message: String) : MessageTimelineUiEffect
 
   data class OpenFileChooser(
-      val uri: android.net.Uri,
+      val uri: Uri,
       val mimeType: String?,
       val displayName: String,
   ) : MessageTimelineUiEffect
@@ -211,24 +213,38 @@ constructor(
     }
   }
 
-  fun onFileClicked(messageId: String) {
-    viewModelScope.launch {
-      // 1. 在协程中查询 SAF URI (例如查数据库或本地存储)
-      val fileEntity = fileRepository.querySafUriByMessageId(messageId)
-
-      if (fileEntity != null && fileEntity.safUri != null) {
-        // 2. 查询成功，抛出打开文件的 UI 事件
-        _uiEvent.send(
-            ChatUiEvent.OpenFileChooser(
-                uri = fileEntity.safUri,
-                mimeType = fileEntity.mimeType,
-                filename = fileEntity.displayFilename,
-            )
+  /** Create the OpenFileChoose intent for GenericFile Message */
+  fun createOpenFileIntentForGenericFileMessage(message: MessageUiModel) {
+    launchWithUserId { userId ->
+      val fileMessageContent =
+          message.content as? MessageContentUiModel.GenericFile
+              ?: run {
+                Timber.w("Invalid message content when call FileClicked: $message")
+                return@launchWithUserId
+              }
+      val uri =
+          fileMessageContent.sourceTemporaryUri
+              ?: runSuspendCatching {
+                fileMessageContent.buildStorageUri(
+                    signInUserId = userId,
+                    topicId = topicId,
+                    messageCreatedAt = message.createdAt,
+                    storagePathUseCase = storagePathUseCase,
+                    storageRepository = storageRepository,
+                )
+              }
+                  .onFailure { e -> Timber.w(e, "Generic File build storage uri failed") }
+                  .getOrNull()
+              ?: return@launchWithUserId
+      runSuspendCatching {
+        openFileWithChooser(
+            context = context,
+            uri = uri,
+            mimeType = fileMessageContent.mimeType,
+            fileDisplayName = fileMessageContent.displayFilename,
         )
-      } else {
-        // 查询失败处理
-        _uiEvent.send(ChatUiEvent.ShowToast("本地文件不存在或已被删除"))
       }
+          .onFailure { e -> Timber.w(e, "OpenFileWithChooser failed") }
     }
   }
 

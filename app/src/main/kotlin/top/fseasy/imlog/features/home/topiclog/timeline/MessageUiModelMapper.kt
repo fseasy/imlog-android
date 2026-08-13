@@ -192,6 +192,7 @@ fun MessageContent.toUiModel(
             sourceTemporaryUri = getSourceTemporaryUri(fileUri),
             displayFilename = displayFilename,
             formatedFileSize = fileByteSize.byteSizeToHumanReadable(),
+            mimeType = mimeType,
             iconRes = mimeTypeToIconResId(mimeType),
         )
     is MessageContent.Image ->

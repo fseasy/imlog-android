@@ -149,6 +149,7 @@ sealed interface MessageContentUiModel : Parcelable {
       val sourceTemporaryUri: Uri?,
       val displayFilename: String,
       val formatedFileSize: String,
+      val mimeType: String,
       @DrawableRes val iconRes: Int,
   ) : Attachment
 }

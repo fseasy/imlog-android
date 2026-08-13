@@ -20,7 +20,6 @@ import top.fseasy.imlog.features.home.topiclog.timeline.AudioPlaybackState
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageSenderUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
-import java.nio.file.Path
 import kotlin.time.Duration
 
 @Composable
@@ -32,8 +31,8 @@ fun MessageBubble(
     onToggleAudioPlay: (message: MessageUiModel) -> Unit,
     onSeekAudio: (message: MessageUiModel, positionRatio: Float) -> Unit,
     onChangeAudioPlaybackSpeed: (MessageId) -> Unit,
-    onShowImage: (path: Path) -> Unit,
-    onShowVideo: (path: Path) -> Unit,
+    onShowImage: (MessageUiModel) -> Unit,
+    onShowVideo: (MessageUiModel) -> Unit,
     onOpenFile: (MessageUiModel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -60,15 +59,17 @@ fun MessageBubble(
 
           is MessageContentUiModel.Image -> {
             ImageMessageBubble(
+                messageId = message.id,
                 content = content,
-                onClick = { onShowImage(content.path) },
+                onClick = { onShowImage(message) },
             )
           }
 
           is MessageContentUiModel.Video -> {
             VideoMessageBubble(
+                messageId = message.id,
                 content = content,
-                onClick = { onShowVideo(content.path) },
+                onClick = { onShowVideo(message) },
             )
           }
 

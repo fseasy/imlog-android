@@ -1,5 +1,11 @@
 package top.fseasy.imlog.features.home.topiclog
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +25,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +65,8 @@ fun TopicLogScreen(
           ?.name
   val focusManager = LocalFocusManager.current
 
+  // Used to close composer and reset composer input mode. It has to be set in the parent level of
+  // the composer
   val handleComposerDismiss = {
     focusManager.clearFocus()
     composerViewModel.clearInputMode()
@@ -65,7 +75,7 @@ fun TopicLogScreen(
   val snackbarHostState = remember { SnackbarHostState() }
   val context = LocalContext.current
 
-  // 监听副作用/单次事件：属于 Smart 层的职责！
+  // Effect listener, belongs to Smart level
   LaunchedEffect(Unit) {
     messageTimelineViewModel.uiEffect.collect { e ->
       when (e) {
@@ -84,33 +94,96 @@ fun TopicLogScreen(
     }
   }
 
-  TopicLogContent(
-      topicId = messageTimelineViewModel.topicId,
-      topicName = topicName,
-      onNavigateBack = onNavigateBack,
-      onSettingsClick = onSettingsClick,
-      timelineSection = {
-        MessageTimeline(
-            onTapOutside = handleComposerDismiss,
-            onDragList = handleComposerDismiss,
-            messageTimelineViewModel = messageTimelineViewModel,
-        )
-      },
-      composerSection = {
-        MessageComposer(
+  TopicLogSharedTransitionLayoutContainer(
+      logContent = { onExitFullScreen ->
+        TopicLogContent(
+            topicId = messageTimelineViewModel.topicId,
+            topicName = topicName,
             onNavigateBack = onNavigateBack,
-            viewModel = composerViewModel,
+            onSettingsClick = onSettingsClick,
+            timelineSection = {
+              MessageTimeline(
+                  onTapOutside = handleComposerDismiss,
+                  onDragList = handleComposerDismiss,
+                  viewModel = messageTimelineViewModel,
+              )
+            },
+            composerSection = {
+              MessageComposer(
+                  onNavigateBack = onNavigateBack,
+                  viewModel = composerViewModel,
+              )
+            },
+            handleComposerDismiss = handleComposerDismiss,
+            snackbarHostState = snackbarHostState,
         )
       },
-      handleComposerDismiss = handleComposerDismiss,
-      snackbarHostState = snackbarHostState,
+      fullScreenOverlay = {},
   )
 }
 
+/**
+ * For SharedTransitionLayout. It's like a local var, The same compositionLocal can provide
+ * different values, so that the composable get the current value according to its position of the
+ * component tree - from the nearest parent node that provides the value.
+ */
+val LocalTopicLogVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
+
+/** For SharedTransitionLayout. */
+val LocalTopicLogSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
+
+/**
+ * The container that wrap the shared-transition-layout between the LogContent and FullScreen
+ * Overlay.
+ *
+ * NOTE: we pass the scope by `compositionLocalOf` instead of param-passing-through
+ */
 @Composable
-private fun TopicLogContainer() {
+private fun TopicLogSharedTransitionLayoutContainer(
+    logContent: @Composable (onFullScreenViewMessage: (MessageUiModel) -> Unit) -> Unit,
+    fullScreenOverlay: @Composable (message: MessageUiModel, onExitFullScreen: () -> Unit) -> Unit,
+) {
   // MessageUiModel supports parcelable, so it's ok to use rememberSavable!
-  var fullScreenViewMessage by rememberSaveable() { mutableStateOf<MessageUiModel?>(null) }
+  var currentFullScreenViewMessage by rememberSaveable() { mutableStateOf<MessageUiModel?>(null) }
+  SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalTopicLogSharedTransitionScope provides this) {
+      Box(modifier = Modifier.fillMaxSize()) {
+        // Why use a AnimatedVisibility with a constant `visible = true`
+        // 1. SharedTransitionLayout must need a animatedVisibility scope!
+        // 2. We can't use AnimatedContent as it will distroy the content when swith to the overlay
+        // part
+        // 3. so finally, we have to hack it to build a dummy always-visible scope.
+        // Why top level instead of the level of the leaf node? -> it's the most efficient one, as
+        // only 1 scope is created and never destroied as user scroll the message timeline.
+        AnimatedVisibility(
+            visible = true,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+          CompositionLocalProvider(LocalTopicLogVisibilityScope provides this) {
+            logContent() { message ->
+              currentFullScreenViewMessage = message
+            }
+          }
+        }
+        AnimatedVisibility(
+            visible = currentFullScreenViewMessage != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+          CompositionLocalProvider(LocalTopicLogVisibilityScope provides this) {
+            currentFullScreenViewMessage?.let {
+              fullScreenOverlay(it) {
+                currentFullScreenViewMessage = null
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -171,95 +244,3 @@ private fun TopicLogContent(
     }
   }
 }
-
-// @Composable
-// fun FullScreenImage(uri: String) {
-//    Dialog(
-//        onDismissRequest = { }, properties = DialogProperties(usePlatformDefaultWidth = false)
-//    ) {
-//        Box(
-//            modifier = Modifier
-//                .fillMaxSize()
-//                .background(Color.Black)
-//                .clickable { }, contentAlignment = Alignment.Center
-//        ) {
-//            AsyncImage(
-//                model = uri,
-//                contentDescription = "Full screen image",
-//                modifier = Modifier.fillMaxSize(),
-//                contentScale = ContentScale.Fit
-//            )
-//        }
-//    }
-// }
-//
-// class TimelinePreviewParameterProvider : PreviewParameterProvider<TimelineUiState> {
-//    override val values = sequenceOf(
-//        // 状态 1：加载中
-//        TimelineUiState(
-//            isLoading = true, topic = null, messages = emptyList(), currentUserId = "user_me"
-//        ),
-//        // 状态 2：正常聊天状态，有多种消息类型
-//        TimelineUiState(
-//            isLoading = false, topic = Topic(
-//                id = TopicId("1"),
-//                name = "闪念 & 灵感盒",
-//                iconUri = "",
-//                creatorId =
-//            ), currentUserId = "user_me", messages = listOf(
-//                MessageUiState(
-//                    Message(
-//                        id = "m1",
-//                        topicId = "1",
-//                        senderId = "user_other",
-//                        type = MessageType.TEXT,
-//                        content = "嗨！ImLog 感觉如何？",
-//                        createdAt = 1717000000000,
-//                    ), null
-//                ), MessageUiState(
-//                    Message(
-//                        id = "m2",
-//                        topicId = "1",
-//                        senderId = "user_me",
-//                        type = MessageType.TEXT,
-//                        content = "非常好用！本地优先，启动速度拉满🚀",
-//                        createdAt = 1717000100000
-//                    ), null
-//                )
-//            )
-//        ),
-//        // 状态 3：正在录音状态
-//        TimelineUiState(
-//            isLoading = false,
-//            topic = Topic(
-//                id = "1",
-//                name = "闪念 & 灵感盒",
-//                iconUri = "",
-//                creatorId = "11",
-//            ),
-//            currentUserId = "user_me",
-//            messages = emptyList(),
-//            voiceRecordingState = VoiceRecordingState.RECORDING,
-//            voiceRecordingElapsed = 3400 // 模拟录制了 3.4 秒
-//        )
-//    )
-// }
-//
-// @Preview(showBackground = true, name = "Timeline Multi-State Preview")
-// @Composable
-// fun TimelineScreenPreview(
-//    @PreviewParameter(TimelinePreviewParameterProvider::class) uiState: TimelineUiState,
-// ) {
-//    MaterialTheme {
-//        TimelineContent(
-//            uiState = uiState,
-//            onBack = {},
-//            onSettingsClick = {},
-//            onCopyMessage = {},
-//            onSendText = {},
-//            onSendImage = {},
-//            onSendVideo = {},
-//            onSendAudio = {},
-//            onVoiceRecordingStateChange = {})
-//    }
-// }

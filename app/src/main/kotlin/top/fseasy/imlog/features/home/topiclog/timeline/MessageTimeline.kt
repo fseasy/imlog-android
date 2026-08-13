@@ -23,13 +23,13 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.MessageBubble
-import java.nio.file.Path
 import kotlin.time.Duration
 
 @Composable
 fun MessageTimeline(
     onTapOutside: () -> Unit,
     onDragList: () -> Unit,
+    onFullScreenViewMessage: (MessageUiModel) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MessageTimelineViewModel = hiltViewModel(),
 ) {
@@ -47,8 +47,9 @@ fun MessageTimeline(
       onToggleAudioPlay = viewModel::toggleAudioPlay,
       onSeekAudio = viewModel::seekAudio,
       onChangeAudioPlaybackSpeed = viewModel::changeAudioPlaybackSpeed,
-      onShowImage = TODO(),
-      onShowVideo = TODO(),
+      onShowImage = onFullScreenViewMessage,
+      onShowVideo = onFullScreenViewMessage,
+      onOpenFile = { message -> viewModel.createOpenFileIntentForGenericFileMessage(message) },
       modifier = modifier,
   )
 }
@@ -65,8 +66,8 @@ fun TimelineContent(
     onToggleAudioPlay: (MessageUiModel) -> Unit,
     onSeekAudio: (MessageUiModel, positionRatio: Float) -> Unit,
     onChangeAudioPlaybackSpeed: (MessageId) -> Unit,
-    onShowImage: (path: Path) -> Unit,
-    onShowVideo: (path: Path) -> Unit,
+    onShowImage: (MessageUiModel) -> Unit,
+    onShowVideo: (MessageUiModel) -> Unit,
     onOpenFile: (MessageUiModel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
