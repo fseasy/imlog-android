@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import top.fseasy.imlog.R
+import top.fseasy.imlog.data.mapper.toUriStr
+import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.Topic
@@ -37,7 +39,6 @@ import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.util.runSuspendCatching
 import top.fseasy.imlog.navigation.MainScreen
-import top.fseasy.imlog.ui.util.openFileWithChooser
 import javax.inject.Inject
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -61,6 +62,9 @@ sealed interface MessageTimelineUiEffect {
       val mimeType: String?,
       val displayName: String,
   ) : MessageTimelineUiEffect
+
+  data class SetFullScreenViewMessage(val fullScreenMessage: FullScreenMessageUiModel) :
+      MessageTimelineUiEffect
 }
 
 @HiltViewModel
@@ -213,7 +217,7 @@ constructor(
     }
   }
 
-  /** Create the OpenFileChoose intent for GenericFile Message */
+  /** Create the OpenFileChoose intent for GenericFile Message. Send UI Effect when success */
   fun createOpenFileIntentForGenericFileMessage(message: MessageUiModel) {
     launchWithUserId { userId ->
       val fileMessageContent =
@@ -223,28 +227,58 @@ constructor(
                 return@launchWithUserId
               }
       val uri =
-          fileMessageContent.sourceTemporaryUri
-              ?: runSuspendCatching {
-                fileMessageContent.buildStorageUri(
-                    signInUserId = userId,
-                    topicId = topicId,
-                    messageCreatedAt = message.createdAt,
-                    storagePathUseCase = storagePathUseCase,
-                    storageRepository = storageRepository,
+          runSuspendCatching {
+            fileMessageContent.buildFileUri(
+                signInUserId = userId,
+                topicId = topicId,
+                messageCreatedAt = message.createdAt,
+                storagePathUseCase = storagePathUseCase,
+                storageRepository = storageRepository,
+            )
+          }
+              .onFailure { e -> Timber.w(e, "Generic File build storage uri failed") }
+              .getOrNull()
+              ?: run {
+                _uiEffect.send(
+                    MessageTimelineUiEffect.ShowSnackBar(
+                        "Failed to resolve file: ${fileMessageContent.displayFilename}"
+                    )
                 )
+                return@launchWithUserId
               }
-                  .onFailure { e -> Timber.w(e, "Generic File build storage uri failed") }
-                  .getOrNull()
-              ?: return@launchWithUserId
-      runSuspendCatching {
-        openFileWithChooser(
-            context = context,
-            uri = uri,
-            mimeType = fileMessageContent.mimeType,
-            fileDisplayName = fileMessageContent.displayFilename,
-        )
-      }
-          .onFailure { e -> Timber.w(e, "OpenFileWithChooser failed") }
+      _uiEffect.send(
+          MessageTimelineUiEffect.OpenFileChooser(
+              uri = uri,
+              mimeType = fileMessageContent.mimeType,
+              displayName = fileMessageContent.displayFilename,
+          )
+      )
+    }
+  }
+
+  fun prepareFullScreenViewMessage(message: MessageUiModel): Unit {
+    launchWithUserId { userId ->
+      // currently fullscreen only support Image/Video
+      val content = message.content as? MessageContentUiModel.ImageLike ?: return@launchWithUserId
+      val uri =
+          runSuspendCatching {
+            content.buildFileUri(
+                signInUserId = userId,
+                topicId = topicId,
+                messageCreatedAt = message.createdAt,
+                storagePathUseCase = storagePathUseCase,
+                storageRepository = storageRepository,
+            )
+          }
+              .onFailure { e -> Timber.w(e, "FullScreenView build storage uri failed") }
+              .getOrNull()
+              ?: run {
+                _uiEffect.send(MessageTimelineUiEffect.ShowSnackBar("Failed to resolve file"))
+                return@launchWithUserId
+              }
+      val path = AbsolutePathModel.UriStrModel(uri.toUriStr())
+      val model = FullScreenMessageUiModel(message = message, path = path)
+      _uiEffect.send(MessageTimelineUiEffect.SetFullScreenViewMessage(model))
     }
   }
 

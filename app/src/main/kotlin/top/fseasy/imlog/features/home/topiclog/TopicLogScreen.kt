@@ -44,7 +44,9 @@ import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposer
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
+import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainer
 import top.fseasy.imlog.features.home.topiclog.timeline.ContextState
+import top.fseasy.imlog.features.home.topiclog.timeline.FullScreenMessageUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimeline
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimelineUiEffect
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimelineViewModel
@@ -74,6 +76,9 @@ fun TopicLogScreen(
 
   val snackbarHostState = remember { SnackbarHostState() }
   val context = LocalContext.current
+  // MessageUiModel supports parcelable, so it's ok to use rememberSavable!
+  var currentFullScreenViewMessage by
+      rememberSaveable() { mutableStateOf<FullScreenMessageUiModel?>(null) }
 
   // Effect listener, belongs to Smart level
   LaunchedEffect(Unit) {
@@ -90,12 +95,20 @@ fun TopicLogScreen(
         is MessageTimelineUiEffect.ShowSnackBar -> {
           snackbarHostState.showSnackbar(e.message)
         }
+
+        is MessageTimelineUiEffect.SetFullScreenViewMessage ->
+            currentFullScreenViewMessage = e.fullScreenMessage
       }
     }
   }
 
   TopicLogSharedTransitionLayoutContainer(
-      logContent = { onExitFullScreen ->
+      currentFullScreenViewMessage = currentFullScreenViewMessage,
+      onFullScreenView = { message ->
+        messageTimelineViewModel.prepareFullScreenViewMessage(message)
+      },
+      onExitFullScreenView = { currentFullScreenViewMessage = null },
+      logContent = { onFullScreenViewMessage ->
         TopicLogContent(
             topicId = messageTimelineViewModel.topicId,
             topicName = topicName,
@@ -106,6 +119,7 @@ fun TopicLogScreen(
                   onTapOutside = handleComposerDismiss,
                   onDragList = handleComposerDismiss,
                   viewModel = messageTimelineViewModel,
+                  onFullScreenViewMessage = onFullScreenViewMessage,
               )
             },
             composerSection = {
@@ -118,7 +132,12 @@ fun TopicLogScreen(
             snackbarHostState = snackbarHostState,
         )
       },
-      fullScreenOverlay = {},
+      fullScreenOverlay = { fullScreenViewMessage, onExitFullScreen ->
+        FullScreenContainer(
+            message = fullScreenViewMessage,
+            onClose = onExitFullScreen,
+        )
+      },
   )
 }
 
@@ -140,11 +159,15 @@ val LocalTopicLogSharedTransitionScope = compositionLocalOf<SharedTransitionScop
  */
 @Composable
 private fun TopicLogSharedTransitionLayoutContainer(
+    currentFullScreenViewMessage: FullScreenMessageUiModel?,
+    onFullScreenView: (MessageUiModel) -> Unit,
+    onExitFullScreenView: () -> Unit,
     logContent: @Composable (onFullScreenViewMessage: (MessageUiModel) -> Unit) -> Unit,
-    fullScreenOverlay: @Composable (message: MessageUiModel, onExitFullScreen: () -> Unit) -> Unit,
+    fullScreenOverlay:
+        @Composable
+        (message: FullScreenMessageUiModel, onExitFullScreen: () -> Unit) -> Unit,
 ) {
-  // MessageUiModel supports parcelable, so it's ok to use rememberSavable!
-  var currentFullScreenViewMessage by rememberSaveable() { mutableStateOf<MessageUiModel?>(null) }
+
   SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
     CompositionLocalProvider(LocalTopicLogSharedTransitionScope provides this) {
       Box(modifier = Modifier.fillMaxSize()) {
@@ -162,9 +185,7 @@ private fun TopicLogSharedTransitionLayoutContainer(
             modifier = Modifier.fillMaxSize(),
         ) {
           CompositionLocalProvider(LocalTopicLogVisibilityScope provides this) {
-            logContent() { message ->
-              currentFullScreenViewMessage = message
-            }
+            logContent(onFullScreenView)
           }
         }
         AnimatedVisibility(
@@ -175,9 +196,7 @@ private fun TopicLogSharedTransitionLayoutContainer(
         ) {
           CompositionLocalProvider(LocalTopicLogVisibilityScope provides this) {
             currentFullScreenViewMessage?.let {
-              fullScreenOverlay(it) {
-                currentFullScreenViewMessage = null
-              }
+              fullScreenOverlay(it, onExitFullScreenView)
             }
           }
         }

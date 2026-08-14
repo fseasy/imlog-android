@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.topiclog.timeline.messagebubble
+package top.fseasy.imlog.features.home.topiclog.fullscreencontainer
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -31,18 +31,19 @@ import kotlinx.coroutines.delay
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.features.home.topiclog.timeline.AudioPlaybackState
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
+import kotlin.time.Duration
 
 @Composable
 fun FullScreenVideoPlayer(
-    messageId: MessageId,
-    player: ExoPlayer,
-    content: MessageContentUiModel.Video,
-    playbackState: AudioPlaybackState,
-    activePlayPositionHolder: State<kotlin.time.Duration>,
-    onTogglePlay: () -> Unit,
-    onSeek: (Float) -> Unit,
-    onSpeedChange: () -> Unit,
-    modifier: Modifier = Modifier,
+  messageId: MessageId,
+  player: ExoPlayer,
+  content: MessageContentUiModel.Video,
+  playbackState: AudioPlaybackState,
+  activePlayPositionHolder: State<Duration>,
+  onTogglePlay: () -> Unit,
+  onSeek: (Float) -> Unit,
+  onSpeedChange: () -> Unit,
+  modifier: Modifier = Modifier,
 ) {
 
   // Local UI state

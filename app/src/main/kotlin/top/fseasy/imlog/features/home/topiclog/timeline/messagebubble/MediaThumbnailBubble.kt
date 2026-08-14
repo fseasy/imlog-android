@@ -15,8 +15,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import top.fseasy.imlog.R
-import top.fseasy.imlog.features.home.topiclog.LocalTopicLogVisibilityScope
 import top.fseasy.imlog.features.home.topiclog.LocalTopicLogSharedTransitionScope
+import top.fseasy.imlog.features.home.topiclog.LocalTopicLogVisibilityScope
 
 object IMMediaDefaults {
   val MinWidth = 80.dp
@@ -56,7 +56,7 @@ fun MediaThumbnailBubble(
       if (sharedTransitionScope != null && visibilityScope != null) {
         with(sharedTransitionScope) {
           Modifier.sharedElement(
-              rememberSharedContentState(key = "media_${id}"),
+              rememberSharedContentState(key = id),
               animatedVisibilityScope = visibilityScope,
           )
         }

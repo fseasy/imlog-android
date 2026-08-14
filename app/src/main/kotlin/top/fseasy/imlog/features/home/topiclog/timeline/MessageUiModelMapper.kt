@@ -29,6 +29,7 @@ import kotlin.io.path.exists
 import kotlin.math.PI
 import kotlin.math.absoluteValue
 import kotlin.math.sin
+import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.time.toJavaInstant
 
@@ -141,6 +142,8 @@ fun MessageContent.toUiModel(
     context: Context,
 ): MessageContentUiModel {
 
+  // `getStorageFilename` or `getSourceTemporaryUri` should be mutually exclusive in normal
+  // condition
   fun getStorageFilename(
       uriAttachmentSource: UriAttachmentSource,
   ): String? = (uriAttachmentSource as? UriAttachmentSource.Storage)?.filename
@@ -198,6 +201,7 @@ fun MessageContent.toUiModel(
     is MessageContent.Image ->
         MessageContentUiModel.Image(
             storedFilename = getStorageFilename(fileUri),
+            sourceTemporaryUri = getSourceTemporaryUri(fileUri),
             thumbnailPath =
                 buildThumbnailPath(
                     uriAttachmentSource = fileUri,
@@ -210,6 +214,7 @@ fun MessageContent.toUiModel(
     is MessageContent.Video ->
         MessageContentUiModel.Video(
             storedFilename = getStorageFilename(fileUri),
+            sourceTemporaryUri = getSourceTemporaryUri(fileUri),
             thumbnailPath =
                 buildThumbnailPath(
                     uriAttachmentSource = fileUri,
@@ -277,7 +282,7 @@ fun TimelineMessage.toUiModel(
 internal suspend fun MessageContentUiModel.Attachment.buildStorageUri(
     signInUserId: UserId,
     topicId: TopicId,
-    messageCreatedAt: kotlin.time.Instant,
+    messageCreatedAt: Instant,
     storagePathUseCase: StoragePathUseCase,
     storageRepository: StorageRepository,
 ): Uri? {
@@ -295,10 +300,27 @@ internal suspend fun MessageContentUiModel.Attachment.buildStorageUri(
 }
 
 /** @throws Exception when resolve Uri */
+internal suspend fun MessageContentUiModel.SourceUriAttachment.buildFileUri(
+    signInUserId: UserId,
+    topicId: TopicId,
+    messageCreatedAt: Instant,
+    storagePathUseCase: StoragePathUseCase,
+    storageRepository: StorageRepository,
+): Uri? =
+    sourceTemporaryUri
+        ?: buildStorageUri(
+            signInUserId = signInUserId,
+            topicId = topicId,
+            messageCreatedAt = messageCreatedAt,
+            storagePathUseCase = storagePathUseCase,
+            storageRepository = storageRepository,
+        )
+
+/** @throws Exception when resolve Uri */
 internal suspend fun MessageContentUiModel.AudioPlaySupported.buildUri(
     signInUserId: UserId,
     topicId: TopicId,
-    messageCreatedAt: kotlin.time.Instant,
+    messageCreatedAt: Instant,
     audioSupportedContent: MessageContentUiModel.AudioPlaySupported,
     storagePathUseCase: StoragePathUseCase,
     storageRepository: StorageRepository,
@@ -324,7 +346,7 @@ internal suspend fun MessageContentUiModel.AudioPlaySupported.buildUri(
   }
 }
 
-private fun generateDummyAmplitudes(duration: kotlin.time.Duration): List<Float> {
+private fun generateDummyAmplitudes(duration: Duration): List<Float> {
   val size = (duration.inWholeSeconds * 4).toInt()
   val salt = duration.inWholeMilliseconds % PI
   return (0 until size).map { i ->

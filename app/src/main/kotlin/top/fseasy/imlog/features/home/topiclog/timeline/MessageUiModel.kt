@@ -4,8 +4,6 @@ import android.net.Uri
 import android.os.Parcelable
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
-import java.nio.file.Path
-import kotlin.time.Duration
 import kotlinx.parcelize.Parcelize
 import kotlinx.parcelize.TypeParceler
 import top.fseasy.imlog.data.mapper.AbsolutePathModelParceler
@@ -17,6 +15,8 @@ import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel.ImageLike
 import top.fseasy.imlog.ui.model.UserAvatarUiModel
+import java.nio.file.Path
+import kotlin.time.Duration
 
 @Parcelize
 sealed interface QuotedMessageSenderUiModel : Parcelable {
@@ -85,6 +85,13 @@ sealed interface MessageContentUiModel : Parcelable {
     val storedFilename: String?
   }
 
+  /** Attachment whose source is Uri */
+  @Immutable
+  @Parcelize
+  sealed interface SourceUriAttachment : Attachment {
+    val sourceTemporaryUri: Uri?
+  }
+
   @Immutable
   @Parcelize
   sealed interface AudioPlaySupported : Attachment {
@@ -93,9 +100,10 @@ sealed interface MessageContentUiModel : Parcelable {
 
   @Immutable
   @Parcelize
-  sealed interface ImageLike : Attachment {
+  sealed interface ImageLike : SourceUriAttachment {
     // 1. from src uri 2. from real thumbnail path 3. illegal state (null)
     val thumbnailPath: AbsolutePathModel?
+
     val width: Int
     val height: Int
   }
@@ -105,6 +113,7 @@ sealed interface MessageContentUiModel : Parcelable {
   @TypeParceler<AbsolutePathModel?, AbsolutePathModelParceler>()
   data class Image(
       override val storedFilename: String?,
+      override val sourceTemporaryUri: Uri?,
       override val thumbnailPath: AbsolutePathModel?,
       override val width: Int,
       override val height: Int,
@@ -115,6 +124,7 @@ sealed interface MessageContentUiModel : Parcelable {
   @TypeParceler<AbsolutePathModel?, AbsolutePathModelParceler>()
   data class Video(
       override val storedFilename: String?,
+      override val sourceTemporaryUri: Uri?,
       override val thumbnailPath: AbsolutePathModel?,
       override val width: Int,
       override val height: Int,
@@ -146,12 +156,12 @@ sealed interface MessageContentUiModel : Parcelable {
   @Parcelize
   data class GenericFile(
       override val storedFilename: String?,
-      val sourceTemporaryUri: Uri?,
+      override val sourceTemporaryUri: Uri?,
       val displayFilename: String,
       val formatedFileSize: String,
       val mimeType: String,
       @DrawableRes val iconRes: Int,
-  ) : Attachment
+  ) : SourceUriAttachment
 }
 
 @Immutable
@@ -170,3 +180,12 @@ data class MessageUiModel(
 
 val ImageLike.aspectRatio: Float
   get() = if (height == 0) 1.0f else width.toFloat() / height
+
+/** For Full Screen show. */
+@Immutable
+@Parcelize
+@TypeParceler<AbsolutePathModel?, AbsolutePathModelParceler>()
+data class FullScreenMessageUiModel(
+    val message: MessageUiModel,
+    val path: AbsolutePathModel,
+) : Parcelable

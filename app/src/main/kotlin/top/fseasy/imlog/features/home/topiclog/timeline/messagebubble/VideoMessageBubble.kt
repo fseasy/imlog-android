@@ -18,12 +18,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import top.fseasy.imlog.R
 import top.fseasy.imlog.data.mapper.toActualFileOrUri
+import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.aspectRatio
 
 @Composable
 fun VideoMessageBubble(
+    messageId: MessageId,
     content: MessageContentUiModel.Video,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -32,6 +34,7 @@ fun VideoMessageBubble(
   val aspectRatio = content.aspectRatio
 
   MediaThumbnailBubble(
+      id = messageId.value,
       thumbnailUrl = content.thumbnailPath?.toActualFileOrUri(),
       aspectRatio = aspectRatio,
       onClick = onClick,

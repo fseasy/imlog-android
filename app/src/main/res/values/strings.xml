@@ -113,4 +113,5 @@
     <string name="term_video">Video</string>
     <string name="term_file">File</string>
     <string name="open_file_by_chooser">Choose app to open file %1$s</string>
+    <string name="term_full_screen_image">Full Screen Image</string>
 </resources>
