@@ -224,6 +224,7 @@ fun MessageContent.toUiModel(
             width = width,
             height = height,
             duration = duration,
+            amplitudes = generateDummyAmplitudes(duration),
         )
     is MessageContent.Voice ->
         MessageContentUiModel.Voice(
@@ -317,7 +318,7 @@ internal suspend fun MessageContentUiModel.SourceUriAttachment.buildFileUri(
         )
 
 /** @throws Exception when resolve Uri */
-internal suspend fun MessageContentUiModel.AudioPlaySupported.buildUri(
+internal suspend fun MessageContentUiModel.AudioPlaySupported.buildFileUri(
     signInUserId: UserId,
     topicId: TopicId,
     messageCreatedAt: Instant,
@@ -325,24 +326,31 @@ internal suspend fun MessageContentUiModel.AudioPlaySupported.buildUri(
     storagePathUseCase: StoragePathUseCase,
     storageRepository: StorageRepository,
 ): Uri? {
-  suspend fun buildStorageUri() =
-      audioSupportedContent.buildStorageUri(
-          signInUserId = signInUserId,
-          topicId = topicId,
-          messageCreatedAt = messageCreatedAt,
-          storagePathUseCase = storagePathUseCase,
-          storageRepository = storageRepository,
-      )
+
   return when (audioSupportedContent) {
     is MessageContentUiModel.Voice -> {
       // Prefer to cache path if it exists.
       val cachePath = audioSupportedContent.cachePath
       if (cachePath != null && cachePath.exists()) {
         Uri.fromFile(cachePath.toFile())
-      } else buildStorageUri()
+      } else
+          audioSupportedContent.buildStorageUri(
+              signInUserId = signInUserId,
+              topicId = topicId,
+              messageCreatedAt = messageCreatedAt,
+              storagePathUseCase = storagePathUseCase,
+              storageRepository = storageRepository,
+          )
     }
-    // Prefer source temporary uri
-    is MessageContentUiModel.Audio -> audioSupportedContent.sourceTemporaryUri ?: buildStorageUri()
+    is MessageContentUiModel.Audio,
+    is MessageContentUiModel.Video ->
+        audioSupportedContent.buildFileUri(
+            signInUserId = signInUserId,
+            topicId = topicId,
+            messageCreatedAt = messageCreatedAt,
+            storagePathUseCase = storagePathUseCase,
+            storageRepository = storageRepository,
+        )
   }
 }
 

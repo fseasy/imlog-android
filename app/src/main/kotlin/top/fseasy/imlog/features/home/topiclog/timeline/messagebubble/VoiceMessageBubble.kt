@@ -30,27 +30,27 @@ import androidx.compose.ui.unit.dp
 import kotlin.time.Duration
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.MessageId
-import top.fseasy.imlog.features.home.topiclog.timeline.AudioPlaybackState
+import top.fseasy.imlog.data.util.MediaPlaybackState
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageSenderUiModel
 import top.fseasy.imlog.ui.components.UserAvatar
 
 @Composable
 fun VoiceMessageBubble(
-    messageId: MessageId,
-    sender: MessageSenderUiModel,
-    content: MessageContentUiModel.Voice,
-    isOwnMessage: Boolean,
-    playbackState: AudioPlaybackState,
-    activePlayPositionHolder: State<Duration>,
-    inactivePlayPosition: Duration,
-    onTogglePlay: () -> Unit,
-    onSeek: (Float) -> Unit,
-    onSpeedChange: () -> Unit,
-    modifier: Modifier = Modifier,
+  messageId: MessageId,
+  sender: MessageSenderUiModel,
+  content: MessageContentUiModel.Voice,
+  isOwnMessage: Boolean,
+  playbackState: MediaPlaybackState,
+  activePlayPositionHolder: State<Duration>,
+  inactivePlayPosition: Duration,
+  onTogglePlay: () -> Unit,
+  onSeek: (Float) -> Unit,
+  onSpeedChange: () -> Unit,
+  modifier: Modifier = Modifier,
 ) {
-  val isActive = playbackState.playingMessageId == messageId
-  val isPlaying = playbackState.isThisMessagePlaying(messageId)
+  val isActive = playbackState.playingId == messageId
+  val isPlaying = playbackState.isThisMediaPlaying(messageId)
 
   val tintColor =
       if (isOwnMessage) MaterialTheme.colorScheme.onPrimary

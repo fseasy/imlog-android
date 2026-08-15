@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.home.createtopic.CreateTopicRoute
 import top.fseasy.imlog.features.home.main.HomeRoute
-import top.fseasy.imlog.features.home.topiclog.TopicLogScreen
+import top.fseasy.imlog.features.home.topiclog.TopicLogRoute
 import top.fseasy.imlog.features.home.topicsettings.TopicSettingsSheet
 import top.fseasy.imlog.features.settings.AboutScreen
 import top.fseasy.imlog.features.settings.FeedbackScreen
@@ -54,7 +54,7 @@ fun NavGraphBuilder.mainGraph(
       )
     }
     composable<MainScreen.TopicTimeline> {
-      TopicLogScreen(
+      TopicLogRoute(
           onNavigateBack = { navController.popBackStack() },
           onSettingsClick = { topicId ->
             navController.navigate(MainScreen.TopicSettings(topicId))

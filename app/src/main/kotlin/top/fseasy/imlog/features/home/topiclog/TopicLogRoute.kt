@@ -45,24 +45,20 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposer
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
 import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainer
-import top.fseasy.imlog.features.home.topiclog.timeline.ContextState
 import top.fseasy.imlog.features.home.topiclog.timeline.FullScreenMessageUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimeline
-import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimelineUiEffect
-import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimelineViewModel
-import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
 import top.fseasy.imlog.ui.util.openFileWithChooser
 
 @Composable
-fun TopicLogScreen(
+fun TopicLogRoute(
     onNavigateBack: () -> Unit,
     onSettingsClick: (TopicId) -> Unit,
-    messageTimelineViewModel: MessageTimelineViewModel = hiltViewModel(),
+    viewModel: TopicLogViewModel = hiltViewModel(),
+    // Manage composer viewmodel here as we need to call its clearInputMode
     composerViewModel: MessageComposerViewModel = hiltViewModel(),
 ) {
   val topicName =
-      (messageTimelineViewModel.contextStateFlow.collectAsStateWithLifecycle().value
-              as? ContextState.Success)
+      (viewModel.contextStateFlow.collectAsStateWithLifecycle().value as? ContextState.Success)
           ?.topic
           ?.name
   val focusManager = LocalFocusManager.current
@@ -82,9 +78,9 @@ fun TopicLogScreen(
 
   // Effect listener, belongs to Smart level
   LaunchedEffect(Unit) {
-    messageTimelineViewModel.uiEffect.collect { e ->
+    viewModel.uiEffect.collect { e ->
       when (e) {
-        is MessageTimelineUiEffect.OpenFileChooser -> {
+        is TopicLogUiEffect.OpenFileChooser -> {
           openFileWithChooser(
               context = context,
               uri = e.uri,
@@ -92,25 +88,33 @@ fun TopicLogScreen(
               fileDisplayName = e.displayName,
           )
         }
-        is MessageTimelineUiEffect.ShowSnackBar -> {
+        is TopicLogUiEffect.ShowSnackBar -> {
           snackbarHostState.showSnackbar(e.message)
         }
 
-        is MessageTimelineUiEffect.SetFullScreenViewMessage ->
+        is TopicLogUiEffect.SetFullScreenViewMessage ->
             currentFullScreenViewMessage = e.fullScreenMessage
       }
     }
   }
 
+  val mediaPlaybackStateAndAction =
+      MediaPlaybackStateAndAction(
+          activePlaybackStateHolder =
+              viewModel.activeMediaPlaybackState.collectAsStateWithLifecycle(),
+          activePlayPositionHolder =
+              viewModel.activeMediaPlayPosition.collectAsStateWithLifecycle(),
+          inactivePlayPositionGetter = viewModel::getMediaCachedPlayPosition,
+          onTogglePlay = viewModel::toggleMediaPlay,
+          onSeek = viewModel::seekMedia,
+          onCyclePlaybackSpeed = viewModel::cycleMediaPlaybackSpeed,
+      )
+
   TopicLogSharedTransitionLayoutContainer(
       currentFullScreenViewMessage = currentFullScreenViewMessage,
-      onFullScreenView = { message ->
-        messageTimelineViewModel.prepareFullScreenViewMessage(message)
-      },
-      onExitFullScreenView = { currentFullScreenViewMessage = null },
-      logContent = { onFullScreenViewMessage ->
+      logContent = {
         TopicLogContent(
-            topicId = messageTimelineViewModel.topicId,
+            topicId = viewModel.topicId,
             topicName = topicName,
             onNavigateBack = onNavigateBack,
             onSettingsClick = onSettingsClick,
@@ -118,8 +122,11 @@ fun TopicLogScreen(
               MessageTimeline(
                   onTapOutside = handleComposerDismiss,
                   onDragList = handleComposerDismiss,
-                  viewModel = messageTimelineViewModel,
-                  onFullScreenViewMessage = onFullScreenViewMessage,
+                  onFullScreenViewMessage = { message ->
+                    viewModel.prepareFullScreenViewMessage(message)
+                  },
+                  mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
+                  onOpenFile = viewModel::createOpenFileIntentForGenericFileMessage,
               )
             },
             composerSection = {
@@ -132,10 +139,10 @@ fun TopicLogScreen(
             snackbarHostState = snackbarHostState,
         )
       },
-      fullScreenOverlay = { fullScreenViewMessage, onExitFullScreen ->
+      fullScreenOverlay = { fullScreenViewMessage ->
         FullScreenContainer(
-            message = fullScreenViewMessage,
-            onClose = onExitFullScreen,
+            model = fullScreenViewMessage,
+            onClose = { currentFullScreenViewMessage = null },
         )
       },
   )
@@ -152,20 +159,15 @@ val LocalTopicLogVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> 
 val LocalTopicLogSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
 
 /**
- * The container that wrap the shared-transition-layout between the LogContent and FullScreen
- * Overlay.
+ * The container wraps the shared-transition-layout between the LogContent and FullScreen Overlay.
  *
  * NOTE: we pass the scope by `compositionLocalOf` instead of param-passing-through
  */
 @Composable
 private fun TopicLogSharedTransitionLayoutContainer(
     currentFullScreenViewMessage: FullScreenMessageUiModel?,
-    onFullScreenView: (MessageUiModel) -> Unit,
-    onExitFullScreenView: () -> Unit,
-    logContent: @Composable (onFullScreenViewMessage: (MessageUiModel) -> Unit) -> Unit,
-    fullScreenOverlay:
-        @Composable
-        (message: FullScreenMessageUiModel, onExitFullScreen: () -> Unit) -> Unit,
+    logContent: @Composable () -> Unit,
+    fullScreenOverlay: @Composable (message: FullScreenMessageUiModel) -> Unit,
 ) {
 
   SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
@@ -185,7 +187,7 @@ private fun TopicLogSharedTransitionLayoutContainer(
             modifier = Modifier.fillMaxSize(),
         ) {
           CompositionLocalProvider(LocalTopicLogVisibilityScope provides this) {
-            logContent(onFullScreenView)
+            logContent()
           }
         }
         AnimatedVisibility(
@@ -196,7 +198,7 @@ private fun TopicLogSharedTransitionLayoutContainer(
         ) {
           CompositionLocalProvider(LocalTopicLogVisibilityScope provides this) {
             currentFullScreenViewMessage?.let {
-              fullScreenOverlay(it, onExitFullScreenView)
+              fullScreenOverlay(it)
             }
           }
         }

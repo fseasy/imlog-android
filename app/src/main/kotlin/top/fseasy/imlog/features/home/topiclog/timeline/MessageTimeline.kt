@@ -11,45 +11,37 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
-import top.fseasy.imlog.domain.model.MessageId
+import top.fseasy.imlog.features.home.topiclog.MediaPlaybackStateAndAction
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.MessageBubble
-import kotlin.time.Duration
 
 @Composable
 fun MessageTimeline(
     onTapOutside: () -> Unit,
     onDragList: () -> Unit,
     onFullScreenViewMessage: (MessageUiModel) -> Unit,
+    onOpenFile: (MessageUiModel) -> Unit,
+    mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
     modifier: Modifier = Modifier,
     viewModel: MessageTimelineViewModel = hiltViewModel(),
 ) {
   val lazyPagingMessages = viewModel.pagedMessagesStateFlow.collectAsLazyPagingItems()
-  val audioPlaybackStateHolder = viewModel.audioPlaybackState.collectAsStateWithLifecycle()
-  val audioPlayPositionHolder = viewModel.audioPlayPosition.collectAsStateWithLifecycle()
 
   TimelineContent(
       pagedMessages = lazyPagingMessages,
       onTapOutside = onTapOutside,
       onDragList = onDragList,
-      audioPlaybackStateHolder = audioPlaybackStateHolder,
-      audioPlayPositionHolder = audioPlayPositionHolder,
-      inactivePlayPositionGetter = { messageId -> viewModel.getCachedPlayPosition(messageId) },
-      onToggleAudioPlay = viewModel::toggleAudioPlay,
-      onSeekAudio = viewModel::seekAudio,
-      onChangeAudioPlaybackSpeed = viewModel::changeAudioPlaybackSpeed,
+      mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
       onShowImage = onFullScreenViewMessage,
       onShowVideo = onFullScreenViewMessage,
-      onOpenFile = { message -> viewModel.createOpenFileIntentForGenericFileMessage(message) },
+      onOpenFile = onOpenFile,
       modifier = modifier,
   )
 }
@@ -60,12 +52,7 @@ fun TimelineContent(
     pagedMessages: LazyPagingItems<MessageUiModel>,
     onTapOutside: () -> Unit,
     onDragList: () -> Unit,
-    audioPlaybackStateHolder: State<AudioPlaybackState>,
-    audioPlayPositionHolder: State<Duration>,
-    inactivePlayPositionGetter: (MessageId) -> Duration,
-    onToggleAudioPlay: (MessageUiModel) -> Unit,
-    onSeekAudio: (MessageUiModel, positionRatio: Float) -> Unit,
-    onChangeAudioPlaybackSpeed: (MessageId) -> Unit,
+    mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
     onShowImage: (MessageUiModel) -> Unit,
     onShowVideo: (MessageUiModel) -> Unit,
     onOpenFile: (MessageUiModel) -> Unit,
@@ -103,12 +90,7 @@ fun TimelineContent(
         if (message != null) {
           MessageBubble(
               message = message,
-              audioPlaybackStateHolder = audioPlaybackStateHolder,
-              audioPlayPositionHolder = audioPlayPositionHolder,
-              inactivePlayPositionGetter = inactivePlayPositionGetter,
-              onToggleAudioPlay = onToggleAudioPlay,
-              onSeekAudio = onSeekAudio,
-              onChangeAudioPlaybackSpeed = onChangeAudioPlaybackSpeed,
+              mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
               onShowImage = onShowImage,
               onShowVideo = onShowVideo,
               onOpenFile = onOpenFile,

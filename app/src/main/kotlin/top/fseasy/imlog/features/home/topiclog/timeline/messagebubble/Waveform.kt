@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,9 +21,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlin.time.Duration
 import top.fseasy.imlog.domain.util.safeDivision
 import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
+import kotlin.time.Duration
 
 /**
  * @param progress [0, 1]
@@ -42,7 +41,7 @@ fun WaveformSlider(
     modifier: Modifier = Modifier,
     barWidth: Dp = 3.dp,
     barGap: Dp = 2.dp,
-    barMinHeightRatio: Float = 0.1f, // 最小高度比例，防止振幅为0时看不到线
+    barMinHeightRatio: Float = 0.1f, // min height of amplitude
 ) {
   val density = LocalDensity.current
   val barWidthPx = with(density) { barWidth.toPx() }
@@ -120,10 +119,11 @@ fun WaveformWithProgressColumn(
     inactivePlayPosition: Duration,
     onSeek: (Float) -> Unit,
     tintColor: Color,
+    modifier: Modifier = Modifier,
 ) {
   val playPosition = if (isActive) activePlayPositionHolder.value else inactivePlayPosition
 
-  Column(modifier = Modifier.padding(8.dp)) {
+  Column(modifier = modifier) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,

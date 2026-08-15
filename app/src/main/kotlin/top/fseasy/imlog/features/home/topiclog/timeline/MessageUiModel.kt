@@ -71,9 +71,6 @@ sealed interface QuotedMessageUiModel : Parcelable {
 @Immutable
 @Parcelize
 sealed interface MessageContentUiModel : Parcelable {
-
-  @Immutable @Parcelize data class Text(val text: String) : MessageContentUiModel
-
   @Immutable
   @Parcelize
   sealed interface Attachment : MessageContentUiModel {
@@ -96,6 +93,7 @@ sealed interface MessageContentUiModel : Parcelable {
   @Parcelize
   sealed interface AudioPlaySupported : Attachment {
     val duration: kotlin.time.Duration
+    val amplitudes: List<Float>
   }
 
   @Immutable
@@ -107,6 +105,8 @@ sealed interface MessageContentUiModel : Parcelable {
     val width: Int
     val height: Int
   }
+
+  @Immutable @Parcelize data class Text(val text: String) : MessageContentUiModel
 
   @Immutable
   @Parcelize
@@ -128,8 +128,9 @@ sealed interface MessageContentUiModel : Parcelable {
       override val thumbnailPath: AbsolutePathModel?,
       override val width: Int,
       override val height: Int,
-      val duration: Duration,
-  ) : ImageLike
+      override val duration: Duration,
+      override val amplitudes: List<Float>,
+  ) : ImageLike, AudioPlaySupported
 
   @Immutable
   @Parcelize
@@ -138,19 +139,19 @@ sealed interface MessageContentUiModel : Parcelable {
       override val storedFilename: String?,
       val cachePath: Path?,
       override val duration: Duration,
-      val amplitudes: List<Float>,
+      override val amplitudes: List<Float>,
   ) : AudioPlaySupported
 
   @Immutable
   @Parcelize
   data class Audio(
       override val storedFilename: String?,
-      val sourceTemporaryUri: Uri?,
+      override val sourceTemporaryUri: Uri?,
       val displayFilename: String,
       override val duration: Duration,
-      val amplitudes: List<Float>,
+      override val amplitudes: List<Float>,
       val mimeType: String,
-  ) : AudioPlaySupported
+  ) : AudioPlaySupported, SourceUriAttachment
 
   @Immutable
   @Parcelize
@@ -184,7 +185,7 @@ val ImageLike.aspectRatio: Float
 /** For Full Screen show. */
 @Immutable
 @Parcelize
-@TypeParceler<AbsolutePathModel?, AbsolutePathModelParceler>()
+@TypeParceler<AbsolutePathModel, AbsolutePathModelParceler>()
 data class FullScreenMessageUiModel(
     val message: MessageUiModel,
     val path: AbsolutePathModel,
