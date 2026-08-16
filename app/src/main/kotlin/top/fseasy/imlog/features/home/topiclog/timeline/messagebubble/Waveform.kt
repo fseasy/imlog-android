@@ -21,9 +21,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.time.Duration
 import top.fseasy.imlog.domain.util.safeDivision
 import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
-import kotlin.time.Duration
 
 /**
  * @param progress [0, 1]

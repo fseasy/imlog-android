@@ -19,6 +19,7 @@ import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageResult
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.InitializeAttachmentMessageUseCase
 import javax.inject.Inject
+import kotlin.time.Instant
 
 abstract class SendUseCaseBase(
     private val backgroundProcessingUseCase: BackgroundProcessingUseCase,
@@ -64,7 +65,7 @@ data class ResolveMetadataResult(
     val srcUriStr: UriStr,
     val userId: UserId,
     val topicId: TopicId,
-    val messageTimestampMs: Long,
+    val messageTimestamp: Instant,
     val messageType: MessageType,
     val fileMetadata: FileMetadataUnion,
 )
@@ -91,7 +92,7 @@ abstract class SendUriUseCaseBase(
       srcUriStr: UriStr,
       userId: UserId,
       topicId: TopicId,
-      messageTimestampMs: Long,
+      messageTimestamp: Instant,
   ): ResolveMetadataResult? {
     val srcPath = AbsolutePathModel.UriStrModel(srcUriStr)
     val messageType = resolveMessageTypeForRender(srcPath)
@@ -112,7 +113,7 @@ abstract class SendUriUseCaseBase(
         srcUriStr = srcUriStr,
         userId = userId,
         topicId = topicId,
-        messageTimestampMs = messageTimestampMs,
+        messageTimestamp = messageTimestamp,
         messageType = messageType,
         fileMetadata = fileMetadata,
     )
@@ -134,7 +135,7 @@ abstract class SendUriUseCaseBase(
               srcUriStr = resolveMetadataResult.srcUriStr,
               senderId = resolveMetadataResult.userId,
               topicId = resolveMetadataResult.topicId,
-              messageTimestampMs = resolveMetadataResult.messageTimestampMs,
+              messageTimestamp = resolveMetadataResult.messageTimestamp,
               messageType = resolveMetadataResult.messageType,
               fileMetadata = resolveMetadataResult.fileMetadata,
           )
@@ -160,7 +161,7 @@ abstract class SendUriUseCaseBase(
                     messageId = messageId,
                     userId = resolveMetadataResult.userId,
                     srcUriStr = resolveMetadataResult.srcUriStr,
-                    messageTimestampMs = resolveMetadataResult.messageTimestampMs,
+                    messageTimestamp = resolveMetadataResult.messageTimestamp,
                     originalDisplayName = resolveMetadataResult.fileMetadata.displayName,
                 )
         ) {
@@ -181,7 +182,7 @@ abstract class SendUriUseCaseBase(
             messageId = messageId,
             userId = resolveMetadataResult.userId,
             topicId = resolveMetadataResult.topicId,
-            messageTimestampMs = resolveMetadataResult.messageTimestampMs,
+            messageTimestamp = resolveMetadataResult.messageTimestamp,
             fileMetadata = resolveMetadataResult.fileMetadata,
             cacheFilename = copyInternalSuccessResult.resultFilename,
             messageType = resolveMetadataResult.messageType,
@@ -195,14 +196,14 @@ abstract class SendUriUseCaseBase(
       srcUriStr: UriStr,
       userId: UserId,
       topicId: TopicId,
-      messageTimestampMs: Long,
+      messageTimestamp: Instant,
   ): Boolean {
     val result =
         resolveMetadata(
             srcUriStr = srcUriStr,
             userId = userId,
             topicId = topicId,
-            messageTimestampMs = messageTimestampMs,
+            messageTimestamp = messageTimestamp,
         ) ?: return false
     val messageId = insertInitialMessage(result) ?: return false
 
@@ -232,10 +233,10 @@ abstract class SendCacheFileUseCaseBase(
 ) : SendUseCaseBase(dependencies.backgroundProcessingUseCase, dependencies.storageRepository) {
 
   suspend operator fun invoke(
-      cacheFilename: String,
-      userId: UserId,
-      topicId: TopicId,
-      messageTimestampMs: Long,
+    cacheFilename: String,
+    userId: UserId,
+    topicId: TopicId,
+    messageTimestamp: Instant,
   ): Boolean {
     val cacheFile =
         dependencies.storagePathUseCase.buildMessageCacheFileStoragePath(
@@ -267,7 +268,7 @@ abstract class SendCacheFileUseCaseBase(
               cacheFilename = cacheFilename,
               senderId = userId,
               topicId = topicId,
-              messageTimestampMs = messageTimestampMs,
+              messageTimestamp = messageTimestamp,
               messageType = messageType,
               fileMetadata = fileMetadata,
           )
@@ -283,7 +284,7 @@ abstract class SendCacheFileUseCaseBase(
             messageId = messageId,
             userId = userId,
             topicId = topicId,
-            messageTimestampMs = messageTimestampMs,
+            messageTimestamp = messageTimestamp,
             messageType = messageType,
             srcUriStr = null,
             cacheFilename = cacheFilename,

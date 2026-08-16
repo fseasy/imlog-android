@@ -143,6 +143,8 @@ fun TopicLogRoute(
         FullScreenContainer(
             model = fullScreenViewMessage,
             onClose = { currentFullScreenViewMessage = null },
+            player = viewModel.player,
+            mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
         )
       },
   )

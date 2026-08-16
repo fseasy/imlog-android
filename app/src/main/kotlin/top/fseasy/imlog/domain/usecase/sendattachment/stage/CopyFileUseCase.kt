@@ -13,6 +13,7 @@ import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import javax.inject.Inject
+import kotlin.time.Instant
 
 class CopyFileUseCase
 @Inject
@@ -22,16 +23,16 @@ constructor(
     private val messageRepository: MessageRepository,
 ) {
   suspend fun copySrcToInternalCacheAndUpdateState(
-      messageId: MessageId,
-      userId: UserId,
-      srcUriStr: UriStr,
-      messageTimestampMs: Long,
-      originalDisplayName: String,
+    messageId: MessageId,
+    userId: UserId,
+    srcUriStr: UriStr,
+    messageTimestamp: Instant,
+    originalDisplayName: String,
   ): CopyStageResult {
 
     val cacheFilename =
         storagePathUseCase.buildTimestampedFilename(
-            timestampMs = messageTimestampMs,
+            timestamp = messageTimestamp,
             originalFilename = originalDisplayName,
         )
     val cachePath =
@@ -84,24 +85,24 @@ constructor(
   }
 
   suspend fun copyInternalCacheToSharedStorageAndUpdateState(
-      messageId: MessageId,
-      userId: UserId,
-      topicId: TopicId,
-      messageTimestampMs: Long,
-      originalDisplayName: String,
-      internalCacheFilePath: StoragePathModel,
-      mimeType: String,
+    messageId: MessageId,
+    userId: UserId,
+    topicId: TopicId,
+    messageTimestamp: Instant,
+    originalDisplayName: String,
+    internalCacheFilePath: StoragePathModel,
+    mimeType: String,
   ): CopyStageResult {
     val rawFilename =
         storagePathUseCase.buildUserFriendlyTimestampedFilename(
-            messageTimestampMs,
+            messageTimestamp,
             originalFilename = originalDisplayName,
         )
     val targetStoragePath =
         storagePathUseCase.buildMessageRawFileStoragePath(
             userId = userId,
             topicId = topicId,
-            timestampMs = messageTimestampMs,
+            timestamp = messageTimestamp,
             filename = rawFilename,
         )
 

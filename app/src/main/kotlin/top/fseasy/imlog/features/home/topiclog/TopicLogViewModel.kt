@@ -2,6 +2,7 @@ package top.fseasy.imlog.features.home.topiclog
 
 import android.content.Context
 import android.net.Uri
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import androidx.lifecycle.SavedStateHandle
@@ -42,6 +43,7 @@ import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.buildFileUri
 import top.fseasy.imlog.navigation.MainScreen
 import javax.inject.Inject
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -80,6 +82,39 @@ data class MediaPlaybackStateAndAction(
     val onCyclePlaybackSpeed: (MessageId) -> Unit,
 )
 
+/**
+ * Read `.activePlaybackStateHolder.value` and `.inactivePlayPositionGetter` of
+ * MediaPlaybackStateAndAction, then prepares a PlaybackState based on the current message isActive
+ * state.
+ *
+ * When target change, those will be re-composition.
+ */
+@Composable
+fun ReadMediaPlaybackStateAndRender(
+    mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
+    messageId: MessageId,
+    messageContent: MessageContentUiModel.AudioPlaySupported,
+    renderContent:
+        @Composable
+        (
+            currentPlaybackState: MediaPlaybackState,
+            inactivePlayPosition: Duration,
+        ) -> Unit,
+) {
+  val audioPlaybackState = mediaPlaybackStateAndAction.activePlaybackStateHolder.value
+  val isActive = audioPlaybackState.isThisMediaActive(toMediaInputId(messageId))
+  val currentPlaybackState =
+      if (isActive) {
+        audioPlaybackState
+      } else {
+        MediaPlaybackState(duration = messageContent.duration)
+      }
+  // it will be recorded before switching to next one
+  val inactivePlayPosition = mediaPlaybackStateAndAction.inactivePlayPositionGetter(messageId)
+  // Render bubble
+  renderContent(currentPlaybackState, inactivePlayPosition)
+}
+
 @HiltViewModel
 class TopicLogViewModel
 @Inject
@@ -98,7 +133,7 @@ constructor(
 
   // For audio/voice message playing position cache
   private val inactiveMediaPlayPositionCache = mutableMapOf<String, kotlin.time.Duration>()
-  private val audioPlayer =
+  private val exoPlayerStateHolder =
       ExoPlayerStateHolder(
               context = context,
               onPlayingStopped = { state, playPosition ->
@@ -116,8 +151,9 @@ constructor(
           .also(::addCloseable)
 
   /** Playback State/Position are global state! which means, there is at most 1 playing media */
-  val activeMediaPlaybackState = audioPlayer.playbackState
-  val activeMediaPlayPosition = audioPlayer.playPositionState
+  val activeMediaPlaybackState = exoPlayerStateHolder.playbackState
+  val activeMediaPlayPosition = exoPlayerStateHolder.playPositionState
+  val player = exoPlayerStateHolder.exoPlayer
 
   @OptIn(ExperimentalCoroutinesApi::class)
   val contextStateFlow: StateFlow<ContextState> =
@@ -152,7 +188,7 @@ constructor(
           1.5f -> 2.0f
           else -> 1.0f
         }
-    viewModelScope.launch { audioPlayer.changeSpeed(newSpeed) }
+    viewModelScope.launch { exoPlayerStateHolder.changeSpeed(newSpeed) }
   }
 
   /** Build MediaInput without cache as the db data may change */
@@ -191,7 +227,7 @@ constructor(
               uri = uri,
               fileDuration = content.duration,
           )
-      audioPlayer.seekToRatio(input, ratio = ratio)
+      exoPlayerStateHolder.seekToRatio(input, ratio = ratio)
     }
   }
 
@@ -228,7 +264,7 @@ constructor(
                 return@launchWithUserId
               }
 
-      audioPlayer.togglePlayPause(
+      exoPlayerStateHolder.togglePlayPause(
           MediaInput(
               id = toMediaInputId(message.id),
               uri = uri,

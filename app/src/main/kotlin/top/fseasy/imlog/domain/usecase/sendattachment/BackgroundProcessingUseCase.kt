@@ -36,16 +36,16 @@ constructor(
     // 1. generate thumbnail
     when (
         val result =
-            generateThumbnailUseCase(
-                messageId = messageId,
-                userId = payload.userId,
-                topicId = payload.topicId,
-                messageTimestampMs = payload.messageTimestampMs,
-                messageType = payload.messageType,
-                srcUriStr = payload.srcUriStr,
-                cacheFilePath = internalCacheFilePath,
-                fileMetadata = payload.fileMetadata,
-            )
+          generateThumbnailUseCase(
+              messageId = messageId,
+              userId = payload.userId,
+              topicId = payload.topicId,
+              messageTimestamp = payload.messageTimestamp,
+              messageType = payload.messageType,
+              srcUriStr = payload.srcUriStr,
+              cacheFilePath = internalCacheFilePath,
+              fileMetadata = payload.fileMetadata,
+          )
     ) {
       is GenerateThumbnailStageResult.Failure ->
           return finishProcessingUseCase.onFailure(
@@ -65,7 +65,7 @@ constructor(
                 messageId = messageId,
                 userId = payload.userId,
                 topicId = payload.topicId,
-                messageTimestampMs = payload.messageTimestampMs,
+                messageTimestamp = payload.messageTimestamp,
                 originalDisplayName = payload.fileMetadata.displayName,
                 internalCacheFilePath = internalCacheFilePath,
                 mimeType = payload.fileMetadata.mimeType,

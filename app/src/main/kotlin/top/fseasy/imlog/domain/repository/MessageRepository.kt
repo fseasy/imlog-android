@@ -64,7 +64,7 @@ interface MessageRepository {
   fun syncInsertInitialAttachmentProcessingTaskState(
       messageId: MessageId,
       fileSource: MessageAttachmentSource,
-      taskStartTime: Long,
+      taskStartTime: Instant,
   )
 
   /**

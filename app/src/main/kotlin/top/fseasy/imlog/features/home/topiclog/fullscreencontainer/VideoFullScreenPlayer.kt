@@ -10,7 +10,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -18,6 +21,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -35,26 +39,31 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.compose.PlayerSurface
 import top.fseasy.imlog.R
-import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.data.util.MediaPlaybackState
-import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.data.util.PlayerStatus
-import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.WaveformWithProgressColumn
+import top.fseasy.imlog.domain.model.MessageId
+import top.fseasy.imlog.domain.util.safeDivision
+import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
+import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
+import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.WaveformSlider
+import top.fseasy.imlog.features.home.topiclog.toMediaInputId
 import top.fseasy.imlog.ui.components.AppCircularProgress
+import top.fseasy.imlog.ui.components.AppTextButton
 import kotlin.time.Duration
 
 @Composable
 fun VideoFullScreenPlayer(
-  messageId: MessageId,
-  player: ExoPlayer,
-  content: MessageContentUiModel.Video,
-  playbackState: MediaPlaybackState,
-  activePlayPositionHolder: State<Duration>,
-  onTogglePlay: () -> Unit,
-  onSeek: (Float) -> Unit,
-  onExit: () -> Unit,
-  onSpeedChange: () -> Unit,
-  modifier: Modifier = Modifier,
+    messageId: MessageId,
+    content: MessageContentUiModel.Video,
+    player: ExoPlayer,
+    playbackState: MediaPlaybackState,
+    activePlayPositionHolder: State<Duration>,
+    inactivePlayPosition: Duration,
+    onTogglePlay: () -> Unit,
+    onSeek: (Float) -> Unit,
+    onSpeedCycle: () -> Unit,
+    onExit: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
 
   var areControlsVisible by remember { mutableStateOf(true) }
@@ -63,7 +72,8 @@ fun VideoFullScreenPlayer(
     onTogglePlay()
   }
 
-  val isPlaying = playbackState.isThisMediaPlaying(messageId)
+  val isPlaying = playbackState.isThisMediaPlaying(toMediaInputId(messageId))
+  val isActive = playbackState.isThisMediaActive(toMediaInputId(messageId))
 
   Box(
       modifier =
@@ -106,40 +116,105 @@ fun VideoFullScreenPlayer(
           )
         }
 
-        // Bottom: play control & Extra function for Future
-        Column(
-            modifier = Modifier.fillMaxSize().align(Alignment.BottomEnd),
-            verticalArrangement = Arrangement.Bottom,
-        ) {
-          Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceBetween) {
-            val playPauseDescription =
-                stringResource(
-                    if (isPlaying) R.string.term_media_pause else R.string.term_media_play
-                )
+        PlayControllerRow(
+            amplitudes = content.amplitudes,
+            isActive = isActive,
+            isPlaying = isPlaying,
+            duration = playbackState.duration,
+            speed = playbackState.speed,
+            activePlayPositionHolder = activePlayPositionHolder,
+            inactivePlayPosition = inactivePlayPosition,
+            onTogglePlay = onTogglePlay,
+            onSeek = onSeek,
+            onSpeedCycle = onSpeedCycle,
+            tintColor = tintColor,
+            modifier = Modifier.fillMaxSize().align(Alignment.BottomEnd).padding(10.dp, 6.dp),
+        )
+      }
+    }
+  }
+}
 
-            IconButton(onClick = onTogglePlay) {
-              Icon(
-                  imageVector =
-                      if (isPlaying) ImageVector.vectorResource(R.drawable.icon_pause)
-                      else Icons.Default.PlayArrow,
-                  contentDescription = playPauseDescription,
-                  tint = tintColor,
-              )
-            }
+/** Used for Audio/Voice bubble */
+@Composable
+fun PlayControllerRow(
+    amplitudes: List<Float>,
+    isActive: Boolean,
+    isPlaying: Boolean,
+    duration: Duration,
+    speed: Float,
+    activePlayPositionHolder: State<Duration>,
+    inactivePlayPosition: Duration,
+    onTogglePlay: () -> Unit,
+    onSeek: (Float) -> Unit,
+    onSpeedCycle: () -> Unit,
+    tintColor: Color,
+    modifier: Modifier = Modifier,
+) {
+  val playPosition = if (isActive) activePlayPositionHolder.value else inactivePlayPosition
 
-            WaveformWithProgressColumn(
-                amplitudes = content.amplitudes,
-                isActive = areControlsVisible,
-                duration = playbackState.duration,
-                activePlayPositionHolder = activePlayPositionHolder,
-                inactivePlayPosition = inactivePlayPosition,
-                onSeek = onSeek,
-                tintColor = tintColor,
-                modifier = Modifier.weight(1f).padding(4.dp),
-            )
-          }
+  Row(
+      modifier = modifier.height(48.dp), // waveform 32 + time/speed 16
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    // play/pause
+    val playPauseDescription =
+        stringResource(if (isPlaying) R.string.term_media_pause else R.string.term_media_play)
+    IconButton(onClick = onTogglePlay, modifier.fillMaxHeight()) {
+      Icon(
+          imageVector =
+              if (isPlaying) ImageVector.vectorResource(R.drawable.icon_pause)
+              else Icons.Default.PlayArrow,
+          contentDescription = playPauseDescription,
+          tint = tintColor,
+      )
+    }
+    // === waveform slider
+    // === TIME ---- Speed
+    Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+      val progress = playPosition.safeDivision(duration).coerceIn(0f, 1f)
+      // === waveform slider
+      Row(modifier = Modifier.fillMaxWidth()) {
+        WaveformSlider(
+            progress = progress,
+            amplitudes = amplitudes,
+            tintColor = tintColor,
+            onSeek = onSeek,
+            modifier = Modifier.fillMaxWidth().height(32.dp), // waveform height
+        )
+      }
+      // === TIME ---- Speed
+      Row(
+          modifier = Modifier.fillMaxWidth().height(16.dp),
+          horizontalArrangement = Arrangement.SpaceBetween,
+      ) {
+        // TIME
+        Row() {
+          Text(
+              text = playPosition.toAppMessageTimeFormat(),
+              style = MaterialTheme.typography.labelSmall,
+              color = tintColor.copy(alpha = 0.6f),
+          )
+          Text(
+              text = "/",
+              style = MaterialTheme.typography.labelSmall,
+              color = tintColor.copy(0.6f),
+          )
+
+          Text(
+              text = duration.toAppMessageTimeFormat(),
+              style = MaterialTheme.typography.labelSmall,
+              color = tintColor.copy(alpha = 0.6f),
+          )
         }
       }
+      AppTextButton(
+          onClick = onSpeedCycle,
+          text = "${speed}x",
+          modifier = Modifier.background(MaterialTheme.colorScheme.surface),
+          enabled = true,
+      )
     }
   }
 }

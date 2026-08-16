@@ -11,6 +11,7 @@ import top.fseasy.imlog.domain.repository.DbRunner
 import top.fseasy.imlog.domain.repository.MessageAttachmentSource
 import top.fseasy.imlog.domain.repository.MessageRepository
 import javax.inject.Inject
+import kotlin.time.Instant
 
 class InitializeAttachmentMessageUseCase
 @Inject
@@ -24,23 +25,24 @@ constructor(
       srcUriStr: UriStr,
       senderId: UserId,
       topicId: TopicId,
-      messageTimestampMs: Long,
+      messageTimestamp: Instant,
       messageType: MessageType,
       fileMetadata: FileMetadataUnion,
   ): MessageId =
       dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
         val messageId =
             messageRepository.syncInsertInitialAttachmentMessage(
-              topicId = topicId,
-              senderId = senderId,
-              type = messageType,
-              createdAt = messageTimestampMs,
-              fileMetadata = fileMetadata,,
+                topicId = topicId,
+                senderId = senderId,
+                type = messageType,
+                createdAt = messageTimestamp,
+                fileMetadata = fileMetadata,
+                quotedMessageId = null,
             )
         messageRepository.syncInsertInitialAttachmentProcessingTaskState(
             messageId = messageId,
             fileSource = MessageAttachmentSource.FromUriStr(srcUriStr),
-            taskStartTime = messageTimestampMs,
+            taskStartTime = messageTimestamp,
         )
         messageId
       }
@@ -53,23 +55,24 @@ constructor(
       cacheFilename: String,
       senderId: UserId,
       topicId: TopicId,
-      messageTimestampMs: Long,
+      messageTimestamp: Instant,
       messageType: MessageType,
       fileMetadata: FileMetadataUnion,
   ): MessageId =
       dbRunner.runTransactionInIOThread(retry = RetryModel.OnAnyException) {
         val messageId =
             messageRepository.syncInsertInitialAttachmentMessage(
-              topicId = topicId,
-              senderId = senderId,
-              type = messageType,
-              createdAt = messageTimestampMs,
-              fileMetadata = fileMetadata,,
+                topicId = topicId,
+                senderId = senderId,
+                type = messageType,
+                createdAt = messageTimestamp,
+                fileMetadata = fileMetadata,
+                quotedMessageId = null,
             )
         messageRepository.syncInsertInitialAttachmentProcessingTaskState(
             messageId = messageId,
             fileSource = MessageAttachmentSource.FromMessageCache(cacheFilename),
-            taskStartTime = messageTimestampMs,
+            taskStartTime = messageTimestamp,
         )
         messageId
       }

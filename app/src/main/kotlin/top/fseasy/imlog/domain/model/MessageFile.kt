@@ -2,6 +2,7 @@ package top.fseasy.imlog.domain.model
 
 import kotlinx.serialization.Serializable
 import kotlin.time.Duration
+import kotlin.time.Instant
 
 @Serializable
 data class AudioMetadata(
@@ -95,15 +96,15 @@ fun GenericFileMetadata.toMetadataUnion() =
 @Serializable
 data class FinishSendingFileWorkerPayload(
     // -- Message Info
-    val messageId: MessageId,
-    val userId: UserId,
-    val topicId: TopicId,
-    val messageTimestampMs: Long,
-    val messageType: MessageType,
+  val messageId: MessageId,
+  val userId: UserId,
+  val topicId: TopicId,
+  val messageTimestamp: Instant,
+  val messageType: MessageType,
     // -- File Info
-    val srcUriStr: UriStr?,
-    val cacheFilename: String,
-    val fileMetadata: FileMetadataUnion,
+  val srcUriStr: UriStr?,
+  val cacheFilename: String,
+  val fileMetadata: FileMetadataUnion,
 )
 
 sealed interface MessageProcessingErrorStage {

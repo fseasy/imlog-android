@@ -1,11 +1,21 @@
 package top.fseasy.imlog.features.home.topiclog.timeline.messagebubble
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
@@ -17,27 +27,28 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import top.fseasy.imlog.R
-import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.data.util.MediaPlaybackState
+import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
+import top.fseasy.imlog.features.home.topiclog.toMediaInputId
 import top.fseasy.imlog.ui.util.mimeTypeToIconResId
 import kotlin.time.Duration
 
 @Composable
 fun AudioMessageBubble(
-  messageId: MessageId,
-  content: MessageContentUiModel.Audio,
-  isOwnMessage: Boolean,
-  playbackState: MediaPlaybackState,
-  activePlayPositionHolder: State<Duration>,
-  inactivePlayPosition: Duration,
-  onTogglePlay: () -> Unit,
-  onSeek: (Float) -> Unit,
-  onSpeedChange: () -> Unit,
-  modifier: Modifier = Modifier,
+    messageId: MessageId,
+    content: MessageContentUiModel.Audio,
+    isOwnMessage: Boolean,
+    playbackState: MediaPlaybackState,
+    activePlayPositionHolder: State<Duration>,
+    inactivePlayPosition: Duration,
+    onTogglePlay: () -> Unit,
+    onSeek: (Float) -> Unit,
+    onSpeedChange: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-  val isActive = playbackState.playingId == messageId
-  val isPlaying = playbackState.isThisMediaPlaying(messageId)
+  val isActive = playbackState.isThisMediaActive(toMediaInputId(messageId))
+  val isPlaying = playbackState.isThisMediaPlaying(toMediaInputId(messageId))
 
   val tintColor =
       if (isOwnMessage) MaterialTheme.colorScheme.onPrimary

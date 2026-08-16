@@ -9,6 +9,10 @@ import java.time.temporal.WeekFields
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
+fun kotlin.time.Instant.toJavaInstant(): java.time.Instant {
+  return java.time.Instant.ofEpochSecond(this.epochSeconds, this.nanosecondsOfSecond.toLong())
+}
+
 /**
  * Utility for formatting timestamps in a WeChat / IM style. Formatters are cached for performance
  * when called frequently.
@@ -38,6 +42,9 @@ object ImTimeUtils {
    *
    * @param instant must be java.time.Instant, or transform following code to kotlin.datatime.xxx
    *   (not kotlin.time.Instant)
+   *
+   * TODO: This is JVM ONLY. and have to be platform dependent as it needs locale info which is hard
+   *   to impl in KMP currently.
    */
   fun formatImTime(
       instant: java.time.Instant,

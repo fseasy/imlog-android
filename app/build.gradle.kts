@@ -94,6 +94,7 @@ dependencies {
   implementation(libs.androidx.paging.compose)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.kotlinx.coroutines.android)
+  implementation(libs.kotlinx.datetime)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.sqldelight.android)
   implementation(libs.sqldelight.coroutines)

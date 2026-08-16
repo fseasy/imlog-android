@@ -2,7 +2,6 @@ package top.fseasy.imlog.features.home.main
 
 import android.content.Context
 import androidx.compose.runtime.Immutable
-import java.time.Instant
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.MessageDraft
@@ -15,6 +14,7 @@ import top.fseasy.imlog.ui.model.TopicAvatarUiModel
 import top.fseasy.imlog.ui.model.buildTopicAvatarNioPath
 import top.fseasy.imlog.ui.model.toUiModel
 import top.fseasy.imlog.ui.util.ImTimeUtils
+import top.fseasy.imlog.ui.util.toJavaInstant
 
 @Immutable data class MessageSnippet(val header: String, val content: String)
 
@@ -25,7 +25,7 @@ data class TopicUiModel(
     val avatarUiModel: TopicAvatarUiModel,
     val isPinned: Boolean,
     val hasUnread: Boolean,
-    val messageUpdatedAt: String,
+    val messageFormatedUpdatedAt: String,
     val messageSnippet: MessageSnippet,
 )
 
@@ -44,10 +44,10 @@ fun HomeTopic.toUiModel(
   }
   val messageSnippet =
       buildMessageSnippet(
-        lastMessagePreview,
-        draft = draft,
-        description = description,
-        context = context,
+          lastMessagePreview,
+          draft = draft,
+          description = description,
+          context = context,
       )
   return TopicUiModel(
       id = id,
@@ -55,7 +55,7 @@ fun HomeTopic.toUiModel(
       avatarUiModel = avatarUiModel,
       isPinned = isPinned,
       hasUnread = hasUnread,
-      messageUpdatedAt = ImTimeUtils.formatImTime(Instant.ofEpochMilli(messageUpdatedAt)),
+      messageFormatedUpdatedAt = ImTimeUtils.formatImTime(messageUpdatedAt.toJavaInstant()),
       messageSnippet = messageSnippet,
   )
 }
@@ -84,7 +84,7 @@ private fun buildMessageSnippet(
 fun MessageDraft.toMessageSnippet(context: Context): MessageSnippet? {
   val header = "[${context.getString(R.string.home_topic_message_snippet_draft_header)}]"
   return if (text.isBlank()) {
-    if (quotedMessage != null) {
+    if (quotedMessageId != null) {
       MessageSnippet(header = header, content = "")
     } else {
       null

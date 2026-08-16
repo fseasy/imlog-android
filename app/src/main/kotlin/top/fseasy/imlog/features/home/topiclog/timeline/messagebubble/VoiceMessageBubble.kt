@@ -27,13 +27,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
-import kotlin.time.Duration
 import top.fseasy.imlog.R
-import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.data.util.MediaPlaybackState
+import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageSenderUiModel
+import top.fseasy.imlog.features.home.topiclog.toMediaInputId
 import top.fseasy.imlog.ui.components.UserAvatar
+import kotlin.time.Duration
 
 @Composable
 fun VoiceMessageBubble(
@@ -49,8 +50,8 @@ fun VoiceMessageBubble(
   onSpeedChange: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val isActive = playbackState.playingId == messageId
-  val isPlaying = playbackState.isThisMediaPlaying(messageId)
+  val isActive = playbackState.isThisMediaActive(toMediaInputId(messageId))
+  val isPlaying = playbackState.isThisMediaPlaying(toMediaInputId(messageId))
 
   val tintColor =
       if (isOwnMessage) MaterialTheme.colorScheme.onPrimary

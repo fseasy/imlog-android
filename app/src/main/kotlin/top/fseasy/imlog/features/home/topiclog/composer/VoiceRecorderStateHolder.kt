@@ -13,8 +13,10 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 
 class VoiceRecordingUiState(
     val recorderState: VoiceRecorderState = VoiceRecorderState.Idle,
@@ -64,14 +66,14 @@ class VoiceRecorderStateHolder(
           it.name,
           userId = userId,
           topicId = topicId,
-          messageTimestampMs = System.currentTimeMillis(),
+          messageTimestamp = Clock.System.now(),
       )
     }
   }
 
   private fun generateVoiceRecordingOutputPathInMessageCacheRule(
       userId: UserId,
-      now: Long = System.currentTimeMillis(),
+      now: Instant = Clock.System.now(),
   ): java.nio.file.Path {
     val filename =
         storagePathUseCase.buildTimestampedFilename(

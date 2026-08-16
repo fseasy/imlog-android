@@ -79,7 +79,7 @@ fun TopicItemCard(
 
       CardRight(
           name = topic.name,
-          messageUpdatedAt = topic.messageUpdatedAt,
+          messageUpdatedAt = topic.messageFormatedUpdatedAt,
           messageSnippet = topic.messageSnippet,
           modifier = Modifier.weight(1f),
       )

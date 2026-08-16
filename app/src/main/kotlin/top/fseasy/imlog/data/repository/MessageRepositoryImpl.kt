@@ -9,6 +9,10 @@ import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToOne
 import app.cash.sqldelight.paging3.QueryPagingSource
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -23,10 +27,11 @@ import top.fseasy.imlog.domain.model.FileMetadataUnion
 import top.fseasy.imlog.domain.model.MessageContent
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageProcessingErrorStage
+import top.fseasy.imlog.domain.model.MessageSender
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.QuotedMessage
 import top.fseasy.imlog.domain.model.QuotedMessageContent
-import top.fseasy.imlog.domain.model.Sender
+import top.fseasy.imlog.domain.model.QuotedMessageSender
 import top.fseasy.imlog.domain.model.Statistics
 import top.fseasy.imlog.domain.model.TimelineMessage
 import top.fseasy.imlog.domain.model.TopicId
@@ -34,14 +39,10 @@ import top.fseasy.imlog.domain.model.UriAttachmentSource
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.MessageAttachmentSource
 import top.fseasy.imlog.domain.repository.MessageRepository
-import top.fseasy.imlog.sqldelight.SqlDelightDb
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
 import top.fseasy.imlog.sqldelight.GetPagedMessages as PagedMessagesEntity
 import top.fseasy.imlog.sqldelight.Message_attachment_processing_task_states as FileProcessingTaskStateEntity
 import top.fseasy.imlog.sqldelight.Messages as MessageEntity
+import top.fseasy.imlog.sqldelight.SqlDelightDb
 
 @Singleton
 class MessageRepositoryImpl
@@ -103,7 +104,7 @@ constructor(
   override fun syncInsertInitialAttachmentProcessingTaskState(
       messageId: MessageId,
       fileSource: MessageAttachmentSource,
-      taskStartTime: Long,
+      taskStartTime: Instant,
   ) {
     val initialStateEntity =
         createInitialAttachmentProcessingTaskStateEntity(
@@ -224,7 +225,7 @@ constructor(
   private fun createInitialAttachmentProcessingTaskStateEntity(
       messageId: MessageId,
       fileSource: MessageAttachmentSource,
-      taskStartTime: Long,
+      taskStartTime: Instant,
   ): FileProcessingTaskStateEntity {
     val (srcUriDbStr, internalCacheFilename) =
         when (fileSource) {
@@ -235,7 +236,7 @@ constructor(
         message_id = messageId,
         src_uri = srcUriDbStr,
         internal_cached_filename = internalCacheFilename,
-        task_tart_time = taskStartTime,
+        task_tart_time = taskStartTime.toEpochMilliseconds(),
         error_stage = null,
         error_user_retryable = null,
     )
@@ -339,13 +340,13 @@ constructor(
                 }
             QuotedMessage.Matched(
                 id = quoted_message_id,
-                sender = Sender.QuotedMessageSender(quoted_sender_id, senderName),
+                sender = QuotedMessageSender(quoted_sender_id, senderName),
                 content = quotedContent,
             )
           }
         }
     val sender =
-        Sender.MessageSender(
+        MessageSender(
             id = sender_id,
             name = sender_name ?: getFallbackSenderName(sender_id),
             avatarModel = sender_avatar ?: AvatarModel.Preset.default(),

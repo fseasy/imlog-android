@@ -14,14 +14,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import top.fseasy.imlog.data.util.MediaPlaybackState
-import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.features.home.topiclog.MediaPlaybackStateAndAction
+import top.fseasy.imlog.features.home.topiclog.ReadMediaPlaybackStateAndRender
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageSenderUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
-import top.fseasy.imlog.features.home.topiclog.toMediaInputId
-import kotlin.time.Duration
 
 @Composable
 fun MessageBubble(
@@ -70,10 +67,10 @@ fun MessageBubble(
           }
 
           is MessageContentUiModel.Voice -> {
-            PrepareMediaBubble(
+            ReadMediaPlaybackStateAndRender(
                 mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
                 messageId = message.id,
-                content = content,
+                messageContent = content,
             ) { currentPlaybackState, inactivePlayPosition ->
               VoiceMessageBubble(
                   messageId = message.id,
@@ -91,10 +88,10 @@ fun MessageBubble(
             }
           }
           is MessageContentUiModel.Audio -> {
-            PrepareMediaBubble(
+            ReadMediaPlaybackStateAndRender(
                 mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
                 messageId = message.id,
-                content = content,
+                messageContent = content,
             ) { currentPlaybackState, inactivePlayPosition ->
               AudioMessageBubble(
                   messageId = message.id,
@@ -131,36 +128,4 @@ fun MessageBubble(
       }
     }
   }
-}
-
-/**
- * Read value from activePlaybackStateHolder, get inactive-play-position, and then rendering the
- * bubble
- */
-@Composable
-private fun PrepareMediaBubble(
-    mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
-    messageId: MessageId,
-    content: MessageContentUiModel.AudioPlaySupported,
-    bubble:
-        @Composable
-        (
-            currentPlaybackState: MediaPlaybackState,
-            inactivePlayPosition: Duration,
-        ) -> Unit,
-) {
-  // When target change, those will be re-composition.
-
-  val audioPlaybackState = mediaPlaybackStateAndAction.activePlaybackStateHolder.value
-  val isActive = audioPlaybackState.isThisMediaActive(toMediaInputId(messageId))
-  val currentPlaybackState =
-      if (isActive) {
-        audioPlaybackState
-      } else {
-        MediaPlaybackState(duration = content.duration)
-      }
-  // it will be recorded before switching to next one
-  val inactivePlayPosition = mediaPlaybackStateAndAction.inactivePlayPositionGetter(messageId)
-  // Render bubble
-  bubble(currentPlaybackState, inactivePlayPosition)
 }

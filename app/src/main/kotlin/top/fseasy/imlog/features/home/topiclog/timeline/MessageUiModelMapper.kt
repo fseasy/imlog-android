@@ -53,7 +53,7 @@ fun QuotedMessageContent.toUiModel(
           .buildMessageThumbnailStoragePath(
               userId = signInUserId,
               topicId = topicId,
-              timestampMs = createdAt.toEpochMilliseconds(),
+              timestamp = createdAt,
               filename = thumbnailFilename,
           )
           .toNioPath(context)
@@ -161,7 +161,7 @@ fun MessageContent.toUiModel(
           .buildMessageThumbnailStoragePath(
               userId = signInUserId,
               topicId = topicId,
-              timestampMs = createdAt.toEpochMilliseconds(),
+              timestamp = createdAt,
               filename = thumbnailFilename,
           )
           .toAbsolutePathWithoutCreating(context)
@@ -292,7 +292,7 @@ internal suspend fun MessageContentUiModel.Attachment.buildStorageUri(
       storagePathUseCase.buildMessageRawFileStoragePath(
           userId = signInUserId,
           topicId = topicId,
-          timestampMs = messageCreatedAt.toEpochMilliseconds(),
+          timestamp = messageCreatedAt,
           filename = filename,
       )
   val uriModel =

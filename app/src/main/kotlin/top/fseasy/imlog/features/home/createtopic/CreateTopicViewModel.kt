@@ -114,10 +114,10 @@ constructor(
           }
       runSuspendCatching {
             topicRepository.createNewTopic(
-              userId,
-              name = name,
-              avatarModel = savedAvatarUiModel.toDomain(),
-              description = description,
+                userId,
+                name = name,
+                avatarModel = savedAvatarUiModel.toDomain(),
+                description = description,
             )
           }
           .fold(
@@ -149,7 +149,7 @@ constructor(
     launchWithUid { uid ->
       val filename =
           storagePathUseCase.buildTimestampedFilename(
-              Clock.System.now().toEpochMilliseconds(),
+              Clock.System.now(),
               "topic_avatar_${uid.value}${avatarOutputFormat.filenameSuffix}",
           )
       val path =

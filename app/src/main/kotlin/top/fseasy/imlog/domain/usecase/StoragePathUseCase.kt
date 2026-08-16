@@ -22,12 +22,13 @@
  */
 package top.fseasy.imlog.domain.usecase
 
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlin.random.Random
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.UtcOffset
+import kotlinx.datetime.format
+import kotlinx.datetime.format.DateTimeComponents
+import kotlinx.datetime.format.char
+import kotlinx.datetime.number
+import kotlinx.datetime.toLocalDateTime
 import top.fseasy.imlog.domain.model.InternalLocation
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.StoragePathModel
@@ -36,6 +37,10 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.ResourceProvider
 import top.fseasy.imlog.domain.repository.StringConstantId
 import top.fseasy.imlog.domain.util.splitNameAndExtension
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.random.Random
+import kotlin.time.Instant
 
 /**
  * Why Singleton: Will be used frequently and widely; has member val
@@ -160,8 +165,10 @@ constructor(
    *
    * Rule: `$time_prefix + $truncated_original_name + .suffix`
    */
-  fun buildUserFriendlyTimestampedFilename(timestampMs: Long, originalFilename: String): String =
-      addPrefixToFilename(formatToUtcDayAndTime(timestampMs), originalFilename)
+  fun buildUserFriendlyTimestampedFilename(
+      timestamp: kotlin.time.Instant,
+      originalFilename: String,
+  ): String = addPrefixToFilename(formatToUtcDayAndTime(timestamp), originalFilename)
 
   /**
    * Add a timestamp + random-int on the given original filename. Used for cache name that don't
@@ -169,8 +176,10 @@ constructor(
    *
    * Rule: `$time_prefix + $truncated_original_name + .suffix`
    */
-  fun buildTimestampedFilename(timestampMs: Long, originalFilename: String) =
-      addPrefixToFilename("$timestampMs-${Random.nextInt(1000)}", originalFilename)
+  fun buildTimestampedFilename(timestamp: kotlin.time.Instant, originalFilename: String): String {
+    val prefix = "${timestamp.toEpochMilliseconds()}-${Random.nextInt(1000)}"
+    return addPrefixToFilename(prefix, originalFilename)
+  }
 
   private fun addPrefixToFilename(prefix: String, originalFilename: String): String {
     val (rawName, extension) = originalFilename.splitNameAndExtension()
@@ -213,7 +222,7 @@ constructor(
   fun buildMessageRawFileStoragePath(
       userId: UserId,
       topicId: TopicId,
-      timestampMs: Long,
+      timestamp: kotlin.time.Instant,
       filename: String,
   ): StoragePathModel.SharedStorageOnly =
       StoragePathModel.SharedStorageOnly(
@@ -221,7 +230,7 @@ constructor(
               userId = userId,
               resourceName = ResourceName.MessageFileRaw,
               topicId = topicId,
-              timestampMs = timestampMs,
+              timestamp = timestamp,
               filename = filename,
           ),
           root = SharedStorageRootSource.LookupByUser(userId),
@@ -231,7 +240,7 @@ constructor(
   fun buildMessageThumbnailStoragePath(
       userId: UserId,
       topicId: TopicId,
-      timestampMs: Long,
+      timestamp: Instant,
       filename: String,
   ): StoragePathModel.InternalOnly =
       StoragePathModel.InternalOnly(
@@ -239,7 +248,7 @@ constructor(
               userId = userId,
               resourceName = ResourceName.MessageThumbnail,
               topicId = topicId,
-              timestampMs = timestampMs,
+              timestamp = timestamp,
               filename = filename,
           ),
           internalLocation = InternalLocation.Persistent,
@@ -264,20 +273,20 @@ constructor(
       userId: UserId,
       resourceName: ResourceName,
       topicId: TopicId,
-      timestampMs: Long,
+      timestamp: kotlin.time.Instant,
       filename: String,
   ): List<String> {
     return buildList(6) {
       addAll(buildResourceRootRelativePath(userId, resourceName)) // cap=2
       add(topicId.value) // 1
-      addAll(buildDatePartitionHierarchy(timestampMs)) // 2
+      addAll(buildDatePartitionHierarchy(timestamp)) // 2
       add(filename) // 1
     }
   }
 
   /** format = ${dd-HHmmss-SSS}-utc (on UTC) */
-  private fun formatToUtcDayAndTime(timestampMs: Long): String {
-    return USER_FRIENDLY_UTC_TIME_FORMATTER.format(Instant.ofEpochMilli(timestampMs))
+  private fun formatToUtcDayAndTime(timestamp: kotlin.time.Instant): String {
+    return timestamp.format(USER_FRIENDLY_UTC_TIME_FORMATTER, UtcOffset.ZERO)
   }
 
   /**
@@ -288,21 +297,26 @@ constructor(
    * - First level: year-month (e.g., 2024-06)
    * - Second level: 10-day intervals (day01-10-utc, day11-20-utc, day21-31-utc)
    *
-   * @param timestampMs Timestamp in milliseconds, e.g., System.currentTimeMillis()
+   * @param timestamp Timestamp in milliseconds, e.g., System.currentTimeMillis()
    * @return List of partition paths, e.g., ["2024-06", "day11-20-utc"]
    * @see [Partition naming convention documentation link]
    */
-  private fun buildDatePartitionHierarchy(timestampMs: Long): List<String> {
-    val instant = Instant.ofEpochMilli(timestampMs)
-    val utc = instant.atOffset(ZoneOffset.UTC)
-    val yearMonth = utc.format(DateTimeFormatter.ofPattern("yyyy-MM"))
-    val day = utc.dayOfMonth
+  private fun buildDatePartitionHierarchy(timestamp: kotlin.time.Instant): List<String> {
+    val date = timestamp.toLocalDateTime(TimeZone.UTC).date
+
+    val yearMonth = buildString {
+      append(date.year)
+      append('-')
+      append(date.month.number.toString().padStart(2, '0'))
+    }
+
     val dayRange =
-        when (day) {
+        when (date.day) {
           in 1..10 -> "day01-10-utc"
           in 11..20 -> "day11-20-utc"
           else -> "day21-31-utc"
         }
+
     return listOf(yearMonth, dayRange)
   }
 
@@ -325,8 +339,18 @@ constructor(
   ): List<String> = listOf(getUserRootDirName(userId), resourceName.value)
 
   companion object {
-    private val USER_FRIENDLY_UTC_TIME_FORMATTER =
-        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS-'utc'").withZone(ZoneOffset.UTC)
+    private val USER_FRIENDLY_UTC_TIME_FORMATTER = DateTimeComponents.Format {
+      year()
+      monthNumber()
+      day()
+      char('-')
+      hour()
+      minute()
+      second()
+      char('-')
+      secondFraction(3) // 对应原来的 SSS
+      chars("-utc")
+    }
   }
 }
 

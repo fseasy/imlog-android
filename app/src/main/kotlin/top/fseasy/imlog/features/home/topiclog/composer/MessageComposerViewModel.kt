@@ -217,7 +217,7 @@ constructor(
               srcUriStr = uri.toUriStr(),
               userId = userId,
               topicId = topicId,
-              messageTimestampMs = instant.toEpochMilliseconds(),
+              messageTimestamp = instant.toEpochMilliseconds(),
           )
       return usecase to result
     }
@@ -245,7 +245,7 @@ constructor(
                 }
               }
               .toList()
-              .sortedBy { it.second?.messageTimestampMs ?: 0 }
+              .sortedBy { it.second?.messageTimestamp ?: 0 }
       // 2. insert to db in sequence
       val insertDbResult = usecaseToMetadataResults.mapNotNull { (usecase, metadataResult) ->
         metadataResult?.let { nonnullMetadata ->

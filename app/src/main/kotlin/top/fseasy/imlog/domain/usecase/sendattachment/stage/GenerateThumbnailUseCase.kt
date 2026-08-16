@@ -1,5 +1,7 @@
 package top.fseasy.imlog.domain.usecase.sendattachment.stage
 
+import javax.inject.Inject
+import kotlin.time.Instant
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import top.fseasy.imlog.data.constants.TIMELINE_THUMBNAIL_COMPRESS_FORMAT
@@ -20,7 +22,6 @@ import top.fseasy.imlog.domain.service.ThumbnailGenerateRequest
 import top.fseasy.imlog.domain.service.ThumbnailScale
 import top.fseasy.imlog.domain.service.ThumbnailService
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
-import javax.inject.Inject
 
 private val thumbnailFormat = TIMELINE_THUMBNAIL_COMPRESS_FORMAT
 
@@ -42,7 +43,7 @@ constructor(
       messageId: MessageId,
       userId: UserId,
       topicId: TopicId,
-      messageTimestampMs: Long,
+      messageTimestamp: Instant,
       messageType: MessageType,
       srcUriStr: UriStr?,
       cacheFilePath: StoragePathModel.InternalOnly,
@@ -77,7 +78,7 @@ constructor(
           saveThumbnail(
               userId = userId,
               topicId = topicId,
-              messageTimestampMs = messageTimestampMs,
+              messageTimestamp = messageTimestamp,
               content = thumbnailBytes,
           )
         } catch (e: CancellationException) {
@@ -192,19 +193,19 @@ constructor(
   private suspend fun saveThumbnail(
       userId: UserId,
       topicId: TopicId,
-      messageTimestampMs: Long,
+      messageTimestamp: Instant,
       content: ByteArray,
   ): String {
     val filename =
         storagePathUseCase.buildUserFriendlyTimestampedFilename(
-            timestampMs = messageTimestampMs,
+            timestamp = messageTimestamp,
             originalFilename = "thumbnail${thumbnailFormat.filenameSuffix}",
         )
     val path =
         storagePathUseCase.buildMessageThumbnailStoragePath(
             userId = userId,
             topicId = topicId,
-            timestampMs = messageTimestampMs,
+            timestamp = messageTimestamp,
             filename = filename,
         )
     storageRepository.writeFile(path, content = content, mimeType = thumbnailFormat.mimeType)
