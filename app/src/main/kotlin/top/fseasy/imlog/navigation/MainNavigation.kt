@@ -5,7 +5,6 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
 import kotlinx.serialization.Serializable
-import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.home.createtopic.CreateTopicRoute
 import top.fseasy.imlog.features.home.main.HomeRoute
 import top.fseasy.imlog.features.home.topiclog.TopicLogRoute
@@ -20,9 +19,15 @@ import top.fseasy.imlog.features.view.ViewScreen
 sealed interface MainScreen {
   @Serializable data object Home : MainScreen
 
-  @Serializable data class TopicTimeline(val topicId: TopicId) : MainScreen
+  /**
+   * NOTE: it's very error-prone to define custom-types in nav key, as you need to write typeMap in
+   * composable<> and SavedStateHandle.toRoute, any missing you'll get a runtime crash...
+   *
+   * I give up, use the plain data type to avoid it.
+   */
+  @Serializable data class TopicTimeline(val topicId: String) : MainScreen
 
-  @Serializable data class TopicSettings(val topicId: TopicId) : MainScreen
+  @Serializable data class TopicSettings(val topicId: String) : MainScreen
 
   @Serializable data object CreateTopic : MainScreen
 
@@ -44,11 +49,11 @@ fun NavGraphBuilder.mainGraph(
     composable<MainScreen.Home> {
       HomeRoute(
           onNavigateToTopic = { topicId ->
-            navController.navigate(MainScreen.TopicTimeline(topicId))
+            navController.navigate(MainScreen.TopicTimeline(topicId.value))
           },
           onNavigateToAppSettings = onOpenDrawer,
           onNavigateToTopicSettings = { topicId ->
-            navController.navigate(MainScreen.TopicSettings(topicId))
+            navController.navigate(MainScreen.TopicSettings(topicId.value))
           },
           onNavigateToCreateTopic = { navController.navigate(MainScreen.CreateTopic) },
       )
@@ -57,12 +62,9 @@ fun NavGraphBuilder.mainGraph(
       TopicLogRoute(
           onNavigateBack = { navController.popBackStack() },
           onSettingsClick = { topicId ->
-            navController.navigate(MainScreen.TopicSettings(topicId))
+            navController.navigate(MainScreen.TopicSettings(topicId.value))
           },
       )
-    }
-    composable<MainScreen.Dashboard> {
-      ViewScreen()
     }
     composable<MainScreen.TopicSettings> {
       TopicSettingsSheet(
@@ -72,11 +74,16 @@ fun NavGraphBuilder.mainGraph(
           },
       )
     }
+
+    composable<MainScreen.Dashboard> {
+      ViewScreen()
+    }
+
     composable<MainScreen.CreateTopic> {
       CreateTopicRoute(
           onNavigateBack = { navController.popBackStack() },
           onNavigateToNewTopic = { topicId ->
-            navController.navigate(MainScreen.TopicTimeline(topicId)) {
+            navController.navigate(MainScreen.TopicTimeline(topicId.value)) {
               popUpTo(MainScreen.CreateTopic) { inclusive = true }
             }
           },

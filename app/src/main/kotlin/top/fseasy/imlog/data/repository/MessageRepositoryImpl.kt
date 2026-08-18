@@ -9,10 +9,6 @@ import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToOne
 import app.cash.sqldelight.paging3.QueryPagingSource
 import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -39,10 +35,14 @@ import top.fseasy.imlog.domain.model.UriAttachmentSource
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.MessageAttachmentSource
 import top.fseasy.imlog.domain.repository.MessageRepository
+import top.fseasy.imlog.sqldelight.SqlDelightDb
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 import top.fseasy.imlog.sqldelight.GetPagedMessages as PagedMessagesEntity
 import top.fseasy.imlog.sqldelight.Message_attachment_processing_task_states as FileProcessingTaskStateEntity
 import top.fseasy.imlog.sqldelight.Messages as MessageEntity
-import top.fseasy.imlog.sqldelight.SqlDelightDb
 
 @Singleton
 class MessageRepositoryImpl
@@ -117,8 +117,10 @@ constructor(
   }
 
   /**
-   * insert message to DB. only suitable for Text message because the other message need extra file
-   * process.
+   * insert message to DB. only suitable for Text message because the other message type need extra
+   * file processing.
+   *
+   * RUN in io thread.
    *
    * TODO: remove this when we also need some side effects when processing text message
    */

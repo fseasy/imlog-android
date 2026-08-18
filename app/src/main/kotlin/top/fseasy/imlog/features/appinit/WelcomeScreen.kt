@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.appinit.ui
+package top.fseasy.imlog.features.appinit
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -17,8 +17,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.features.appinit.WelcomeUiState
-import top.fseasy.imlog.features.appinit.WelcomeViewModel
 import top.fseasy.imlog.ui.components.AppInternalErrorContent
 import top.fseasy.imlog.ui.components.AppPrimaryButton
 import top.fseasy.imlog.ui.components.HighlightConfig

@@ -9,11 +9,9 @@ import androidx.navigation.navigation
 import androidx.navigation.toRoute
 import kotlinx.serialization.Serializable
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.features.appinit.ui.AppInitDispatch
-import top.fseasy.imlog.features.appinit.ui.WelcomeScreen
+import top.fseasy.imlog.features.appinit.selectstorage.SharedStorageSelectScreen
 import top.fseasy.imlog.features.auth.AuthGraph
 import top.fseasy.imlog.features.auth.authGraph
-import top.fseasy.imlog.features.selectstorage.SharedStorageSelectScreen
 
 /** Global entry in public */
 @Serializable data object AppInitGraph
@@ -22,7 +20,9 @@ fun NavGraphBuilder.appInitGraph(
     navController: NavController,
     onInitSuccessNavigate: () -> Unit,
 ) {
-  navigation<AppInitGraph>(startDestination = InitScreen.Dispatch) {
+  navigation<AppInitGraph>(
+      startDestination = InitScreen.Dispatch,
+  ) {
     composable<InitScreen.Dispatch>(
         enterTransition = { EnterTransition.None },
         exitTransition = { ExitTransition.None },
@@ -35,14 +35,14 @@ fun NavGraphBuilder.appInitGraph(
               is AppInitStep.SelectMediaStorageUri ->
                   dispatchTo(
                       navController,
-                      InitScreen.SelectMediaStorageUri(step.userId),
+                      InitScreen.SelectMediaStorageUri(step.userId.value),
                   )
 
               is AppInitStep.Welcome ->
                   dispatchTo(
                       navController,
                       InitScreen.Welcome(
-                          userId = step.userId,
+                          userId = step.userId.value,
                           needCreateFirstTopic = step.needCreateFirstTopic,
                       ),
                   )
@@ -54,16 +54,16 @@ fun NavGraphBuilder.appInitGraph(
     authGraph(
         navController = navController,
         onAuthSuccessNavigate = {
-          backToDispatch(navController, AuthGraph)
+          backToDispatch<AuthGraph>(navController)
         },
     )
 
     composable<InitScreen.SelectMediaStorageUri> { backStackEntry ->
       val route: InitScreen.SelectMediaStorageUri = backStackEntry.toRoute()
       SharedStorageSelectScreen(
-          currentUserId = route.userId,
+          currentUserId = UserId(route.userId),
           onSuccessNavigate = {
-            backToDispatch(navController, InitScreen.SelectMediaStorageUri)
+            backToDispatch<InitScreen.SelectMediaStorageUri>(navController)
           },
       )
     }
@@ -71,9 +71,9 @@ fun NavGraphBuilder.appInitGraph(
     composable<InitScreen.Welcome> { backStackEntry ->
       val route: InitScreen.Welcome = backStackEntry.toRoute()
       WelcomeScreen(
-          userId = route.userId,
+          userId = UserId(route.userId),
           needCreateFirstTopic = route.needCreateFirstTopic,
-          onSuccessNavigate = { backToDispatch(navController, InitScreen.Welcome) },
+          onSuccessNavigate = { backToDispatch<InitScreen.Welcome>(navController) },
       )
     }
   }
@@ -82,23 +82,23 @@ fun NavGraphBuilder.appInitGraph(
 private sealed interface InitScreen {
   @Serializable data object Dispatch : InitScreen
 
-  @Serializable data class SelectMediaStorageUri(val userId: UserId) : InitScreen
+  @Serializable data class SelectMediaStorageUri(val userId: String) : InitScreen
 
   @Serializable
-  data class Welcome(val userId: UserId, val needCreateFirstTopic: Boolean) : InitScreen
+  data class Welcome(val userId: String, val needCreateFirstTopic: Boolean) : InitScreen
 }
 
 private fun <T : Any> dispatchTo(navController: NavController, destination: T) {
   navController.navigate(destination) {
-    popUpTo(InitScreen.Dispatch) {
+    popUpTo<InitScreen.Dispatch> {
       inclusive = true
     }
   }
 }
 
-private fun <T : Any> backToDispatch(navController: NavController, source: T) {
+private inline fun <reified CurrentRouteT : Any> backToDispatch(navController: NavController) {
   navController.navigate(InitScreen.Dispatch) {
-    popUpTo(source) {
+    popUpTo<CurrentRouteT> {
       inclusive = true
     }
   }

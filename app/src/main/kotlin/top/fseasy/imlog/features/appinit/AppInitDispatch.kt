@@ -1,12 +1,10 @@
-package top.fseasy.imlog.features.appinit.ui
+package top.fseasy.imlog.features.appinit
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import top.fseasy.imlog.features.appinit.AppInitDispatchViewModel
-import top.fseasy.imlog.features.appinit.AppInitStep
 
 @Composable
 fun AppInitDispatch(

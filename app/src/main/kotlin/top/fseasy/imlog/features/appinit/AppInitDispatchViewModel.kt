@@ -6,15 +6,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
+import javax.inject.Inject
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import timber.log.Timber
 import top.fseasy.imlog.domain.model.AppInitData
+import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.ui.util.toDisplayMessage
-import javax.inject.Inject
 
 @Immutable
 data class AppInitDispatchUiState(
@@ -30,35 +35,53 @@ constructor(
     private val userRepository: UserRepository,
 ) : ViewModel() {
 
-  private val _uiState = MutableStateFlow(AppInitDispatchUiState())
-  val uiState = _uiState.asStateFlow()
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val uiState: StateFlow<AppInitDispatchUiState> =
+      userRepository.authState
+          .flatMapLatest { auth ->
+            when (auth) {
+              AuthState.Loading -> flowOf(AppInitDispatchUiState())
+              AuthState.Unauthenticated -> {
+                Timber.i("UnAuth")
+                flowOf(
+                    AppInitDispatchUiState(
+                        initStep = AppInitStep.Auth,
+                        errorDisplayMessage = null,
+                    )
+                )
+              }
 
-  init {
-    checkInitStep()
-  }
-
-  private fun checkInitStep() {
-    viewModelScope.launch {
-      runCatching {
-        val userId = userRepository.observeCurrentUserIdOrNull().firstOrNull()
-        when (userId) {
-          null -> updateUiState(step = AppInitStep.Auth, error = null)
-
-          else -> {
-            val initData = userRepository.observeUserAppInitDataOrNull(userId).firstOrNull()
-            val step = determineInitStep(initData)
-            updateUiState(step = step, error = null)
+              is AuthState.Authenticated -> {
+                Timber.i("Auth")
+                userRepository.observeUserAppInitDataOrNull(auth.userId).map { initData ->
+                  val step = determineInitStep(initData)
+                  Timber.i("step = %s", step)
+                  AppInitDispatchUiState(initStep = step, errorDisplayMessage = null)
+                }
+              }
+            }
           }
-        }
-      }
-          .onFailure { e -> updateUiState(step = null, error = e) }
-    }
-  }
+          .catch { e ->
+            emit(
+                AppInitDispatchUiState(
+                    initStep = null,
+                    errorDisplayMessage = e.toDisplayMessage(context),
+                )
+            )
+          }
+          .stateIn(
+              scope = viewModelScope,
+              started = SharingStarted.WhileSubscribed(5_000),
+              initialValue = AppInitDispatchUiState(),
+          )
 
   private fun determineInitStep(initData: AppInitData?): AppInitStep =
       when {
         initData == null -> AppInitStep.Auth
-        !initData.storageUriSelected -> AppInitStep.SelectMediaStorageUri(initData.userId)
+        !initData.storageUriSelected -> {
+          Timber.i("Select media storage uri, userid=%s", initData.userId)
+          AppInitStep.SelectMediaStorageUri(initData.userId)
+        }
         !initData.welcomeShown ->
             AppInitStep.Welcome(
                 userId = initData.userId,
@@ -67,19 +90,4 @@ constructor(
 
         else -> AppInitStep.Finished
       }
-
-  private fun updateUiState(step: AppInitStep?, error: Throwable?) {
-    // Make them exclusive
-    if (error != null) {
-      _uiState.update {
-        it.copy(
-            errorDisplayMessage = error.toDisplayMessage(context),
-            initStep = null,
-        )
-      }
-    } else {
-      requireNotNull(step) { "Error is Null while step is also null" }
-      _uiState.update { it.copy(initStep = step, errorDisplayMessage = null) }
-    }
-  }
 }

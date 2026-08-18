@@ -31,7 +31,6 @@ import top.fseasy.imlog.data.util.VoiceRecorderState
 import top.fseasy.imlog.di.ApplicationIoScope
 import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.MessageDraft
-import top.fseasy.imlog.domain.model.MessageFactory
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
@@ -72,7 +71,7 @@ constructor(
     @param:ApplicationContext private val context: Context,
     @ApplicationIoScope private val applicationIoScope: CoroutineScope,
 ) : ViewModel() {
-  private val topicId = savedStateHandle.toRoute<MainScreen.TopicTimeline>().topicId
+  private val topicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicTimeline>().topicId)
   private val authState = userRepository.authState
 
   val voiceRecorderStateHolder =
@@ -217,7 +216,7 @@ constructor(
               srcUriStr = uri.toUriStr(),
               userId = userId,
               topicId = topicId,
-              messageTimestamp = instant.toEpochMilliseconds(),
+              messageTimestamp = instant,
           )
       return usecase to result
     }
@@ -227,7 +226,8 @@ constructor(
       // make a dummy ASC timestamps for each uri, step = 10ms
       val ascTimestamps = List(uris.size) { now + (it * 10).milliseconds }
       // 1. resolve metadata parallel
-      // - because it's pair, so it's very hard to elimit the null from ResolveMetadataResult?
+      // - because it's pair, so it's very hard to eliminate the null from ResolveMetadataResult?
+      // - So will filter it in the later step
       val usecaseToMetadataResults =
           uris
               .zip(ascTimestamps)
@@ -245,7 +245,10 @@ constructor(
                 }
               }
               .toList()
-              .sortedBy { it.second?.messageTimestamp ?: 0 }
+              .sortedBy {
+                // null replacement can be any value as it will be filtered
+                it.second?.messageTimestamp ?: now
+              }
       // 2. insert to db in sequence
       val insertDbResult = usecaseToMetadataResults.mapNotNull { (usecase, metadataResult) ->
         metadataResult?.let { nonnullMetadata ->
@@ -281,11 +284,15 @@ constructor(
     }
   }
 
-  fun sendTextMessage(content: String) {
+  fun sendTextMessage(text: String) {
     launchWithTopicUserId(useLocalScope = false) { topicId, userId ->
-      val now = System.currentTimeMillis()
-      val textMsg = MessageFactory.createText(topicId, userId, text = content, timestampMs = now)
-      messageRepository.saveTextMessage(textMsg)
+      messageRepository.insertTextMessage(
+          topicId = topicId,
+          senderId = userId,
+          quotedMessageId = null,
+          text = text,
+          createdAt = Clock.System.now(),
+      )
     }
   }
 
@@ -295,9 +302,9 @@ constructor(
     launchWithTopicUserId { topicId, userId ->
       val draft =
           MessageDraft(
-            inputMode = inputMode,
-            quotedMessage = null, // TODO: add quoteMessage impl
-            text = inputText,
+              inputMode = inputMode,
+              quotedMessageId = null, // TODO: add quoteMessage impl
+              text = inputText,
           )
       try {
         topicRepository.setMessageDraft(

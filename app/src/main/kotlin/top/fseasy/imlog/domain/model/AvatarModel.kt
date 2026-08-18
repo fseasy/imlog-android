@@ -44,4 +44,5 @@ fun defaultUserPresetAvatar(): UserAvatarModel = AvatarModel.Preset.default()
 
 fun defaultTopicPresetAvatar(): TopicAvatarModel = AvatarModel.Preset.default()
 
-fun <T : PresetAvatar> AvatarModel<T>.serialize(): String = defaultJson.encodeToString(this)
+inline fun <reified T : PresetAvatar> AvatarModel<T>.serialize(): String =
+    defaultJson.encodeToString(this)

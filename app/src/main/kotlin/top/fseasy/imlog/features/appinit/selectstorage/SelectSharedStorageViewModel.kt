@@ -1,9 +1,10 @@
-package top.fseasy.imlog.features.selectstorage
+package top.fseasy.imlog.features.appinit.selectstorage
 
 import android.net.Uri
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -28,6 +29,7 @@ data class SelectSharedStorageUiState(
     val selectState: UriSelectState = UriSelectState.IDLE,
 )
 
+@HiltViewModel
 class SelectSharedStorageViewModel
 @Inject
 constructor(

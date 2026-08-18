@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.Topic
+import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicPreference
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.TopicRepository
@@ -44,7 +45,7 @@ constructor(
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
-  val topicId = savedStateHandle.toRoute<MainScreen.TopicSettings>().topicId
+  val topicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicSettings>().topicId)
 
   @OptIn(ExperimentalCoroutinesApi::class)
   val uiStateFlow: StateFlow<TopicSettingsUiState> =

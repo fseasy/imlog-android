@@ -23,8 +23,8 @@ suspend fun openFileWithChooser(
   val resolvedMimeType =
       mimeType
           ?: context.contentResolver.getType(uri)
-          ?: MimeTypeUtils.getMimeType(context, uri)
-          ?: "*/*" // 保底：让系统列出所有可能打开的应用
+          ?: MimeTypeUtils.getMimeTypeOrNull(context, uri)
+          ?: "*/*" // fallback to enable all candidates selection
 
   val viewIntent =
       Intent(Intent.ACTION_VIEW).apply {
