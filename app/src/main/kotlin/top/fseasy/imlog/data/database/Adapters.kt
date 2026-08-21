@@ -65,7 +65,7 @@ val messageTypeAdapter =
       override fun decode(databaseValue: String): MessageType =
           MessageType.fromValueOrDefault(databaseValue)
 
-      override fun encode(value: MessageType): String = value.name
+      override fun encode(value: MessageType): String = value.value
     }
 
 val messageDraftAdapter =
@@ -89,8 +89,9 @@ val uriStrAdapter =
       override fun encode(value: UriStr): String = value.value
     }
 
+val intAdapter =
+    object : ColumnAdapter<Int, Long> {
+      override fun decode(databaseValue: Long): Int = databaseValue.toInt()
 
-val intAdapter = object : ColumnAdapter<Int, Long> {
-  override fun decode(databaseValue: Long): Int = databaseValue.toInt()
-  override fun encode(value: Int): Long = value.toLong()
-}
+      override fun encode(value: Int): Long = value.toLong()
+    }

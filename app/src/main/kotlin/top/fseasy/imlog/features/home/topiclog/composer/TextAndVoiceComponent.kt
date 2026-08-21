@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -109,6 +110,16 @@ private fun UserInputTextField(
 ) {
   var isFocused by remember { mutableStateOf(false) }
 
+  // Bind focusRequester on this BasicTextField element, so it can process the ime show/hide in top
+  // element
+  val focusRequester = LocalComposerFocusRequester.current
+  val focusRequesterModifier =
+      if (focusRequester != null) {
+        Modifier.focusRequester(focusRequester)
+      } else {
+        Modifier
+      }
+
   val shape = RoundedCornerShape(12.dp)
   val backgroundColor =
       if (isFocused) {
@@ -131,10 +142,13 @@ private fun UserInputTextField(
         value = textFieldValue,
         onValueChange = onTextChanged,
         modifier =
-            Modifier.fillMaxWidth().heightIn(min = 22.dp, max = 100.dp).onFocusChanged { state ->
-              isFocused = state.isFocused
-              onFocusChanged(state.isFocused)
-            },
+            Modifier.fillMaxWidth()
+                .heightIn(min = 22.dp, max = 100.dp)
+                .onFocusChanged { state ->
+                  isFocused = state.isFocused
+                  onFocusChanged(state.isFocused)
+                }
+                .then(focusRequesterModifier),
         textStyle =
             TextStyle(
                 fontSize = 15.sp,

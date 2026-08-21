@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -14,13 +15,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
-import kotlinx.coroutines.flow.StateFlow
 
 @Composable
 fun UserInputRow(
     inputText: String,
     inputMode: MessageInputModeParcelable?,
-    voiceRecordingUiStateFlow: StateFlow<VoiceRecordingUiState>,
+    voiceRecordingUiStateHolder: State<VoiceRecordingUiState>,
     inputModeSetActions: InputModeSetActions,
     onInputTextChange: (String) -> Unit,
     onSendText: () -> Unit,
@@ -46,19 +46,24 @@ fun UserInputRow(
     }
   }
 
-  val isTextMode = inputMode == MessageInputModeParcelable.Text
+  // NOTE: MUST use the boolean flag to trigger the animated content.
+  //       AS the BasicTextField should not be recomposition duration mode change from null -> Text.
+  //       If using mode as the `targetState`, the trigger element will change, even though they go
+  // to the
+  //       same branch!
+  val isVoiceMode = inputMode == MessageInputModeParcelable.Voice
 
   AnimatedContent(
-      targetState = inputMode,
+      targetState = isVoiceMode,
       transitionSpec = {
         fadeIn(animationSpec = tween(200)) togetherWith fadeOut(animationSpec = tween(200))
       },
       label = "InputModeTransition",
-  ) { mode ->
-    when (mode) {
-      MessageInputModeParcelable.Voice ->
+  ) { isInVoice ->
+    when (isInVoice) {
+      true ->
           VoiceRecodingRow(
-              voiceRecordingUiStateFlow = voiceRecordingUiStateFlow,
+              voiceRecordingUiStateHolder = voiceRecordingUiStateHolder,
               onSend = onSendVoice,
               onCancel = onCancelVoiceRecoding,
               modifier = modifier,
@@ -67,7 +72,7 @@ fun UserInputRow(
       else ->
           UserInputDefaultRow(
               textFieldValue = textFieldValueState,
-              isTextMode = isTextMode,
+              isTextMode = inputMode == MessageInputModeParcelable.Text,
               inputModeSetActions = inputModeSetActions,
               onTextChanged = { newValue ->
                 textFieldValueState = newValue

@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,23 +35,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.StateFlow
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.util.toMmSsFormat
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun VoiceRecodingRow(
-    voiceRecordingUiStateFlow: StateFlow<VoiceRecordingUiState>,
+    voiceRecordingUiStateHolder: State<VoiceRecordingUiState>,
     onSend: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-  val recordingState by voiceRecordingUiStateFlow.collectAsStateWithLifecycle()
   VoiceRecodingContent(
-      voiceRecordingUiState = recordingState,
+      voiceRecordingUiState = voiceRecordingUiStateHolder.value,
       onCancel = onCancel,
       onSend = onSend,
       modifier = modifier,
