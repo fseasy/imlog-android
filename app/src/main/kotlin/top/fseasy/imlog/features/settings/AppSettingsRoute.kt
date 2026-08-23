@@ -11,14 +11,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,18 +33,36 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import top.fseasy.imlog.R
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsDrawer(
-    onNavigate: (String) -> Unit,
+fun AppSettingsRoute(
+    onNavigateBack: () -> Unit,
+    onNavigateToAbout: () -> Unit,
+    onNavigateToFeedback: () -> Unit,
 ) {
   var showEditProfile by remember { mutableStateOf(false) }
 
-  ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.85f)) {
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+  Scaffold(
+      topBar = {
+        TopAppBar(
+            title = {
+              Text(stringResource(R.string.feature_app_settings_title))
+            },
+            navigationIcon = {
+              IconButton(onClick = { onNavigateBack() }) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.btn_back))
+              }
+            },
+        )
+      },
+      modifier = Modifier.fillMaxWidth(),
+  ) { innerPadding ->
+    Column(modifier = Modifier.fillMaxWidth().padding(innerPadding)) {
       Text(
           text = "Settings",
           style = MaterialTheme.typography.headlineMedium,
@@ -82,18 +104,17 @@ fun SettingsDrawer(
           icon = ImageVector.vectorResource(R.drawable.icon_help),
           title = "Feedback",
           subtitle = "Send us your feedback",
-          onClick = { onNavigate("feedback") },
+          onClick = onNavigateToFeedback,
       )
 
       SettingsItem(
           icon = Icons.Default.Info,
           title = "About ImTrace",
           subtitle = "Version 1.0.0",
-          onClick = { onNavigate("about") },
+          onClick = onNavigateToAbout,
       )
 
       Spacer(modifier = Modifier.height(24.dp))
-
     }
   }
 

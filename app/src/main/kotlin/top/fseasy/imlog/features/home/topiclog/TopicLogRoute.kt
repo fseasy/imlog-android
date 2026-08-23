@@ -2,6 +2,8 @@ package top.fseasy.imlog.features.home.topiclog
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeIn
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
@@ -31,6 +34,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -40,6 +44,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposer
@@ -110,6 +115,19 @@ fun TopicLogRoute(
           onCyclePlaybackSpeed = viewModel::cycleMediaPlaybackSpeed,
       )
 
+  val messageListState = rememberLazyListState()
+  val coroutineScope = rememberCoroutineScope()
+  fun messageListScrollToBottom() {
+    coroutineScope.launch {
+      // too much, directly scroll w/o animation
+      if (messageListState.firstVisibleItemIndex > 5) {
+        messageListState.scrollToItem(0)
+      } else {
+        messageListState.animateScrollToItem(0)
+      }
+    }
+  }
+
   TopicLogSharedTransitionLayoutContainer(
       currentFullScreenViewMessage = currentFullScreenViewMessage,
       logContent = {
@@ -120,6 +138,7 @@ fun TopicLogRoute(
             onSettingsClick = onSettingsClick,
             timelineSection = {
               MessageTimeline(
+                  messageListState = messageListState,
                   onTapOutside = handleComposerDismiss,
                   onDragList = handleComposerDismiss,
                   onFullScreenViewMessage = { message ->
@@ -132,6 +151,7 @@ fun TopicLogRoute(
             composerSection = {
               MessageComposer(
                   onNavigateBack = onNavigateBack,
+                  onSendMessageCallback = ::messageListScrollToBottom,
                   viewModel = composerViewModel,
               )
             },
@@ -184,8 +204,8 @@ private fun TopicLogSharedTransitionLayoutContainer(
         // only 1 scope is created and never destroied as user scroll the message timeline.
         AnimatedVisibility(
             visible = true,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = EnterTransition.None,
+            exit = ExitTransition.None,
             modifier = Modifier.fillMaxSize(),
         ) {
           CompositionLocalProvider(LocalTopicLogVisibilityScope provides this) {

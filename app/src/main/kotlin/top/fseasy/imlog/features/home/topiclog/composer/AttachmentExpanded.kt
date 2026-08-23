@@ -28,15 +28,15 @@ import top.fseasy.imlog.ui.components.AppIconButton
 
 @Composable
 fun AttachmentExpanded(
-    inputMode: MessageInputModeParcelable?,
-    onSelectAlbums: (uris: List<Uri>) -> Unit,
-    onSelectAudios: (uris: List<Uri>) -> Unit,
-    onSelectFiles: (uris: List<Uri>) -> Unit,
-    closeExpanded: () -> Unit,
-    modifier: Modifier = Modifier,
-    height: Dp = 72.dp,
+  inputMode: MessageInputModeUiState?,
+  onSelectAlbums: (uris: List<Uri>) -> Unit,
+  onSelectAudios: (uris: List<Uri>) -> Unit,
+  onSelectFiles: (uris: List<Uri>) -> Unit,
+  closeExpanded: () -> Unit,
+  modifier: Modifier = Modifier,
+  height: Dp = 72.dp,
 ) {
-  if (inputMode != MessageInputModeParcelable.Attachment) return
+  if (inputMode != MessageInputModeUiState.Attachment) return
 
   val focusRequester = remember { FocusRequester() }
 

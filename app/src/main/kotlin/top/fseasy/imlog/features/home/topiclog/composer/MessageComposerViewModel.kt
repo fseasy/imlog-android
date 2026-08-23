@@ -8,27 +8,32 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.data.util.MimeTypeUtils
 import top.fseasy.imlog.data.util.VoiceRecorderState
 import top.fseasy.imlog.di.ApplicationIoScope
+import top.fseasy.imlog.domain.DbUnexpectedResultException
 import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.MessageType
@@ -43,14 +48,12 @@ import top.fseasy.imlog.domain.usecase.sendattachment.SendUriUseCaseBase
 import top.fseasy.imlog.domain.usecase.sendattachment.SendUriUseCaseFactory
 import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.fileMimeTypeToMessageType
+import top.fseasy.imlog.domain.util.runSuspendCatching
 import top.fseasy.imlog.navigation.MainScreen
 import javax.inject.Inject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
-
-private const val MESSAGE_INPUT_MODE_UI_STATE = "message_input_mode"
-private const val MESSAGE_INPUT_TEXT_UI_STATE = "message_input_text"
 
 // SQLite writing is single thread, so it is useless that set it higher
 private const val ATTACHMENT_RESOLVE_METADATA_CONCURRENCY = 6
@@ -64,14 +67,14 @@ constructor(
     storagePathUseCase: StoragePathUseCase,
     sendVoiceMessageUseCase: SendVoiceMessageUseCase,
     userRepository: UserRepository,
-    private val savedStateHandle: SavedStateHandle,
+    savedStateHandle: SavedStateHandle,
     private val messageRepository: MessageRepository,
     private val topicRepository: TopicRepository,
     private val sendUriUseCaseFactory: SendUriUseCaseFactory,
     @param:ApplicationContext private val context: Context,
     @ApplicationIoScope private val applicationIoScope: CoroutineScope,
 ) : ViewModel() {
-  private val topicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicTimeline>().topicId)
+  private val topicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
   private val authState = userRepository.authState
 
   val voiceRecorderStateHolder =
@@ -83,55 +86,82 @@ constructor(
           )
           .also(::addCloseable)
 
-  // Bind to SavedStateHandle to remember it while app in background/killed-restore state
-  val inputTextUiState: StateFlow<String> =
-      savedStateHandle.getStateFlow(MESSAGE_INPUT_TEXT_UI_STATE, initialValue = "")
+  // Split text & mode from the MessageDraft as text is a high-frequency flow
+  private val _inputTextUiState = MutableStateFlow("")
+  val inputTextUiState: StateFlow<String> = _inputTextUiState.asStateFlow()
 
-  val inputModeUiState: StateFlow<MessageInputModeParcelable?> =
-      savedStateHandle.getStateFlow(
-          MESSAGE_INPUT_MODE_UI_STATE,
-          initialValue = null,
-      )
+  private val _inputModeUiState = MutableStateFlow<MessageInputModeUiState?>(null)
+  val inputModeUiState: StateFlow<MessageInputModeUiState?> = _inputModeUiState.asStateFlow()
+
+  private var _lastSavedDraft: MessageDraft? = null
 
   private val _uiEffect = Channel<ComposerUiEffect>()
   val uiEffect = _uiEffect.receiveAsFlow()
 
   init {
-    if (!savedStateHandle.contains(MESSAGE_INPUT_MODE_UI_STATE)) {
-      // Init in cold start, let's load from db.
-      launchWithTopicUserId { topicId, userId ->
-        val draft =
-            topicRepository.getMessageDraft(userId = userId, topicId = topicId) ?: MessageDraft()
-        savedStateHandle[MESSAGE_INPUT_TEXT_UI_STATE] = draft.text
-        savedStateHandle[MESSAGE_INPUT_MODE_UI_STATE] = draft.inputMode?.toParcelable()
-      }
+    Timber.i("MessageComposer Cold start, load from db")
+    // Load draft from db.
+    launchWithTopicUserId { topicId, userId ->
+      val draft =
+          topicRepository.getMessageDraft(userId = userId, topicId = topicId) ?: MessageDraft()
+      // UPDATE lastSavedDraft before updating input sates, to avoid unnecessary db writing
+      _lastSavedDraft = draft
+      Timber.i("MessageComposer, db value = $draft")
+      updateInputText(draft.text)
+      updateInputMode(draft.inputMode?.toUiState())
     }
-    inputTextUiState
-        .debounce(500.milliseconds)
+
+    // bind Draft saving on input state
+    combine(
+            inputTextUiState.debounce(500.milliseconds).distinctUntilChanged(),
+            inputModeUiState,
+            authState.filterIsInstance<AuthState.Authenticated>(),
+        ) { text, mode, auth ->
+          Pair(MessageDraftUtil.buildDraft(inputText = text, inputMode = mode), auth.userId)
+        }
         .distinctUntilChanged()
-        .onEach { saveDraftToDb() }
+        .onEach { (draft, userId) ->
+          if (draft == _lastSavedDraft) return@onEach
+          MessageDraftUtil.syncSaveDraft(
+                  draft = draft,
+                  topicId = topicId,
+                  userId = userId,
+                  topicRepository = topicRepository,
+              )
+              .onFailure { e -> Timber.w(e, "Failed to save draft") }
+              .onSuccess { _lastSavedDraft = draft }
+        }
         .launchIn(viewModelScope)
-    inputModeUiState.onEach { saveDraftToDb() }.launchIn(viewModelScope)
   }
 
-  fun updateInputText(text: String) {
-    savedStateHandle[MESSAGE_INPUT_TEXT_UI_STATE] = text
+  override fun onCleared() {
+    fun asyncSaveDirtyDraft() {
+      val draft =
+          MessageDraftUtil.buildDraft(
+              inputText = inputTextUiState.value,
+              inputMode = inputModeUiState.value,
+          )
+      if (draft == _lastSavedDraft) return
+      val userId = (authState.value as? AuthState.Authenticated)?.userId ?: return
+      MessageDraftUtil.asyncSaveDraft(
+          draft = draft,
+          topicId = topicId,
+          userId = userId,
+          globalTopicRepository = topicRepository,
+          applicationIoScope = applicationIoScope,
+      )
+    }
+    // save the draft before leaving, in async
+    asyncSaveDirtyDraft()
+    super.onCleared()
   }
 
-  fun setInputModeToText() {
-    savedStateHandle[MESSAGE_INPUT_MODE_UI_STATE] = MessageInputModeParcelable.Text
-  }
+  fun updateInputText(text: String) = _inputTextUiState.update { text }
 
-  fun setInputModeToVoice() {
-    savedStateHandle[MESSAGE_INPUT_MODE_UI_STATE] = MessageInputModeParcelable.Voice
-  }
+  fun clearInputMode() = updateInputMode(null)
 
-  fun clearInputMode() {
-    savedStateHandle[MESSAGE_INPUT_MODE_UI_STATE] = null
-  }
-
-  fun updateInputMode(newInputMode: MessageInputModeParcelable?) {
-    savedStateHandle[MESSAGE_INPUT_MODE_UI_STATE] = newInputMode
+  fun updateInputMode(newInputMode: MessageInputModeUiState?) = _inputModeUiState.update {
+    newInputMode
   }
 
   /** After press Back button, change draftMetaUiState and send _uiEffect to trigger page action. */
@@ -143,13 +173,13 @@ constructor(
         null -> _uiEffect.send(ComposerUiEffect.PopBackStack)
 
         // just clear inputMode, the UI will then update
-        MessageInputModeParcelable.Attachment,
-        MessageInputModeParcelable.Text,
+        MessageInputModeUiState.Attachment,
+        MessageInputModeUiState.Text,
         -> clearInputMode() // reset to null mode
 
         // TODO: should trigger pause and keep the state so that the state can be saved to draft db.
         // HERE we just stop the recorder and sending message, and pop back.
-        MessageInputModeParcelable.Voice -> {
+        MessageInputModeUiState.Voice -> {
           val recorderState = voiceRecorderStateHolder.voiceRecordingUiState.value
           if (recorderState.recorderState == VoiceRecorderState.Recording) {
             // TODO: support recording pause logic! issue #6
@@ -286,6 +316,7 @@ constructor(
 
   fun sendTextMessage(text: String) {
     launchWithTopicUserId(useLocalScope = false) { topicId, userId ->
+      // 1. save to db
       messageRepository.insertTextMessage(
           topicId = topicId,
           senderId = userId,
@@ -293,29 +324,8 @@ constructor(
           text = text,
           createdAt = Clock.System.now(),
       )
-    }
-  }
-
-  private fun saveDraftToDb() {
-    val inputMode = inputModeUiState.value?.toDomain()
-    val inputText = inputTextUiState.value
-    launchWithTopicUserId { topicId, userId ->
-      val draft =
-          MessageDraft(
-              inputMode = inputMode,
-              quotedMessageId = null, // TODO: add quoteMessage impl
-              text = inputText,
-          )
-      try {
-        topicRepository.setMessageDraft(
-            userId = userId,
-            topicId = topicId,
-            draft = draft,
-        )
-      } catch (e: Exception) {
-        if (e is CancellationException) throw e
-        Timber.d(e, "Failed to set message draft")
-      }
+      // 2. clean the inputText
+      updateInputText("")
     }
   }
 
@@ -329,6 +339,57 @@ constructor(
 
     scope.launch {
       block(topicId, userId)
+    }
+  }
+}
+
+private object MessageDraftUtil {
+  fun buildDraft(
+      inputText: String,
+      inputMode: MessageInputModeUiState?,
+  ) =
+      MessageDraft(
+          inputMode = inputMode?.toDomain(),
+          quotedMessageId = null, // TODO: add quoteMessage impl
+          text = inputText,
+      )
+
+  /** Run in IO in blocking way. */
+  suspend fun syncSaveDraft(
+      draft: MessageDraft,
+      topicId: TopicId,
+      userId: UserId,
+      topicRepository: TopicRepository,
+  ) = runSuspendCatching {
+    val isSetSuccess =
+        topicRepository.setMessageDraft(
+            userId = userId,
+            topicId = topicId,
+            draft = draft,
+        )
+    if (!isSetSuccess)
+        throw DbUnexpectedResultException("topic", message = "Saving MessageDraft but failed in db")
+  }
+
+  /**
+   * Async saving draft: running the saving logic in the application level scope.
+   *
+   * Best usecase: on `onClosed` body, saving without blocking the ui.
+   */
+  fun asyncSaveDraft(
+      draft: MessageDraft,
+      topicId: TopicId,
+      userId: UserId,
+      globalTopicRepository: TopicRepository,
+      @ApplicationIoScope applicationIoScope: CoroutineScope,
+  ) {
+    applicationIoScope.launch {
+      syncSaveDraft(
+          draft = draft,
+          topicId = topicId,
+          userId = userId,
+          topicRepository = globalTopicRepository,
+      )
     }
   }
 }

@@ -1,4 +1,4 @@
 package top.fseasy.imlog.domain
 
-class AppException {
-}
+class DbUnexpectedResultException(tableSource: String, message: String) :
+    RuntimeException("Db Table $tableSource SQL result get unexpected: $message")

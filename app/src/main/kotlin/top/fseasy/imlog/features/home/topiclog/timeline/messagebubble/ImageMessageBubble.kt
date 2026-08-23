@@ -6,6 +6,7 @@ import top.fseasy.imlog.data.mapper.toActualFileOrUri
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.aspectRatio
+import top.fseasy.imlog.features.home.topiclog.toSharedTransitionElementId
 
 @Composable
 fun ImageMessageBubble(
@@ -16,9 +17,9 @@ fun ImageMessageBubble(
 ) {
   val imageAspectRatio = content.aspectRatio
   MediaThumbnailBubble(
-      id = messageId.value,
       thumbnailUrl = content.thumbnailPath?.toActualFileOrUri(),
       aspectRatio = imageAspectRatio,
+      sharedElementId = toSharedTransitionElementId(messageId),
       onClick = onClick,
       modifier = modifier,
       overlayContent = null,

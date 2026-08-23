@@ -18,15 +18,15 @@ import androidx.compose.ui.text.input.TextFieldValue
 
 @Composable
 fun UserInputRow(
-    inputText: String,
-    inputMode: MessageInputModeParcelable?,
-    voiceRecordingUiStateHolder: State<VoiceRecordingUiState>,
-    inputModeSetActions: InputModeSetActions,
-    onInputTextChange: (String) -> Unit,
-    onSendText: () -> Unit,
-    onSendVoice: () -> Unit,
-    onCancelVoiceRecoding: () -> Unit,
-    modifier: Modifier = Modifier,
+  inputText: String,
+  inputMode: MessageInputModeUiState?,
+  voiceRecordingUiStateHolder: State<VoiceRecordingUiState>,
+  inputModeSetActions: InputModeSetActions,
+  onInputTextChange: (String) -> Unit,
+  onSendText: () -> Unit,
+  onSendVoice: () -> Unit,
+  onCancelVoiceRecoding: () -> Unit,
+  modifier: Modifier = Modifier,
 ) {
   // Put textFieldValueState on parent component, so it's state can be saved even
   // it switched to Voice input.
@@ -51,7 +51,7 @@ fun UserInputRow(
   //       If using mode as the `targetState`, the trigger element will change, even though they go
   // to the
   //       same branch!
-  val isVoiceMode = inputMode == MessageInputModeParcelable.Voice
+  val isVoiceMode = inputMode == MessageInputModeUiState.Voice
 
   AnimatedContent(
       targetState = isVoiceMode,
@@ -72,7 +72,7 @@ fun UserInputRow(
       else ->
           UserInputDefaultRow(
               textFieldValue = textFieldValueState,
-              isTextMode = inputMode == MessageInputModeParcelable.Text,
+              isTextMode = inputMode == MessageInputModeUiState.Text,
               inputModeSetActions = inputModeSetActions,
               onTextChanged = { newValue ->
                 textFieldValueState = newValue

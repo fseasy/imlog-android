@@ -142,7 +142,7 @@ private fun TopBarAction(moreOptionMenuAction: MoreOptionMenuAction) {
         text = { Text(stringResource(R.string.home_screen_more_options_menu_item_setting)) },
         onClick = {
           showMenu = false
-          moreOptionMenuAction.onCreateTopic()
+          moreOptionMenuAction.onOpenAppSettings()
         },
         leadingIcon = {
           Icon(Icons.Default.Settings, contentDescription = null)

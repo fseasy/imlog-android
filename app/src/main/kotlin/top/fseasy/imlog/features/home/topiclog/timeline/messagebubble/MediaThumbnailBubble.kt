@@ -42,12 +42,12 @@ fun Modifier.imMediaConstraints(
 
 @Composable
 fun MediaThumbnailBubble(
-    id: String,
-    thumbnailUrl: Any?,
-    aspectRatio: Float,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    overlayContent: (@Composable BoxScope.() -> Unit)? = null,
+  thumbnailUrl: Any?,
+  aspectRatio: Float,
+  sharedElementId: String,
+  onClick: () -> Unit,
+  modifier: Modifier = Modifier,
+  overlayContent: (@Composable BoxScope.() -> Unit)? = null,
 ) {
   val sharedTransitionScope = LocalTopicLogSharedTransitionScope.current
   val visibilityScope = LocalTopicLogVisibilityScope.current
@@ -56,7 +56,7 @@ fun MediaThumbnailBubble(
       if (sharedTransitionScope != null && visibilityScope != null) {
         with(sharedTransitionScope) {
           Modifier.sharedElement(
-              rememberSharedContentState(key = id),
+              rememberSharedContentState(key = sharedElementId),
               animatedVisibilityScope = visibilityScope,
           )
         }

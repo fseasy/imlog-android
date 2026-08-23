@@ -33,7 +33,7 @@ constructor(
     private val storagePathUseCase: StoragePathUseCase,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
-  val topicId: TopicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicTimeline>().topicId)
+  val topicId: TopicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
 
   @OptIn(ExperimentalCoroutinesApi::class)
   val pagedMessagesStateFlow: Flow<PagingData<MessageUiModel>> =

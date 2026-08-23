@@ -127,7 +127,7 @@ constructor(
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
-  val topicId: TopicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicTimeline>().topicId)
+  val topicId: TopicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
   private val _uiEffect = Channel<TopicLogUiEffect>()
   val uiEffect = _uiEffect.receiveAsFlow()
 

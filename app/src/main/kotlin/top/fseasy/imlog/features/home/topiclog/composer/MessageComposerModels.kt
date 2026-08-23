@@ -5,31 +5,33 @@ import kotlinx.parcelize.Parcelize
 import top.fseasy.imlog.domain.model.MessageInputMode
 import top.fseasy.imlog.features.home.topiclog.timeline.QuotedMessageUiModel
 
+/** Support parcelize */
 @Parcelize
-enum class MessageInputModeParcelable : Parcelable {
+enum class MessageInputModeUiState : Parcelable {
   Text,
   Voice,
   Attachment,
 }
 
-fun MessageInputMode.toParcelable(): MessageInputModeParcelable =
+fun MessageInputMode.toUiState(): MessageInputModeUiState =
     when (this) {
-      MessageInputMode.Text -> MessageInputModeParcelable.Text
-      MessageInputMode.Voice -> MessageInputModeParcelable.Voice
-      MessageInputMode.Attachment -> MessageInputModeParcelable.Attachment
+      MessageInputMode.Text -> MessageInputModeUiState.Text
+      MessageInputMode.Voice -> MessageInputModeUiState.Voice
+      MessageInputMode.Attachment -> MessageInputModeUiState.Attachment
     }
 
-fun MessageInputModeParcelable.toDomain(): MessageInputMode =
+fun MessageInputModeUiState.toDomain(): MessageInputMode =
     when (this) {
-      MessageInputModeParcelable.Text -> MessageInputMode.Text
-      MessageInputModeParcelable.Voice -> MessageInputMode.Voice
-      MessageInputModeParcelable.Attachment -> MessageInputMode.Attachment
+      MessageInputModeUiState.Text -> MessageInputMode.Text
+      MessageInputModeUiState.Voice -> MessageInputMode.Voice
+      MessageInputModeUiState.Attachment -> MessageInputMode.Attachment
     }
 
 /**
- * Will be saved to SavedStateHandle, needs the parcelize interface. What's Meta: includes all the
- * attributes of drafts except the inputText. As it's high frequent fresh data, will be processed
- * alone.
+ * What's Meta: includes all the attributes of drafts except the inputText. As it's high frequent
+ * fresh data, will be processed alone.
+ *
+ * Support Parcelize
  */
 @Parcelize
 sealed interface ComposerDraftMeta : Parcelable {
@@ -37,7 +39,7 @@ sealed interface ComposerDraftMeta : Parcelable {
 
   @Parcelize
   data class Ready(
-      val inputMode: MessageInputModeParcelable?,
+      val inputMode: MessageInputModeUiState?,
       val quotedMessage: QuotedMessageUiModel?,
   ) : ComposerDraftMeta
 }
@@ -60,4 +62,5 @@ class InputModeSetActions(
     val onTextInputFocusChange: (Boolean) -> Unit,
     val onVoiceInputSingleClick: () -> Unit,
     val onAttachmentClick: () -> Unit,
+    val onTextModeImeHide: () -> Unit,
 )

@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,6 +24,7 @@ import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.MessageBub
 
 @Composable
 fun MessageTimeline(
+    messageListState: LazyListState,
     onTapOutside: () -> Unit,
     onDragList: () -> Unit,
     onFullScreenViewMessage: (MessageUiModel) -> Unit,
@@ -35,6 +36,7 @@ fun MessageTimeline(
   val lazyPagingMessages = viewModel.pagedMessagesStateFlow.collectAsLazyPagingItems()
 
   TimelineContent(
+      messageListState = messageListState,
       pagedMessages = lazyPagingMessages,
       onTapOutside = onTapOutside,
       onDragList = onDragList,
@@ -49,6 +51,7 @@ fun MessageTimeline(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimelineContent(
+    messageListState: LazyListState,
     pagedMessages: LazyPagingItems<MessageUiModel>,
     onTapOutside: () -> Unit,
     onDragList: () -> Unit,
@@ -58,14 +61,24 @@ fun TimelineContent(
     onOpenFile: (MessageUiModel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-  val listState = rememberLazyListState()
 
   // Clear focus & inputMode when user drag timeline list
-  val isDragged by listState.interactionSource.collectIsDraggedAsState()
+  val isDragged by messageListState.interactionSource.collectIsDraggedAsState()
   LaunchedEffect(isDragged) {
     if (isDragged) {
       onDragList()
     }
+  }
+
+  // Scroll to latest message if getting new and user isn't in history viewing.
+  val latestMessageId =
+      if (pagedMessages.itemCount > 0) {
+        pagedMessages.peek(0)?.id?.value
+      } else null
+  LaunchedEffect(latestMessageId) {
+    if (latestMessageId == null) return@LaunchedEffect
+    val isViewingHistory = messageListState.firstVisibleItemIndex > 1
+    if (!isViewingHistory) messageListState.animateScrollToItem(0)
   }
 
   Box(
@@ -78,7 +91,7 @@ fun TimelineContent(
   ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(), // use an empty Modifier
-        state = listState,
+        state = messageListState,
         reverseLayout =
             true, // items are ordered in time DESC, reverse will make latest message show in bottom
         contentPadding = PaddingValues(16.dp),
@@ -94,7 +107,6 @@ fun TimelineContent(
               onShowImage = onShowImage,
               onShowVideo = onShowVideo,
               onOpenFile = onOpenFile,
-              modifier = modifier,
           )
         }
       }
