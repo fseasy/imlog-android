@@ -7,9 +7,9 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.request.crossfade
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 import timber.log.Timber
 import top.fseasy.imlog.data.util.CrashReportingTree
-import javax.inject.Inject
 
 @HiltAndroidApp
 class ImLogApplication : Application(), Configuration.Provider {

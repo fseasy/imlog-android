@@ -25,8 +25,8 @@ constructor(
   }
 }
 
-/** For common api: runBackground */
-@ViewModelScoped
+/** For common api: runBackground.
+ * NOTE: no @ViewModelScoped as it's running in background and independent of UI*/
 class SendRunBackgroundUseCaseFactory
 @Inject
 constructor(

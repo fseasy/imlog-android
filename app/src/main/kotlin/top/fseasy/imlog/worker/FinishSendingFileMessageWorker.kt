@@ -1,6 +1,7 @@
 package top.fseasy.imlog.worker
 
 import android.content.Context
+import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
@@ -10,6 +11,7 @@ import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
 import top.fseasy.imlog.domain.usecase.sendattachment.SendRunBackgroundUseCaseFactory
 import top.fseasy.imlog.domain.util.defaultJson
 
+@HiltWorker
 class FinishSendingFileMessageWorker
 @AssistedInject
 constructor(
