@@ -5,6 +5,8 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -27,13 +29,20 @@ fun FullScreenContainer(
 
   BackHandler() { onClose() }
 
-  Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+  Box(
+      modifier =
+          modifier
+              .fillMaxSize()
+              .systemBarsPadding()
+              .navigationBarsPadding()
+              .background(MaterialTheme.colorScheme.surface)
+  ) {
     when (val content = model.message.content) {
       is MessageContentUiModel.Image -> {
         ImageFullScreenViewer(
             imageUrl = model.path.toActualFileOrUri(),
             onDismiss = onClose,
-            modifier = modifier,
+            modifier = Modifier.fillMaxSize(),
         )
       }
       is MessageContentUiModel.Video ->
@@ -55,7 +64,7 @@ fun FullScreenContainer(
                       mediaPlaybackStateAndAction.onCyclePlaybackSpeed(model.message.id)
                     },
                     onExit = onClose,
-                    modifier = modifier,
+                    modifier = Modifier.fillMaxSize(),
                 )
               },
           )

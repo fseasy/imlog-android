@@ -11,6 +11,15 @@ import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailSta
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailUseCase
 import javax.inject.Inject
 
+/**
+ * A common flow for Attachment Processing Steps that will be run in background (i.e., not in
+ * coroutine)
+ *
+ * Steps:
+ * 1. generate thumbnail if necessary
+ * 2. copy raw file to shared storage
+ * 3. clean up
+ */
 class BackgroundProcessingUseCase
 @Inject
 constructor(
@@ -36,16 +45,16 @@ constructor(
     // 1. generate thumbnail
     when (
         val result =
-          generateThumbnailUseCase(
-              messageId = messageId,
-              userId = payload.userId,
-              topicId = payload.topicId,
-              messageTimestamp = payload.messageTimestamp,
-              messageType = payload.messageType,
-              srcUriStr = payload.srcUriStr,
-              cacheFilePath = internalCacheFilePath,
-              fileMetadata = payload.fileMetadata,
-          )
+            generateThumbnailUseCase(
+                messageId = messageId,
+                userId = payload.userId,
+                topicId = payload.topicId,
+                messageTimestamp = payload.messageTimestamp,
+                messageType = payload.messageType,
+                srcUriStr = payload.srcUriStr,
+                cacheFilePath = internalCacheFilePath,
+                fileMetadata = payload.fileMetadata,
+            )
     ) {
       is GenerateThumbnailStageResult.Failure ->
           return finishProcessingUseCase.onFailure(

@@ -52,7 +52,7 @@ constructor(
 
     val generateFunction =
         when (messageType) {
-          MessageType.Audio -> ::generateImageThumbnail
+          MessageType.Image -> ::generateImageThumbnail
           MessageType.Video -> ::generateVideoThumbnail
           else -> return GenerateThumbnailStageResult.Skip
         }

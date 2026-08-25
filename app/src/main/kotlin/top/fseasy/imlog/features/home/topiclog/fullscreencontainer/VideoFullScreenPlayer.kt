@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
@@ -31,10 +32,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.compose.PlayerSurface
@@ -48,8 +52,9 @@ import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.WaveformSlider
 import top.fseasy.imlog.features.home.topiclog.toMediaInputId
 import top.fseasy.imlog.ui.components.AppCircularProgress
-import top.fseasy.imlog.ui.components.AppTextButton
+import top.fseasy.imlog.ui.theme.ImlogTheme
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 @Composable
 fun VideoFullScreenPlayer(
@@ -63,6 +68,40 @@ fun VideoFullScreenPlayer(
     onSeek: (Float) -> Unit,
     onSpeedCycle: () -> Unit,
     onExit: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+  VideoFullScreenPlayerContent(
+      content = content,
+      messageId = messageId,
+      playbackState = playbackState,
+      activePlayPositionHolder = activePlayPositionHolder,
+      inactivePlayPosition = inactivePlayPosition,
+      onTogglePlay = onTogglePlay,
+      onSeek = onSeek,
+      onSpeedCycle = onSpeedCycle,
+      onExit = onExit,
+      videoSurface = {
+        PlayerSurface(
+            player = player,
+            modifier = Modifier.fillMaxSize(),
+        )
+      },
+      modifier = modifier,
+  )
+}
+
+@Composable
+fun VideoFullScreenPlayerContent(
+    messageId: MessageId,
+    content: MessageContentUiModel.Video,
+    playbackState: MediaPlaybackState,
+    activePlayPositionHolder: State<Duration>,
+    inactivePlayPosition: Duration,
+    onTogglePlay: () -> Unit,
+    onSeek: (Float) -> Unit,
+    onSpeedCycle: () -> Unit,
+    onExit: () -> Unit,
+    videoSurface: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
 
@@ -85,10 +124,7 @@ fun VideoFullScreenPlayer(
             areControlsVisible = !areControlsVisible
           }
   ) {
-    PlayerSurface(
-        player = player,
-        modifier = Modifier.fillMaxSize(),
-    )
+    videoSurface()
 
     if (playbackState.status == PlayerStatus.Buffering) {
       AppCircularProgress(
@@ -102,12 +138,16 @@ fun VideoFullScreenPlayer(
         exit = fadeOut(),
         modifier = Modifier.fillMaxSize(),
     ) {
-      Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+      Box(
+          modifier =
+              Modifier.fillMaxSize()
+                  .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))
+      ) {
         val tintColor = MaterialTheme.colorScheme.onSurface
         // close button
         IconButton(
             onClick = onExit,
-            modifier = Modifier.align(Alignment.TopStart).padding(top = 40.dp, start = 16.dp),
+            modifier = Modifier.align(Alignment.TopStart).padding(top = 16.dp, start = 16.dp),
         ) {
           Icon(
               imageVector = Icons.Default.Close,
@@ -128,7 +168,7 @@ fun VideoFullScreenPlayer(
             onSeek = onSeek,
             onSpeedCycle = onSpeedCycle,
             tintColor = tintColor,
-            modifier = Modifier.fillMaxSize().align(Alignment.BottomEnd).padding(10.dp, 6.dp),
+            modifier = Modifier.fillMaxWidth().align(Alignment.BottomEnd).padding(16.dp, 32.dp),
         )
       }
     }
@@ -154,14 +194,14 @@ fun PlayControllerRow(
   val playPosition = if (isActive) activePlayPositionHolder.value else inactivePlayPosition
 
   Row(
-      modifier = modifier.height(48.dp), // waveform 32 + time/speed 16
+      modifier = modifier.height(48.dp),
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically,
   ) {
     // play/pause
     val playPauseDescription =
         stringResource(if (isPlaying) R.string.term_media_pause else R.string.term_media_play)
-    IconButton(onClick = onTogglePlay, modifier.fillMaxHeight()) {
+    IconButton(onClick = onTogglePlay, Modifier.fillMaxHeight()) {
       Icon(
           imageVector =
               if (isPlaying) ImageVector.vectorResource(R.drawable.icon_pause)
@@ -181,6 +221,7 @@ fun PlayControllerRow(
             amplitudes = amplitudes,
             tintColor = tintColor,
             onSeek = onSeek,
+            stretchToFit = true,
             modifier = Modifier.fillMaxWidth().height(32.dp), // waveform height
         )
       }
@@ -208,13 +249,57 @@ fun PlayControllerRow(
               color = tintColor.copy(alpha = 0.6f),
           )
         }
+        Text(
+            text = "${speed}x",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = tintColor,
+            modifier =
+                Modifier.clip(RoundedCornerShape(4.dp))
+                    .clickable(onClick = onSpeedCycle)
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+        )
       }
-      AppTextButton(
-          onClick = onSpeedCycle,
-          text = "${speed}x",
-          modifier = Modifier.background(MaterialTheme.colorScheme.surface),
-          enabled = true,
-      )
     }
+  }
+}
+
+@Preview(showBackground = true, widthDp = 390, heightDp = 844)
+@Composable
+private fun VideoFullScreenPlayerPreview() {
+  ImlogTheme {
+    VideoFullScreenPlayerContent(
+        messageId = MessageId("msg_123"),
+        content =
+            MessageContentUiModel.Video(
+                amplitudes = listOf(0.2f, 0.5f, 0.8f, 0.4f, 0.9f, 0.3f, 0.6f, 0.7f),
+                storedFilename = "Test.mp4",
+                sourceTemporaryUri = null,
+                thumbnailPath = null,
+                width = 1080,
+                height = 720,
+                duration = 30.seconds,
+            ),
+        playbackState =
+            MediaPlaybackState(
+                status = PlayerStatus.Playing,
+                speed = 1.0f,
+            ),
+        activePlayPositionHolder = remember { mutableStateOf(20.seconds) },
+        inactivePlayPosition = Duration.ZERO,
+        onTogglePlay = {},
+        onSeek = {},
+        onSpeedCycle = {},
+        onExit = {},
+        videoSurface = {
+          // placeholder
+          Box(
+              modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)),
+              contentAlignment = Alignment.Center,
+          ) {
+            Text("Video Surface Preview", color = Color.DarkGray)
+          }
+        },
+    )
   }
 }

@@ -185,9 +185,9 @@ constructor(
     val (rawName, extension) = originalFilename.splitNameAndExtension()
     val rawTruncatedName = rawName.take(KEEP_ORIGINAL_FILENAME_MAX_CHARS)
     return if (extension.isNotEmpty()) {
-      "${prefix}.{$rawTruncatedName}.${extension}"
+      "$prefix.$rawTruncatedName.$extension"
     } else {
-      "${prefix}.{$rawTruncatedName}"
+      "$prefix.$rawTruncatedName"
     }
   }
 

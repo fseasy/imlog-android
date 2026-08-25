@@ -10,6 +10,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +58,7 @@ data class MediaPlaybackState(
 }
 
 /** created & use must be in main thread as ExoPlayer requirements */
+@UnstableApi
 @MainThread
 class ExoPlayerStateHolder(
     context: Context,
@@ -81,8 +84,12 @@ class ExoPlayerStateHolder(
           .setUsage(C.USAGE_MEDIA)
           .build()
 
+  private val renderersFactory = DefaultRenderersFactory(context).apply {
+    setEnableDecoderFallback(true)
+  }
+
   val exoPlayer =
-      ExoPlayer.Builder(appContext)
+      ExoPlayer.Builder(appContext, renderersFactory)
           .setAudioAttributes(audioAttributes, /* handleAudioFocus= */ true)
           .setHandleAudioBecomingNoisy(true)
           .build()

@@ -38,11 +38,6 @@ fun AttachmentExpanded(
 ) {
   if (inputMode != MessageInputModeUiState.Attachment) return
 
-  val focusRequester = remember { FocusRequester() }
-
-  SideEffect {
-    focusRequester.requestFocus()
-  }
   val albumPickerLauncher =
       rememberLauncherForActivityResult(
           // getPickImagesMaxLimit() Needs R Extensions Version 2. so just set a hard limit
