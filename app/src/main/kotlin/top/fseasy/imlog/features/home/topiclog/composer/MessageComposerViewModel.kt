@@ -186,7 +186,13 @@ constructor(
             stopVoiceRecordingAndSendVoiceMessage()
             _uiEffect.send(ComposerUiEffect.Vibrate)
           }
-          // always pop back
+          // always reset input mode & pop back
+          // WHY set null:
+          // Because currently we can't pause, so we must set it to NULL to avoid
+          // the weird condition that the draft state recording mode=voice and when user enter
+          // again,
+          // the UI show the voice recording panel while recorder not work!
+          clearInputMode()
           _uiEffect.send(ComposerUiEffect.PopBackStack)
           // Here we don't need to change inputMode.
         }
@@ -194,9 +200,28 @@ constructor(
     }
   }
 
+  /** After pressing Navigation Back of parent component, we should always pop back! */
+  fun handleNavigationBack() {
+    viewModelScope.launch {
+      val inputMode = inputModeUiState.value
+
+      // TODO: support recording pause logic! issue #6
+      if (inputMode == MessageInputModeUiState.Voice) {
+        val recorderState = voiceRecorderStateHolder.voiceRecordingUiState.value
+        if (recorderState.recorderState == VoiceRecorderState.Recording) {
+          stopVoiceRecordingAndSendVoiceMessage()
+          _uiEffect.send(ComposerUiEffect.Vibrate)
+        }
+      }
+      // always clear input mode and pop back
+      clearInputMode()
+      _uiEffect.send(ComposerUiEffect.PopBackStack)
+    }
+  }
+
   fun startVoiceRecording() {
     launchWithTopicUserId { _, userId ->
-      voiceRecorderStateHolder.startVoiceRecording(userId)
+      voiceRecorderStateHolder.startVoiceRecording(userId).onFailure {}
     }
   }
 

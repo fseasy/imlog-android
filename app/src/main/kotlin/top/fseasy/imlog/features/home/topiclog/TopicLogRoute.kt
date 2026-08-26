@@ -134,7 +134,8 @@ fun TopicLogRoute(
         TopicLogContent(
             topicId = viewModel.topicId,
             topicName = topicName,
-            onNavigateBack = onNavigateBack,
+            // proxy to composer viewModel to handle the inputMode correctly and then navigate back
+            onNavigateBack = composerViewModel::handleNavigationBack,
             onSettingsClick = onSettingsClick,
             timelineSection = {
               MessageTimeline(
@@ -152,6 +153,7 @@ fun TopicLogRoute(
               MessageComposer(
                   onNavigateBack = onNavigateBack,
                   onSendMessageCallback = ::messageListScrollToBottom,
+                  onShowSnackbar = viewModel::showSnackbar,
                   viewModel = composerViewModel,
               )
             },

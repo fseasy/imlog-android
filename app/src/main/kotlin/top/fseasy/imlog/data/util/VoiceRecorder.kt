@@ -15,6 +15,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import top.fseasy.imlog.domain.util.runSuspendCatching
 import java.io.File
 import kotlin.io.path.createParentDirectories
 import kotlin.time.Duration.Companion.milliseconds
@@ -66,13 +67,11 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
    * Start recording. do nothing if current state is already recording!
    *
    * Run in IO thread.
-   *
-   * @throws Exception
    */
   @OptIn(ExperimentalUuidApi::class)
-  suspend fun start(context: Context, path: java.nio.file.Path) {
-    if (_state.value == VoiceRecorderState.Recording) return
-    return withContext(Dispatchers.IO) {
+  suspend fun start(context: Context, path: java.nio.file.Path) = runSuspendCatching {
+    if (_state.value == VoiceRecorderState.Recording) return@runSuspendCatching
+    withContext(Dispatchers.IO) {
       // Reset.
       syncCleanup()
       val currentOutputFile = path.createParentDirectories().toFile()
@@ -110,7 +109,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
   }
 
   /**
-   * Cancel recording.
+   * Cancel recording. No exception
    *
    * Run in IO threads.
    */
@@ -128,7 +127,7 @@ class VoiceRecorder(private val coroutineScope: CoroutineScope) : AutoCloseable 
     syncCleanup()
   }
 
-  /** Will always release mediaRecoder! */
+  /** Will always release mediaRecoder! No exception thrown. */
   private fun syncStopRecording(): File? {
     stopTimer()
     val isStopSuccess =

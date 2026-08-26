@@ -115,4 +115,5 @@
     <string name="open_file_by_chooser">Choose app to open file %1$s</string>
     <string name="term_full_screen_image">Full Screen Image</string>
     <string name="feature_app_settings_title">Settings</string>
+    <string name="composer_recording_fail_on_permission">Failed to Record Due to No Permissions</string>
 </resources>

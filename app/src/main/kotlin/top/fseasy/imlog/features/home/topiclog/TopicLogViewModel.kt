@@ -2,6 +2,7 @@ package top.fseasy.imlog.features.home.topiclog
 
 import android.content.Context
 import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
@@ -130,6 +131,10 @@ constructor(
   val topicId: TopicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
   private val _uiEffect = Channel<TopicLogUiEffect>()
   val uiEffect = _uiEffect.receiveAsFlow()
+
+  fun showSnackbar(@StringRes messageResId: Int) = viewModelScope.launch {
+    _uiEffect.send(TopicLogUiEffect.ShowSnackBar(context.getString(messageResId)))
+  }
 
   // For audio/voice message playing position cache
   private val inactiveMediaPlayPositionCache = mutableMapOf<String, kotlin.time.Duration>()

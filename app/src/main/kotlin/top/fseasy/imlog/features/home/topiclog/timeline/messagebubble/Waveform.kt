@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +26,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import top.fseasy.imlog.domain.util.safeDivision
+import androidx.compose.ui.unit.sp
 import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
 import kotlin.time.Duration
 
@@ -138,42 +139,50 @@ fun WaveformWithProgressColumn(
     modifier: Modifier = Modifier,
 ) {
   val playPosition = if (isActive) activePlayPositionHolder.value else inactivePlayPosition
+  val progress =
+      if (duration > Duration.ZERO) {
+        (playPosition.inWholeMilliseconds.toFloat() / duration.inWholeMilliseconds.toFloat())
+            .coerceIn(0f, 1f)
+      } else {
+        0f
+      }
 
-  Column(modifier = modifier) {
+  Column(
+      modifier = modifier,
+      verticalArrangement = Arrangement.Center,
+  ) {
+    // Waveform Visualizer & Seek Area
+    WaveformSlider(
+        progress = progress,
+        amplitudes = amplitudes,
+        tintColor = tintColor,
+        onSeek = onSeek,
+        modifier =
+            Modifier.fillMaxWidth()
+                .height(32.dp), // 32.dp is ideal for chat bubbles (48dp is often too tall)
+    )
+
+    Spacer(modifier = Modifier.height(2.dp))
+
+    // Timestamp Row
     Row(
         modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-      Column(modifier = Modifier.weight(1f)) {
-        val progress = playPosition.safeDivision(duration).coerceIn(0f, 1f)
+      // Left: Current playback position (or "0:00" when active)
+      Text(
+          text = playPosition.toAppMessageTimeFormat(),
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+          color = tintColor.copy(alpha = 0.7f),
+      )
 
-        WaveformSlider(
-            progress = progress,
-            amplitudes = amplitudes,
-            tintColor = tintColor,
-            onSeek = onSeek,
-            modifier = Modifier.fillMaxWidth().height(48.dp), // waveform height
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-          if (playPosition > Duration.ZERO) {
-            Text(
-                text = playPosition.toAppMessageTimeFormat(),
-                style = MaterialTheme.typography.labelSmall,
-                color = tintColor.copy(alpha = 0.6f),
-            )
-          }
-
-          Text(
-              text = duration.toAppMessageTimeFormat(),
-              style = MaterialTheme.typography.labelSmall,
-              color = tintColor.copy(alpha = 0.6f),
-          )
-        }
-      }
+      // Right: Total voice duration
+      Text(
+          text = duration.toAppMessageTimeFormat(),
+          style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+          color = tintColor.copy(alpha = 0.7f),
+      )
     }
   }
 }

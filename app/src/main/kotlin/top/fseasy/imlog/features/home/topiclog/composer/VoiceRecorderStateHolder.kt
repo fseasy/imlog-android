@@ -1,6 +1,10 @@
 package top.fseasy.imlog.features.home.topiclog.composer
 
 import android.content.Context
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -13,10 +17,6 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
-import kotlin.time.Clock
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
 
 class VoiceRecordingUiState(
     val recorderState: VoiceRecorderState = VoiceRecorderState.Idle,
@@ -50,9 +50,9 @@ class VoiceRecorderStateHolder(
               initialValue = VoiceRecordingUiState(),
           )
 
-  suspend fun startVoiceRecording(userId: UserId) {
+  suspend fun startVoiceRecording(userId: UserId): Result<Unit> {
     val path = generateVoiceRecordingOutputPathInMessageCacheRule(userId = userId)
-    voiceRecorder.start(context, path)
+    return voiceRecorder.start(context, path)
   }
 
   suspend fun cancelVoiceRecording() {

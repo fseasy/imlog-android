@@ -1,5 +1,6 @@
 package top.fseasy.imlog.features.home.topiclog.composer
 
+import android.Manifest
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
@@ -24,15 +25,20 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.yield
 import timber.log.Timber
+import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.MessageType
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalPermissionsApi::class)
 @Composable
 fun MessageComposer(
     onNavigateBack: () -> Unit,
     onSendMessageCallback: () -> Unit,
+    onShowSnackbar: (messageResId: Int) -> Unit,
     viewModel: MessageComposerViewModel = hiltViewModel(),
 ) {
   val inputMode by viewModel.inputModeUiState.collectAsStateWithLifecycle()
@@ -41,6 +47,20 @@ fun MessageComposer(
   //       UI refresh can be limited the lowest UI component
   val voiceRecordingUiStateHolder =
       viewModel.voiceRecorderStateHolder.voiceRecordingUiState.collectAsStateWithLifecycle()
+  val onVoiceButtonSingleClick = {
+    viewModel.updateInputMode(MessageInputModeUiState.Voice)
+    // start recording NOW
+    viewModel.startVoiceRecording()
+  }
+  // Needs permission to record!
+  val micPermissionState =
+      rememberPermissionState(Manifest.permission.RECORD_AUDIO) { isGranted ->
+        if (isGranted) {
+          onVoiceButtonSingleClick()
+        } else {
+          onShowSnackbar(R.string.composer_recording_fail_on_permission)
+        }
+      }
 
   // Response for back-handler
   BackHandler(true) { viewModel.handleBackPress() }
@@ -74,7 +94,11 @@ fun MessageComposer(
                 // is it outer area click? -> The parent component will handle this condition!
               },
               onVoiceInputSingleClick = {
-                viewModel.updateInputMode(MessageInputModeUiState.Voice)
+                if (micPermissionState.status.isGranted) {
+                  onVoiceButtonSingleClick()
+                } else {
+                  micPermissionState.launchPermissionRequest()
+                }
               },
               onAttachmentClick = {
                 if (inputMode != MessageInputModeUiState.Attachment) {
@@ -96,9 +120,14 @@ fun MessageComposer(
       },
       onSendVoice = {
         viewModel.stopVoiceRecordingAndSendVoiceMessage()
+        viewModel.clearInputMode() // return to idle composer ui
         onSendMessageCallback()
       },
-      onCancelVoiceRecoding = { viewModel.cancelVoiceRecording() },
+      onCancelVoiceRecoding = {
+        viewModel.cancelVoiceRecording()
+        // Use this to return the idle composer ui
+        viewModel.clearInputMode()
+      },
       onSelectAlbums = { uris ->
         viewModel.sendMultipleAttachments(uris)
         onSendMessageCallback()
