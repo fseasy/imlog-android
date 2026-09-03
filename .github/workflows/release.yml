@@ -45,17 +45,15 @@ jobs:
           CLEAN_VERSION=${VERSION_NAME%%-*}
           
           # verify format
-          if ! [[ "CLEAN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if ! [[ "$CLEAN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "❌ Invalid Tag，must be vX.Y.Z(current =  $TAG)"
             exit 1
           fi
           
-          # Parse major.minor.patch
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NAME"
-          
-          # versionCode calculation
+          # versionCode calculation from version name + action run number
           # 1.2.3 + run_number → 1002003 + run_number
           # advantage: 1. bind to semantic version 2. always increases as building 
+          IFS='.' read -r MAJOR MINOR PATCH <<< "CLEAN_VERSION"
           BASE_CODE=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))
           VERSION_CODE=$((BASE_CODE + ${{ github.run_number }}))
           
