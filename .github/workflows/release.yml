@@ -1,0 +1,113 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'          # can only be triggered with tag like: v1.2.3
+    #  workflow_dispatch:      # disable manually trigger
+
+permissions:
+  contents: write         # for GitHub release creating
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0          # to get the full tag history
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install required Android packages
+        run: |
+          sdkmanager "platforms;android-37" "build-tools;37.0.0"
+
+
+      - name: Calculate version from tag
+        id: version
+        run: |
+          # get tag: v1.2.3-rc.1 → 1.2.3
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION_NAME=${TAG#v}
+          CLEAN_VERSION=${VERSION_NAME%%-*}
+          
+          # verify format
+          if ! [[ "CLEAN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Invalid Tag，must be vX.Y.Z(current =  $TAG)"
+            exit 1
+          fi
+          
+          # Parse major.minor.patch
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NAME"
+          
+          # versionCode calculation
+          # 1.2.3 + run_number → 1002003 + run_number
+          # advantage: 1. bind to semantic version 2. always increases as building 
+          BASE_CODE=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))
+          VERSION_CODE=$((BASE_CODE + ${{ github.run_number }}))
+          
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_OUTPUT
+          
+          echo "Calculated versionName: $VERSION_NAME"
+          echo "Calculated versionCode: $VERSION_CODE"
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.SIGNING_KEY_BASE64 }}" | base64 -d > $GITHUB_WORKSPACE/release.jks
+          echo "Keystore decoded successfully"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build Release AAB + APK
+        env:
+          SIGNING_STORE_FILE: ${{ github.workspace }}/release.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew clean \
+            bundleRelease \
+            assembleRelease \
+            --no-daemon \
+            --stacktrace
+
+      - name: Upload AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          generate_release_notes: true
+          files: |
+            app/build/outputs/bundle/release/*.aab
+            app/build/outputs/apk/release/*.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

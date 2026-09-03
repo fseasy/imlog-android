@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.io.FileInputStream
+import java.util.Properties
 
 plugins {
   alias(libs.plugins.android.application)
@@ -17,8 +19,12 @@ android {
 
   defaultConfig {
     applicationId = libs.versions.appPackageName.get()
-    versionCode = 1
-    versionName = "1.0.0"
+
+    val versionNameFromProp = project.findProperty("VERSION_NAME") as? String
+    val versionCodeFromProp = (project.findProperty("VERSION_CODE") as? String)?.toIntOrNull()
+
+    versionName = versionNameFromProp ?: "1.0.0"
+    versionCode = versionCodeFromProp ?: 1
 
     targetSdk = 37
     // after 2020
@@ -33,13 +39,38 @@ android {
     )
   }
 
+  signingConfigs {
+    create("release") {
+      val keystorePropertiesFile = rootProject.file("signin-keystore.properties")
+      val keystoreProperties = Properties()
+
+      if (keystorePropertiesFile.exists()) {
+        keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+      }
+
+      storeFile = file(
+          System.getenv("SIGNING_STORE_FILE")
+            ?: keystoreProperties["storeFile"] as? String
+            ?: "release.jks"
+      )
+      storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+        ?: keystoreProperties["storePassword"] as? String
+      keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+        ?: keystoreProperties["keyAlias"] as? String
+      keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+        ?: keystoreProperties["keyPassword"] as? String
+    }
+  }
+
   buildTypes {
     release {
-      isMinifyEnabled = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(
           getDefaultProguardFile("proguard-android-optimize.txt"),
           "proguard-rules.pro",
       )
+      signingConfig = signingConfigs.getByName("release")
     }
   }
 

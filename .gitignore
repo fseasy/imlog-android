@@ -1,4 +1,7 @@
 /learning
+/*.jks
+/*.jks.base64
+/signin-keystore.properties
 
 .DS_Store
 
