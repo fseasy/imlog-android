@@ -1,6 +1,6 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.FileInputStream
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
   alias(libs.plugins.android.application)
@@ -48,17 +48,17 @@ android {
         keystoreProperties.load(FileInputStream(keystorePropertiesFile))
       }
 
-      storeFile = file(
-          System.getenv("SIGNING_STORE_FILE")
-            ?: keystoreProperties["storeFile"] as? String
-            ?: "release.jks"
-      )
-      storePassword = System.getenv("SIGNING_STORE_PASSWORD")
-        ?: keystoreProperties["storePassword"] as? String
-      keyAlias = System.getenv("SIGNING_KEY_ALIAS")
-        ?: keystoreProperties["keyAlias"] as? String
-      keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
-        ?: keystoreProperties["keyPassword"] as? String
+      storeFile =
+          file(
+              System.getenv("SIGNING_STORE_FILE")
+                  ?: keystoreProperties["storeFile"] as? String
+                  ?: "release.jks"
+          )
+      storePassword =
+          System.getenv("SIGNING_STORE_PASSWORD") ?: keystoreProperties["storePassword"] as? String
+      keyAlias = System.getenv("SIGNING_KEY_ALIAS") ?: keystoreProperties["keyAlias"] as? String
+      keyPassword =
+          System.getenv("SIGNING_KEY_PASSWORD") ?: keystoreProperties["keyPassword"] as? String
     }
   }
 
@@ -151,6 +151,9 @@ sqldelight {
   databases {
     create("SqlDelightDb") {
       packageName.set("${libs.versions.appPackageName.get()}.sqldelight")
+      // For migragation.
+      schemaOutputDirectory.set(file("src/main/sqldelight/databases"))
+      verifyMigrations.set(true)
     }
   }
 }
