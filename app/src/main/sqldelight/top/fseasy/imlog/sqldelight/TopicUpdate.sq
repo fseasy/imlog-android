@@ -6,13 +6,13 @@ SET
     name = :newName,
     attributes_updated_at = :updatedAt
 WHERE id = :topicId
-AND EXISTS (
-    SELECT 1
-    FROM topic_members
-    WHERE topic_id = :topicId
-    AND user_id = :triggerUserId
-    AND role = :adminRoleValue
-);
+    AND EXISTS (
+        SELECT 1
+        FROM topic_members
+        WHERE topic_id = :topicId
+        AND user_id = :triggerUserId
+        AND role = :adminRoleValue
+    );
 
 updateTopicAvatarModel:
 -- with user permission check: role = admin; role is effective
@@ -21,13 +21,13 @@ SET
     avatar_model = :newAvatarModel,
     attributes_updated_at = :updatedAt
 WHERE id = :topicId
-AND EXISTS (
-    SELECT 1
-    FROM topic_members
-    WHERE topic_id = :topicId
-    AND user_id = :triggerUserId
-    AND role = :adminRoleValue
-);
+    AND EXISTS (
+        SELECT 1
+        FROM topic_members
+        WHERE topic_id = :topicId
+        AND user_id = :triggerUserId
+        AND role = :adminRoleValue
+    );
 
 
 updateTopicArchived:
@@ -36,13 +36,13 @@ SET
     archived = :newArchived,
     attributes_updated_at = :updatedAt
 WHERE id = :topicId
-AND EXISTS (
-    SELECT 1
-    FROM topic_members
-    WHERE topic_id = :topicId
-    AND user_id = :triggerUserId
-    AND role = :adminRoleValue
-);
+    AND EXISTS (
+        SELECT 1
+        FROM topic_members
+        WHERE topic_id = :topicId
+        AND user_id = :triggerUserId
+        AND role = :adminRoleValue
+    );
 
 updateTopicPersonalBackground:
 UPDATE topic_preference
@@ -50,7 +50,7 @@ SET
     background = :newBackground,
     attributes_updated_at = :updatedAt
 WHERE topic_id = :topicId
-AND user_id = :triggerUserId;
+    AND user_id = :triggerUserId;
 
 updateTopicPersonalPinned:
 UPDATE topic_preference
@@ -58,11 +58,43 @@ SET
     pinned = :newPinned,
     attributes_updated_at = :updatedAt
 WHERE topic_id = :topicId
-AND user_id = :triggerUserId;
+    AND user_id = :triggerUserId;
 
 updateTopicMessageDraft:
 UPDATE topic_message_state
 SET
     draft = :newDraft
 WHERE topic_id = :topicId
-AND user_id = :triggerUserId;
+    AND user_id = :triggerUserId;
+
+-- Manaully set the last read message id. suitable for the condition of sending message
+updateTopicLastReadMessageId:
+UPDATE topic_message_state
+SET
+    last_read_message_id = :lastReadMessageId
+WHERE
+    topic_id = :topicId
+    AND user_id = :triggerUserId;
+
+-- Automatically mark the topic as READ by retrieving the newest message id internally
+-- use this when entering the topic route
+markTopicAsRead:
+INSERT INTO topic_message_state (topic_id, user_id, last_read_message_id)
+VALUES (
+    :topicId,
+    :userId,
+    (
+       SELECT id
+       FROM messages
+       WHERE
+            topic_id = :topicId
+            AND is_deleted = 0
+       ORDER BY
+            created_at DESC,
+            id DESC
+       LIMIT 1
+      )
+)
+ON CONFLICT(topic_id, user_id) DO UPDATE SET
+    last_read_message_id = excluded.last_read_message_id
+WHERE last_read_message_id IS NOT excluded.last_read_message_id;

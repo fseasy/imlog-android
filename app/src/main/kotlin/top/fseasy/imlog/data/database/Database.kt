@@ -48,6 +48,7 @@ fun createSqlDelightDb(context: Context): SqlDelightDb {
               draftAdapter = messageDraftAdapter,
               topic_idAdapter = topicIdAdapter,
               user_idAdapter = userIdAdapter,
+              last_read_message_idAdapter = messageIdAdapter
           ),
       topic_membersAdapter =
           TopicMembersAdapter(

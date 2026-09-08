@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
 import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.MessageDraft
+import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessagePreview
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicAvatarModel
@@ -122,7 +123,7 @@ constructor(
         Topic_message_state(
             topic_id = topicId,
             user_id = creatorId,
-            last_read_at = createdAtMs,
+            last_read_message_id = null,
             draft = null,
         )
     )
@@ -281,6 +282,29 @@ constructor(
                 wrapperValue,
                 topicId = topicId,
                 triggerUserId = userId,
+            )
+            .value > 0L
+      }
+
+  override fun syncUpdateTopicLastReadMessageId(
+      userId: UserId,
+      topicId: TopicId,
+      messageId: MessageId,
+  ): Boolean =
+      database.topicUpdateQueries
+          .updateTopicLastReadMessageId(
+              lastReadMessageId = messageId,
+              topicId = topicId,
+              triggerUserId = userId,
+          )
+          .value > 0L
+
+  override suspend fun markTopicAsRead(userId: UserId, topicId: TopicId): Boolean =
+      withContext(dispatcher) {
+        database.topicUpdateQueries
+            .markTopicAsRead(
+                topicId = topicId,
+                userId = userId,
             )
             .value > 0L
       }

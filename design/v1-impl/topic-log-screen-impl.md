@@ -155,3 +155,4 @@ AnimatedContent 适合 “状态 A → 状态 B” 内容替换（除了开/关�
 对于微信/Telegram 级别的 IM 媒体查看器，最稳健、可扩展性最好的架构是：
 - 外层用 AnimatedVisibility 负责全屏 Overlay 的**“打开与关闭”**。
 - 全屏内部如果有左右滑动查看同聊天记录其他图片/视频的需求，内部放入 Compose 官方的 HorizontalPager。
+

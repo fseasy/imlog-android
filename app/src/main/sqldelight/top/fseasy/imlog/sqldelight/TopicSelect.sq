@@ -11,9 +11,14 @@ SELECT
     t.avatar_model,
     COALESCE(tps.pinned, 0) AS pinned,
     CASE
-        WHEN m.created_at IS NULL THEN 0
-        WHEN tms.last_read_at IS NULL THEN 1
-        WHEN tms.last_read_at < m.created_at THEN 1
+        -- No message, unread=false
+        WHEN m.id IS NULL THEN 0
+        -- No reading while has messages, unread
+        WHEN tms.last_read_message_id IS NULL THEN 1
+        -- Timing of last read message id < latest message (m.id), unread
+        -- NOTE: message id is timing-asc awareness, so we can use `<`
+        WHEN tms.last_read_message_id < m.id THEN 1
+        -- last read timing >= latest message timeing, unread=false
         ELSE 0
     END AS has_unread,
     -- for ui display and sort：if has message: m.created_at, else topic.created_at
@@ -26,6 +31,7 @@ SELECT
     sender.username AS last_message_sender_name,
     t.description
 FROM topics t
+-- only topics whose members include currentUserId
 INNER JOIN topic_members tm ON t.id = tm.topic_id AND tm.user_id = :currentUserId
 LEFT JOIN topic_preference tps ON t.id = tps.topic_id AND tps.user_id = :currentUserId
 LEFT JOIN topic_message_state tms ON t.id = tms.topic_id AND tms.user_id = :currentUserId

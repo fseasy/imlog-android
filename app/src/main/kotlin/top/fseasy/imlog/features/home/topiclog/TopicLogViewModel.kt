@@ -3,15 +3,19 @@ package top.fseasy.imlog.features.home.topiclog
 import android.content.Context
 import android.net.Uri
 import androidx.annotation.StringRes
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.util.UnstableApi
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,79 +47,21 @@ import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.buildFileUri
 import top.fseasy.imlog.navigation.MainScreen
-import javax.inject.Inject
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
-
-sealed interface ContextState {
-  object Loading : ContextState
-
-  data class Error(val reason: String) : ContextState
-
-  data class Success(
-      val topic: Topic,
-      val currentUserId: UserId,
-  ) : ContextState
-}
-
-sealed interface TopicLogUiEffect {
-  data class ShowSnackBar(val message: String) : TopicLogUiEffect
-
-  data class OpenFileChooser(
-      val uri: Uri,
-      val mimeType: String?,
-      val displayName: String,
-  ) : TopicLogUiEffect
-
-  data class SetFullScreenViewMessage(val fullScreenMessage: FullScreenMessageUiModel) :
-      TopicLogUiEffect
-}
-
-@Immutable
-data class MediaPlaybackStateAndAction(
-    val activePlaybackStateHolder: State<MediaPlaybackState>,
-    val activePlayPositionHolder: State<kotlin.time.Duration>,
-    val inactivePlayPositionGetter: (MessageId) -> kotlin.time.Duration,
-    val onTogglePlay: (MessageUiModel) -> Unit,
-    val onSeek: (MessageUiModel, ratio: Float) -> Unit,
-    val onCyclePlaybackSpeed: (MessageId) -> Unit,
-)
 
 /**
- * Read `.activePlaybackStateHolder.value` and `.inactivePlayPositionGetter` of
- * MediaPlaybackStateAndAction, then prepares a PlaybackState based on the current message isActive
- * state.
+ * TopicLog main view model.
  *
- * When target change, those will be re-composition.
+ * It holds
+ * 1. media-play (ExoPlayer) interface, used in timeline(message bubble) & fullscreen part
+ *    play/pause, playing state. => Unstable Api annotation source, propagated from the lower
+ *    ExoPlayer.
+ * 2. UiEffect, especially showing-snackbar, which will be used in children components
+ * 3. uiState: topic model.
+ *
+ * Special Logic:
+ * - mark topic read when init
  */
-@Composable
-fun ReadMediaPlaybackStateAndRender(
-    mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
-    messageId: MessageId,
-    messageContent: MessageContentUiModel.AudioPlaySupported,
-    renderContent:
-        @Composable
-        (
-            currentPlaybackState: MediaPlaybackState,
-            inactivePlayPosition: Duration,
-        ) -> Unit,
-) {
-  val audioPlaybackState = mediaPlaybackStateAndAction.activePlaybackStateHolder.value
-  val isActive = audioPlaybackState.isThisMediaActive(toMediaInputId(messageId))
-  val currentPlaybackState =
-      if (isActive) {
-        audioPlaybackState
-      } else {
-        MediaPlaybackState(duration = messageContent.duration)
-      }
-  // it will be recorded before switching to next one
-  val inactivePlayPosition = mediaPlaybackStateAndAction.inactivePlayPositionGetter(messageId)
-  // Render bubble
-  renderContent(currentPlaybackState, inactivePlayPosition)
-}
-
+@UnstableApi
 @HiltViewModel
 class TopicLogViewModel
 @Inject
@@ -129,9 +75,42 @@ constructor(
 ) : ViewModel() {
 
   val topicId: TopicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
+
+  init {
+    launchWithUserId { userId ->
+      runSuspendCatching { topicRepository.markTopicAsRead(userId = userId, topicId = topicId) }
+          .onFailure { e ->
+            Timber.w(e, "Failed to mark topic [$topicId] as read")
+          }
+          .onSuccess { isSuccess -> Timber.d("Mark topic as read result: $isSuccess") }
+    }
+  }
+
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val contextStateFlow: StateFlow<ContextState> =
+      combine(
+              userRepository.authState.filterIsInstance<AuthState.Authenticated>(),
+              topicRepository.observeTopicOrNull(topicId),
+          ) { authState, topic ->
+            when (topic) {
+              null -> ContextState.Error("Failed to load Topic for id: $topicId")
+              else ->
+                  ContextState.Success(
+                      currentUserId = authState.userId,
+                      topic = topic,
+                  )
+            }
+          }
+          .stateIn(
+              scope = viewModelScope,
+              started = SharingStarted.WhileSubscribed(5000),
+              initialValue = ContextState.Loading,
+          )
+
   private val _uiEffect = Channel<TopicLogUiEffect>()
   val uiEffect = _uiEffect.receiveAsFlow()
 
+  /** An exported api for children components sending snackbar */
   fun showSnackbar(@StringRes messageResId: Int) = viewModelScope.launch {
     _uiEffect.send(TopicLogUiEffect.ShowSnackBar(context.getString(messageResId)))
   }
@@ -159,27 +138,6 @@ constructor(
   val activeMediaPlaybackState = exoPlayerStateHolder.playbackState
   val activeMediaPlayPosition = exoPlayerStateHolder.playPositionState
   val player = exoPlayerStateHolder.exoPlayer
-
-  @OptIn(ExperimentalCoroutinesApi::class)
-  val contextStateFlow: StateFlow<ContextState> =
-      combine(
-              userRepository.authState.filterIsInstance<AuthState.Authenticated>(),
-              topicRepository.observeTopicOrNull(topicId),
-          ) { authState, topic ->
-            when (topic) {
-              null -> ContextState.Error("Failed to load Topic for id: $topicId")
-              else ->
-                  ContextState.Success(
-                      currentUserId = authState.userId,
-                      topic = topic,
-                  )
-            }
-          }
-          .stateIn(
-              scope = viewModelScope,
-              started = SharingStarted.WhileSubscribed(5000),
-              initialValue = ContextState.Loading,
-          )
 
   fun getMediaCachedPlayPosition(messageId: MessageId) =
       inactiveMediaPlayPositionCache[toMediaInputId(messageId)] ?: 0.milliseconds
@@ -350,3 +308,37 @@ constructor(
     }
   }
 }
+
+sealed interface ContextState {
+  object Loading : ContextState
+
+  data class Error(val reason: String) : ContextState
+
+  data class Success(
+      val topic: Topic,
+      val currentUserId: UserId,
+  ) : ContextState
+}
+
+sealed interface TopicLogUiEffect {
+  data class ShowSnackBar(val message: String) : TopicLogUiEffect
+
+  data class OpenFileChooser(
+      val uri: Uri,
+      val mimeType: String?,
+      val displayName: String,
+  ) : TopicLogUiEffect
+
+  data class SetFullScreenViewMessage(val fullScreenMessage: FullScreenMessageUiModel) :
+      TopicLogUiEffect
+}
+
+@Immutable
+data class MediaPlaybackStateAndAction(
+    val activePlaybackStateHolder: State<MediaPlaybackState>,
+    val activePlayPositionHolder: State<kotlin.time.Duration>,
+    val inactivePlayPositionGetter: (MessageId) -> kotlin.time.Duration,
+    val onTogglePlay: (MessageUiModel) -> Unit,
+    val onSeek: (MessageUiModel, ratio: Float) -> Unit,
+    val onCyclePlaybackSpeed: (MessageId) -> Unit,
+)

@@ -92,8 +92,8 @@ fun TimelineContent(
     LazyColumn(
         modifier = Modifier.fillMaxSize(), // use an empty Modifier
         state = messageListState,
-        reverseLayout =
-            true, // items are ordered in time DESC, reverse will make latest message show in bottom
+        // items are ordered in time DESC, reverse will make latest message show in bottom
+        reverseLayout = true,
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

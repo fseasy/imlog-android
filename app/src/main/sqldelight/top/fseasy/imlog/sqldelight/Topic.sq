@@ -1,6 +1,7 @@
 import kotlin.Boolean;
 import top.fseasy.imlog.domain.model.AvatarModel;
 import top.fseasy.imlog.domain.model.MessageDraft;
+import top.fseasy.imlog.domain.model.MessageId;
 import top.fseasy.imlog.domain.model.TopicId;
 import top.fseasy.imlog.domain.model.TopicMemberRole;
 import top.fseasy.imlog.domain.model.TopicPresetAvatar;
@@ -60,7 +61,8 @@ CREATE TABLE topic_preference (
 CREATE TABLE topic_message_state (
     topic_id TEXT AS TopicId NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
     user_id TEXT AS UserId NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    last_read_at INTEGER,
+    last_read_message_id TEXT AS MessageId,
+    -- Use Result to handle parsing error condition
     draft TEXT AS kotlin.Result<MessageDraft>,
     PRIMARY KEY (topic_id, user_id)
 );

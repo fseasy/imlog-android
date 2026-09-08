@@ -1,11 +1,11 @@
 package top.fseasy.imlog.domain.model
 
-import kotlinx.serialization.Serializable
-import timber.log.Timber
 import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.serialization.Serializable
+import timber.log.Timber
 
 enum class MessageType(val value: String) {
   Text("text"),
@@ -36,6 +36,8 @@ value class MessageId(val value: String) {
     require(value.startsWith(PREFIX)) { "Invalid MessageId prefix" }
   }
 
+  // NOTE!
+  // UUID V7 is time-order awareness, so you can use it to order, or as a SEQUENCE signal
   companion object {
     private const val PREFIX = "msg_"
 

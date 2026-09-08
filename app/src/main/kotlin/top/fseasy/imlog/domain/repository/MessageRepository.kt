@@ -1,7 +1,6 @@
 package top.fseasy.imlog.domain.repository
 
 import androidx.paging.PagingData
-import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import top.fseasy.imlog.domain.model.FileMetadataUnion
 import top.fseasy.imlog.domain.model.MessageId
@@ -12,6 +11,7 @@ import top.fseasy.imlog.domain.model.TimelineMessage
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
+import kotlin.time.Instant
 
 /**
  * Use this type to specify the attachment file source when insert initial file message. WHY don't
@@ -33,8 +33,7 @@ interface MessageRepository {
 
   fun observeStatistics(senderId: UserId): Flow<Statistics>
 
-  /** RUN in io thread. */
-  suspend fun insertTextMessage(
+  fun syncInsertTextMessage(
       topicId: TopicId,
       senderId: UserId,
       quotedMessageId: MessageId?,
@@ -42,6 +41,7 @@ interface MessageRepository {
       createdAt: Instant,
   ): MessageId
 
+  /** Run in IO */
   suspend fun delete(messageId: MessageId): Boolean
 
   // ==============

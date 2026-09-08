@@ -71,18 +71,6 @@ CREATE TABLE message_attachment_processing_task_states (
    error_user_retryable INTEGER AS kotlin.Boolean DEFAULT NULL
 );
 
-getMessagesByTopic:
--- need join the media-processing table
-SELECT m.*, p.src_uri, p.error_stage, p.error_user_retryable
-FROM messages m
-LEFT JOIN message_attachment_processing_task_states p ON m.id = p.message_id
-WHERE m.topic_id = :topic_id
-AND m.is_deleted = 0
-ORDER BY m.created_at ASC;
-
-getMessageCount:
-SELECT COUNT(*) FROM messages WHERE is_deleted = 0;
-
 insertMessage:
 INSERT INTO messages
 VALUES ?;

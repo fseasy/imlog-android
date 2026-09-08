@@ -1,0 +1,46 @@
+import top.fseasy.imlog.domain.model.MessageDraft;
+import top.fseasy.imlog.domain.model.MessageId;
+import top.fseasy.imlog.domain.model.TopicId;
+import top.fseasy.imlog.domain.model.UserId;
+
+-- Migrations:
+-- 1. table `topic_message_state` (by table rebuild way):
+--    - drop column last_read_at
+--    - add column last_read_message_id
+--
+
+---------
+-- table `topic_message_state` migration
+---------
+-- 1. create new temp
+CREATE TABLE topic_message_state_new (
+    topic_id TEXT AS TopicId NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    user_id TEXT AS UserId NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    last_read_message_id TEXT AS MessageId,
+    draft TEXT AS kotlin.Result<MessageDraft>,
+    PRIMARY KEY (topic_id, user_id)
+);
+
+-- 2. migrate data from old to new
+-- build last_read_message_id based on the last_read_at
+INSERT INTO topic_message_state_new (topic_id, user_id, last_read_message_id, draft)
+SELECT
+    old_state.topic_id,
+    old_state.user_id,
+    (
+        SELECT m.id
+        FROM messages AS m
+        WHERE m.topic_id = old_state.topic_id
+          AND m.is_deleted = 0
+          AND m.created_at <= old_state.last_read_at
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT 1
+    ) AS last_read_message_id,
+    old_state.draft
+FROM topic_message_state AS old_state;
+
+-- 3. drop old
+DROP TABLE topic_message_state;
+
+-- 4. rename
+ALTER TABLE topic_message_state_new RENAME TO topic_message_state;

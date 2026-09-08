@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.launch
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.TopicId
@@ -54,6 +55,7 @@ import top.fseasy.imlog.features.home.topiclog.timeline.FullScreenMessageUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimeline
 import top.fseasy.imlog.ui.util.openFileWithChooser
 
+@androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun TopicLogRoute(
     onNavigateBack: () -> Unit,

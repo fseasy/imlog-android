@@ -8,6 +8,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -42,6 +46,7 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
+import top.fseasy.imlog.domain.usecase.SendTextMessageUseCase
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.ResolveMetadataResult
 import top.fseasy.imlog.domain.usecase.sendattachment.SendUriUseCaseBase
@@ -50,10 +55,6 @@ import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.fileMimeTypeToMessageType
 import top.fseasy.imlog.domain.util.runSuspendCatching
 import top.fseasy.imlog.navigation.MainScreen
-import javax.inject.Inject
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
 
 // SQLite writing is single thread, so it is useless that set it higher
 private const val ATTACHMENT_RESOLVE_METADATA_CONCURRENCY = 6
@@ -65,10 +66,10 @@ class MessageComposerViewModel
 @Inject
 constructor(
     storagePathUseCase: StoragePathUseCase,
+    private val sendTextMessageUseCase: SendTextMessageUseCase,
     sendVoiceMessageUseCase: SendVoiceMessageUseCase,
     userRepository: UserRepository,
     savedStateHandle: SavedStateHandle,
-    private val messageRepository: MessageRepository,
     private val topicRepository: TopicRepository,
     private val sendUriUseCaseFactory: SendUriUseCaseFactory,
     @param:ApplicationContext private val context: Context,
@@ -342,13 +343,14 @@ constructor(
   fun sendTextMessage(text: String) {
     launchWithTopicUserId(useLocalScope = false) { topicId, userId ->
       // 1. save to db
-      messageRepository.insertTextMessage(
+      sendTextMessageUseCase(
           topicId = topicId,
           senderId = userId,
           quotedMessageId = null,
           text = text,
           createdAt = Clock.System.now(),
       )
+
       // 2. clean the inputText
       updateInputText("")
     }
@@ -387,7 +389,7 @@ private object MessageDraftUtil {
       topicRepository: TopicRepository,
   ) = runSuspendCatching {
     val isSetSuccess =
-        topicRepository.setMessageDraft(
+      topicRepository.setMessageDraft(
             userId = userId,
             topicId = topicId,
             draft = draft,

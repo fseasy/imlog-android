@@ -10,6 +10,7 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.DbRunner
 import top.fseasy.imlog.domain.repository.MessageAttachmentSource
 import top.fseasy.imlog.domain.repository.MessageRepository
+import top.fseasy.imlog.domain.repository.TopicRepository
 import javax.inject.Inject
 import kotlin.time.Instant
 
@@ -17,6 +18,7 @@ class InitializeAttachmentMessageUseCase
 @Inject
 constructor(
     private val messageRepository: MessageRepository,
+    private val topicRepository: TopicRepository,
     private val dbRunner: DbRunner,
 ) {
 
@@ -73,6 +75,11 @@ constructor(
             messageId = messageId,
             fileSource = MessageAttachmentSource.FromMessageCache(cacheFilename),
             taskStartTime = messageTimestamp,
+        )
+        topicRepository.syncUpdateTopicLastReadMessageId(
+            userId = senderId,
+            topicId = topicId,
+            messageId = messageId
         )
         messageId
       }
