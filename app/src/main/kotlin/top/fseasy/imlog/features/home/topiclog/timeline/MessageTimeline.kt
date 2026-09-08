@@ -37,7 +37,7 @@ fun MessageTimeline(
 
   TimelineContent(
       messageListState = messageListState,
-      pagedMessages = lazyPagingMessages,
+      pagedItems = lazyPagingMessages,
       onTapOutside = onTapOutside,
       onDragList = onDragList,
       mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
@@ -52,7 +52,7 @@ fun MessageTimeline(
 @Composable
 fun TimelineContent(
     messageListState: LazyListState,
-    pagedMessages: LazyPagingItems<MessageUiModel>,
+    pagedItems: LazyPagingItems<TimelineItemUiModel>,
     onTapOutside: () -> Unit,
     onDragList: () -> Unit,
     mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
@@ -71,12 +71,11 @@ fun TimelineContent(
   }
 
   // Scroll to latest message if getting new and user isn't in history viewing.
-  val latestMessageId =
-      if (pagedMessages.itemCount > 0) {
-        pagedMessages.peek(0)?.id?.value
-      } else null
-  LaunchedEffect(latestMessageId) {
-    if (latestMessageId == null) return@LaunchedEffect
+  val latestMessageItem =
+      pagedItems.itemSnapshotList.items.firstOrNull { it is TimelineItemUiModel.MessageItem }
+          as? TimelineItemUiModel.MessageItem
+  LaunchedEffect(latestMessageItem) {
+    if (latestMessageItem == null) return@LaunchedEffect
     val isViewingHistory = messageListState.firstVisibleItemIndex > 1
     if (!isViewingHistory) messageListState.animateScrollToItem(0)
   }
@@ -98,16 +97,18 @@ fun TimelineContent(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
       // Key must be savable in bundle => primitive String does
-      items(pagedMessages.itemCount, key = pagedMessages.itemKey { it.id.value }) { index ->
-        val message = pagedMessages[index]
-        if (message != null) {
-          MessageBubble(
-              message = message,
-              mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
-              onShowImage = onShowImage,
-              onShowVideo = onShowVideo,
-              onOpenFile = onOpenFile,
-          )
+      items(pagedItems.itemCount, key = pagedItems.itemKey { it.key }) { index ->
+        when (val item = pagedItems[index]) {
+          is TimelineItemUiModel.DateSeparator -> DateDivider(text = item.formatedText)
+          is TimelineItemUiModel.MessageItem ->
+              MessageBubble(
+                  message = item.message,
+                  mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
+                  onShowImage = onShowImage,
+                  onShowVideo = onShowVideo,
+                  onOpenFile = onOpenFile,
+              )
+          null -> Unit
         }
       }
     }
