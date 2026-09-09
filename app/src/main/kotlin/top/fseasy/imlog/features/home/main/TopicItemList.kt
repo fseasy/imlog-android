@@ -51,10 +51,10 @@ private fun TopicItemListDispatcher(
     onClickTopicSetting: (TopicId) -> Unit,
 ) {
   if (topicsState.loading) {
-    AppCircularProgress()
+    AppCircularProgress(modifier = modifier)
   } else if (topicsState.topics.isEmpty()) {
     Box(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
       Text(stringResource(R.string.topic_list_empty_text))
@@ -94,7 +94,7 @@ private fun TopicItemListContent(
       contentPadding = PaddingValues(16.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
   ) {
-    // MUST use .value as it should be savable in bundle
+    // key MUST use .value as it should be savable in bundle
     items(topics, key = { it.id.value }) { topic ->
       TopicItemCard(
           topic = topic,

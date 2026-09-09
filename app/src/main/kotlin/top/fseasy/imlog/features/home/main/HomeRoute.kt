@@ -91,7 +91,7 @@ fun TopicsScreenContent(
       TopicItemList(
           onClickTopic = onSelectTopic,
           onClickTopicSetting = onOpenTopicSettings,
-          modifier = modifier,
+          modifier = Modifier.fillMaxSize(),
       )
     }
   }

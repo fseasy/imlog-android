@@ -31,6 +31,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import timber.log.Timber
 import top.fseasy.imlog.R
 import top.fseasy.imlog.ui.model.TopicAvatarUiModel
 import top.fseasy.imlog.ui.model.toCoilModel

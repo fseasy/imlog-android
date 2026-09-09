@@ -44,7 +44,8 @@ fun HomeTopic.toUiModel(
   }
   val messageSnippet =
       buildMessageSnippet(
-          lastMessagePreview,
+          currentUserId = currentUserId,
+          lastMessagePreview = lastMessagePreview,
           draft = draft,
           description = description,
           context = context,
@@ -61,7 +62,8 @@ fun HomeTopic.toUiModel(
 }
 
 private fun buildMessageSnippet(
-    latestMessagePreview: MessagePreview?,
+    currentUserId: UserId,
+    lastMessagePreview: MessagePreview?,
     draft: MessageDraft?,
     description: String?,
     context: Context,
@@ -70,7 +72,7 @@ private fun buildMessageSnippet(
   if (draftSource != null) {
     return draftSource
   }
-  val messageSource = latestMessagePreview?.toMessageSnippet(context)
+  val messageSource = lastMessagePreview?.toMessageSnippet(currentUserId, context)
   if (messageSource != null) {
     return messageSource
   }
@@ -95,27 +97,28 @@ fun MessageDraft.toMessageSnippet(context: Context): MessageSnippet? {
 }
 
 /** Logically, it can't generate an empty snippet */
-fun MessagePreview.toMessageSnippet(context: Context): MessageSnippet {
-  val content = buildString {
-    if (senderName != null) {
-      append(senderName)
-      append(":")
-    }
-    val typeNoteResId =
-        when (type) {
-          MessageType.Text -> null
-          MessageType.Image -> R.string.home_topic_message_snippet_image_type_note
-          MessageType.Video -> R.string.home_topic_message_snippet_video_type_note
-          MessageType.Audio -> R.string.home_topic_message_snippet_Audio_type_note
-          MessageType.Voice -> R.string.home_topic_message_snippet_voice_type_note
-          MessageType.GenericFile -> R.string.home_topic_message_snippet_generic_file_type_note
-        }
-    if (typeNoteResId != null) {
-      append(" [${context.getString(typeNoteResId)}]")
-    }
-    if (text != null) {
-      append(" $text")
-    }
+fun MessagePreview.toMessageSnippet(
+    currentUserId: UserId,
+    context: Context,
+): MessageSnippet {
+  val parts = mutableListOf<String>()
+  if (senderId != currentUserId && senderName != null) {
+    parts.add("$senderName:")
   }
-  return MessageSnippet(header = "", content = content)
+  val typeNoteResId =
+      when (type) {
+        MessageType.Text -> null
+        MessageType.Image -> R.string.home_topic_message_snippet_image_type_note
+        MessageType.Video -> R.string.home_topic_message_snippet_video_type_note
+        MessageType.Audio -> R.string.home_topic_message_snippet_Audio_type_note
+        MessageType.Voice -> R.string.home_topic_message_snippet_voice_type_note
+        MessageType.GenericFile -> R.string.home_topic_message_snippet_generic_file_type_note
+      }
+  if (typeNoteResId != null) {
+    parts.add("[${context.getString(typeNoteResId)}]")
+  }
+  if (text != null) {
+    parts.add(text)
+  }
+  return MessageSnippet(header = "", content = parts.joinToString(" "))
 }
