@@ -12,20 +12,23 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import top.fseasy.imlog.features.home.topiclog.MediaPlaybackStateAndAction
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.MessageBubble
+import top.fseasy.imlog.ui.components.AppCircularProgress
 
 @Composable
 fun MessageTimeline(
     messageListState: LazyListState,
-    onTapOutside: () -> Unit,
+    onTapEmptyArea: () -> Unit,
     onDragList: () -> Unit,
     onFullScreenViewMessage: (MessageUiModel) -> Unit,
     onOpenFile: (MessageUiModel) -> Unit,
@@ -38,7 +41,7 @@ fun MessageTimeline(
   TimelineContent(
       messageListState = messageListState,
       pagedItems = lazyPagingMessages,
-      onTapOutside = onTapOutside,
+      onTapEmptyArea = onTapEmptyArea,
       onDragList = onDragList,
       mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
       onShowImage = onFullScreenViewMessage,
@@ -53,7 +56,7 @@ fun MessageTimeline(
 fun TimelineContent(
     messageListState: LazyListState,
     pagedItems: LazyPagingItems<TimelineItemUiModel>,
-    onTapOutside: () -> Unit,
+    onTapEmptyArea: () -> Unit,
     onDragList: () -> Unit,
     mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
     onShowImage: (MessageUiModel) -> Unit,
@@ -80,14 +83,20 @@ fun TimelineContent(
     if (!isViewingHistory) messageListState.animateScrollToItem(0)
   }
 
+  val isListEmpty =
+      pagedItems.loadState.refresh is LoadState.NotLoading && pagedItems.itemCount == 0
+  val isInitialLoading =
+      pagedItems.loadState.refresh is LoadState.Loading && pagedItems.itemCount == 0
+
   Box(
       modifier =
           modifier.fillMaxSize().pointerInput(Unit) {
             detectTapGestures {
-              onTapOutside()
+              onTapEmptyArea()
             }
           }
   ) {
+    // Items
     LazyColumn(
         modifier = Modifier.fillMaxSize(), // use an empty Modifier
         state = messageListState,
@@ -111,6 +120,14 @@ fun TimelineContent(
           null -> Unit
         }
       }
+    }
+    // Empty State
+    if (isListEmpty) {
+      EmptyTimelinePlaceholder(modifier = Modifier.align(Alignment.Center))
+    }
+    // Items Loading when entering
+    if (isInitialLoading) {
+      AppCircularProgress(modifier = Modifier.align(Alignment.Center))
     }
   }
 }

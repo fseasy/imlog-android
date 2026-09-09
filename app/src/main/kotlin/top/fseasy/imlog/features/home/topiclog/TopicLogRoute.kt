@@ -8,7 +8,6 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -38,7 +37,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -139,16 +137,17 @@ fun TopicLogRoute(
             // proxy to composer viewModel to handle the inputMode correctly and then navigate back
             onNavigateBack = composerViewModel::handleNavigationBack,
             onSettingsClick = onSettingsClick,
-            timelineSection = {
+            timelineSection = { modifier ->
               MessageTimeline(
                   messageListState = messageListState,
-                  onTapOutside = handleComposerDismiss,
+                  onTapEmptyArea = handleComposerDismiss,
                   onDragList = handleComposerDismiss,
                   onFullScreenViewMessage = { message ->
                     viewModel.prepareFullScreenViewMessage(message)
                   },
                   mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
                   onOpenFile = viewModel::createOpenFileIntentForGenericFileMessage,
+                  modifier = modifier,
               )
             },
             composerSection = {
@@ -159,7 +158,6 @@ fun TopicLogRoute(
                   viewModel = composerViewModel,
               )
             },
-            handleComposerDismiss = handleComposerDismiss,
             snackbarHostState = snackbarHostState,
         )
       },
@@ -240,9 +238,8 @@ private fun TopicLogContent(
     topicName: String?,
     onNavigateBack: () -> Unit,
     onSettingsClick: (TopicId) -> Unit,
-    timelineSection: @Composable () -> Unit,
+    timelineSection: @Composable (modifier: Modifier) -> Unit,
     composerSection: @Composable () -> Unit,
-    handleComposerDismiss: () -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
@@ -276,16 +273,7 @@ private fun TopicLogContent(
                 .consumeWindowInsets(paddingValues)
                 .imePadding()
     ) {
-      Box(
-          modifier =
-              modifier.weight(1f).fillMaxSize().pointerInput(Unit) {
-                detectTapGestures {
-                  handleComposerDismiss()
-                }
-              }
-      ) {
-        timelineSection()
-      }
+      timelineSection(Modifier.weight(1f))
 
       composerSection()
     }

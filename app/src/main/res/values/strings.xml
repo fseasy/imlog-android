@@ -116,4 +116,5 @@
     <string name="term_full_screen_image">Full Screen Image</string>
     <string name="feature_app_settings_title">Settings</string>
     <string name="composer_recording_fail_on_permission">Failed to Record Due to No Permissions</string>
+    <string name="topic_log_empty_text">No Logs Yet.</string>
 </resources>
