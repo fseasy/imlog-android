@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -44,7 +46,6 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import timber.log.Timber
 import top.fseasy.imlog.R
 
@@ -132,10 +133,12 @@ private fun UserInputTextField(
   Box(
       modifier =
           modifier
+              // Align the min height of the composer
+              .defaultMinSize(minHeight = ComposerMinActionHeight)
               .clip(shape)
               .background(backgroundColor)
               .border(1.dp, borderColor, shape)
-              .padding(horizontal = 12.dp, vertical = 8.dp),
+              .padding(horizontal = 14.dp, vertical = InputMethodVerticalPadding),
       contentAlignment = Alignment.CenterStart,
   ) {
     BasicTextField(
@@ -143,7 +146,7 @@ private fun UserInputTextField(
         onValueChange = onTextChanged,
         modifier =
             Modifier.fillMaxWidth()
-                .heightIn(min = 22.dp, max = 100.dp)
+                .heightIn(max = 100.dp)
                 .onFocusChanged { state ->
                   isFocused = state.isFocused
                   onFocusChanged(state.isFocused)
@@ -151,19 +154,20 @@ private fun UserInputTextField(
                 .then(focusRequesterModifier),
         textStyle =
             TextStyle(
-                fontSize = 15.sp,
+                fontSize = ComposerFontSize,
                 color = MaterialTheme.colorScheme.onSurface,
             ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
     ) { innerTextField ->
       Box(
-          modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+          modifier = Modifier.fillMaxWidth(),
           contentAlignment = Alignment.CenterStart,
       ) {
         if (textFieldValue.text.isEmpty()) {
           Text(
               text = stringResource(R.string.composer_text_input_placeholder),
               color = Color.Gray,
+              fontSize = ComposerFontSize,
           )
         }
 
@@ -180,21 +184,37 @@ private fun UserInputVoiceButton(
     modifier: Modifier = Modifier,
 ) {
   Surface(
-      shape = CircleShape, // Always use CircleShape, depending on Padding to change shape
-      color = MaterialTheme.colorScheme.primaryContainer,
+      shape = CircleShape,
+      color = MaterialTheme.colorScheme.primary,
+      contentColor = MaterialTheme.colorScheme.onPrimary,
+      shadowElevation = 1.dp,
       modifier =
-          modifier.pointerInput(Unit) {
-            detectTapGestures(
-                onTap = { onClick() },
-                onLongPress = { Timber.d("Long press. SKIP NOW") },
-            )
-          },
+          modifier
+              .then(
+                  if (isCircle) {
+                    Modifier.size(ComposerMinActionHeight)
+                  } else {
+                    Modifier.defaultMinSize(minHeight = ComposerMinActionHeight)
+                  }
+              )
+              .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onLongPress = { Timber.d("Long press. SKIP NOW") },
+                )
+              },
   ) {
     Row(
         modifier =
-            Modifier.padding(
-                horizontal = if (isCircle) 10.dp else 16.dp,
-                vertical = 10.dp,
+            Modifier.then(
+                if (isCircle) {
+                  Modifier.fillMaxSize()
+                } else {
+                  Modifier.padding(
+                      horizontal = 16.dp,
+                      vertical = InputMethodVerticalPadding,
+                  )
+                }
             ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
@@ -203,16 +223,19 @@ private fun UserInputVoiceButton(
           imageVector = ImageVector.vectorResource(R.drawable.icon_mic),
           contentDescription = stringResource(R.string.composer_mic_icon_desc),
           tint = MaterialTheme.colorScheme.onPrimary,
-          modifier = Modifier.size(18.dp),
+          modifier = Modifier.size(ComposerIconSize),
       )
 
       if (!isCircle) {
-        Spacer(modifier = Modifier.width(6.dp))
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = stringResource(R.string.composer_voice_button_text),
             style = MaterialTheme.typography.labelLarge,
+            fontSize = ComposerFontSize,
         )
       }
     }
   }
 }
+
+private val InputMethodVerticalPadding = 10.dp

@@ -18,15 +18,15 @@ import androidx.compose.ui.text.input.TextFieldValue
 
 @Composable
 fun UserInputRow(
-  inputText: String,
-  inputMode: MessageInputModeUiState?,
-  voiceRecordingUiStateHolder: State<VoiceRecordingUiState>,
-  inputModeSetActions: InputModeSetActions,
-  onInputTextChange: (String) -> Unit,
-  onSendText: () -> Unit,
-  onSendVoice: () -> Unit,
-  onCancelVoiceRecoding: () -> Unit,
-  modifier: Modifier = Modifier,
+    inputText: String,
+    inputMode: MessageInputModeUiState?,
+    voiceRecordingUiStateHolder: State<VoiceRecordingUiState>,
+    inputModeSetActions: InputModeSetActions,
+    onInputTextChange: (String) -> Unit,
+    onSendText: () -> Unit,
+    onSendVoice: () -> Unit,
+    onCancelVoiceRecoding: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
   // Put textFieldValueState on parent component, so it's state can be saved even
   // it switched to Voice input.
@@ -81,6 +81,7 @@ fun UserInputRow(
                 }
               },
               onSendText = onSendText,
+              modifier = modifier,
           )
     }
   }

@@ -7,10 +7,12 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -24,7 +26,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -35,8 +36,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
 
@@ -69,7 +70,7 @@ private fun VoiceRecordingContent(
     amplitudes: List<Float> = emptyList(),
 ) {
   // 1. Efficient Blinking Animation (no coroutine overhead)
-  val infiniteTransition = rememberInfiniteTransition(label = "recording_pulse")
+  val infiniteTransition = rememberInfiniteTransition(label = "RecordingPulse")
   val redDotAlpha by
       infiniteTransition.animateFloat(
           initialValue = 1f,
@@ -79,72 +80,74 @@ private fun VoiceRecordingContent(
                   animation = tween(durationMillis = 600, easing = FastOutSlowInEasing),
                   repeatMode = RepeatMode.Reverse,
               ),
-          label = "red_dot_alpha",
+          label = "RedDotAlpha",
       )
-
   Row(
-      modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+      modifier =
+          modifier
+              .fillMaxWidth()
+              .height(IntrinsicSize.Min)
+              .padding(horizontal = 8.dp, vertical = 4.dp),
       verticalAlignment = Alignment.CenterVertically,
       horizontalArrangement = Arrangement.spacedBy(8.dp),
   ) {
-    // Main Pill Container (Recording info + visualizer + delete)
-    Surface(
-        modifier = Modifier.weight(1f).height(48.dp),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        tonalElevation = 2.dp,
+    // Main Pill Container
+    Row(
+        modifier =
+            Modifier.weight(1f)
+                .fillMaxHeight()
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      Row(
-          modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-          verticalAlignment = Alignment.CenterVertically,
+      // Delete / Cancel Button (secondary, prefer box instead of IconButton whose minimal size is
+      // 48.dp)
+      Box(
+          modifier =
+              // 48.dp - padding(12.dp) = 36, circle clip should be fine
+              Modifier.size(36.dp)
+                  .clip(CircleShape)
+                  .clickable(role = Role.Button, onClick = onCancel),
+          contentAlignment = Alignment.Center,
       ) {
-        // Delete / Cancel Button
-        IconButton(
-            onClick = onCancel,
-            modifier = Modifier.size(36.dp),
-        ) {
-          Icon(
-              imageVector = Icons.Default.Delete,
-              contentDescription = stringResource(R.string.composer_delete_voice_btn_desc),
-              tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-              modifier = Modifier.size(22.dp),
-          )
-        }
-
-        Spacer(modifier = Modifier.width(4.dp))
-
-        // Pulsing Red Dot
-        Box(modifier = Modifier.size(10.dp).alpha(redDotAlpha).background(WhatsAppRed, CircleShape))
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        // Elapsed Recording Time
-        Text(
-            text = voiceRecordingUiState.elapsed.toAppMessageTimeFormat(),
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        // Sound Wave Amplitude Visualizer
-        AudioWaveVisualizer(
-            modifier = Modifier.weight(1f).height(24.dp),
-            amplitudes = amplitudes,
+        Icon(
+            imageVector = Icons.Default.Delete,
+            contentDescription = stringResource(R.string.composer_delete_voice_btn_desc),
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(ComposerIconSize),
         )
       }
+
+      // Pulsing Red Dot
+      Box(modifier = Modifier.size(10.dp).alpha(redDotAlpha).background(WhatsAppRed, CircleShape))
+
+      // Elapsed Recording Time
+      Text(
+          text = voiceRecordingUiState.elapsed.toAppMessageTimeFormat(),
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurface,
+      )
+
+      // Sound Wave Amplitude Visualizer
+      AudioWaveVisualizer(
+          modifier = Modifier.weight(1f).height(24.dp),
+          amplitudes = amplitudes,
+      )
     }
 
-    // Send button
+    // Send button. As the height bar
     IconButton(
         onClick = onSend,
-        modifier = Modifier.size(48.dp).clip(CircleShape).background(WhatsAppGreen),
+        modifier =
+            Modifier.size(ComposerMinActionHeight).clip(CircleShape).background(WhatsAppGreen),
     ) {
       Icon(
           imageVector = Icons.AutoMirrored.Filled.Send,
           contentDescription = stringResource(R.string.composer_send_voice_btn_desc),
           tint = Color.White,
-          modifier = Modifier.size(22.dp),
+          modifier = Modifier.size(ComposerIconSize),
       )
     }
   }

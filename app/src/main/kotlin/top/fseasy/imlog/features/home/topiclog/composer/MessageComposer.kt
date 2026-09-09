@@ -212,7 +212,6 @@ fun MessageComposerContent(
             onSendText = onSendText,
             onSendVoice = onSendVoice,
             onCancelVoiceRecoding = onCancelVoiceRecoding,
-            modifier = modifier,
         )
       }
       AttachmentExpanded(
@@ -221,7 +220,6 @@ fun MessageComposerContent(
           onSelectAudios = onSelectAudios,
           onSelectFiles = onSelectFiles,
           closeExpanded = onCloseExpanded,
-          modifier = modifier,
           height = 72.dp, // TODO: set it to IME height to avoid menu row jitter
       )
     }
