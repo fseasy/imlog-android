@@ -16,10 +16,19 @@ import top.fseasy.imlog.ui.model.toUiModel
 import top.fseasy.imlog.ui.util.ImTimeUtils
 import top.fseasy.imlog.ui.util.toJavaInstant
 
+/** Used in Home Top Bar More Menu */
+@Immutable
+data class MoreOptionMenuAction(
+    val onCreateTopic: () -> Unit,
+    val onOpenAppSettings: () -> Unit,
+)
+
+/** For message snippet showing in home topic item */
 @Immutable data class MessageSnippet(val header: String, val content: String)
 
+/** Each Home Topic item */
 @Immutable
-data class TopicUiModel(
+data class HomeTopicUiModel(
     val id: TopicId,
     val name: String,
     val avatarUiModel: TopicAvatarUiModel,
@@ -33,7 +42,7 @@ fun HomeTopic.toUiModel(
     currentUserId: UserId,
     storagePathUseCase: StoragePathUseCase,
     context: Context,
-): TopicUiModel {
+): HomeTopicUiModel {
   val avatarUiModel = avatarModel.toUiModel { filename ->
     buildTopicAvatarNioPath(
         signInUserId = currentUserId,
@@ -50,7 +59,7 @@ fun HomeTopic.toUiModel(
           description = description,
           context = context,
       )
-  return TopicUiModel(
+  return HomeTopicUiModel(
       id = id,
       name = name,
       avatarUiModel = avatarUiModel,
@@ -118,7 +127,8 @@ fun MessagePreview.toMessageSnippet(
     parts.add("[${context.getString(typeNoteResId)}]")
   }
   if (text != null) {
-    parts.add(text)
+    // Trim spaces of message
+    parts.add(text.trim())
   }
   return MessageSnippet(header = "", content = parts.joinToString(" "))
 }

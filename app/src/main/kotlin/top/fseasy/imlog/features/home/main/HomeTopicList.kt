@@ -1,9 +1,8 @@
 package top.fseasy.imlog.features.home.main
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -25,13 +24,13 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.ui.components.AppCircularProgress
 
 @Composable
-internal fun TopicItemList(
+internal fun HomeTopicList(
     onClickTopic: (TopicId) -> Unit,
     onClickTopicSetting: (TopicId) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: TopicListViewModel = hiltViewModel(),
+    viewModel: HomeTopicListViewModel = hiltViewModel(),
 ) {
-  val topicsState by viewModel.topicsUiStateFlow.collectAsStateWithLifecycle()
+  val topicsState by viewModel.topicListUiStateFlow.collectAsStateWithLifecycle()
 
   TopicItemListDispatcher(
       topicsState = topicsState,
@@ -44,7 +43,7 @@ internal fun TopicItemList(
 
 @Composable
 private fun TopicItemListDispatcher(
-    topicsState: TopicsUiState,
+    topicsState: HomeTopicListUiState,
     modifier: Modifier = Modifier,
     onClickTopic: (TopicId) -> Unit,
     onTogglePin: (TopicId, Boolean) -> Unit,
@@ -71,8 +70,8 @@ private fun TopicItemListDispatcher(
 }
 
 @Composable
-private fun TopicItemListContent(
-    topics: List<TopicUiModel>,
+internal fun TopicItemListContent(
+    topics: List<HomeTopicUiModel>,
     onClickTopic: (TopicId) -> Unit,
     onTogglePin: (TopicId, Boolean) -> Unit,
     onClickTopicSetting: (TopicId) -> Unit,
@@ -89,14 +88,13 @@ private fun TopicItemListContent(
   }
 
   LazyColumn(
-      modifier = modifier.fillMaxSize(),
+      // Extra 16.dp to padding the top area
+      modifier = modifier.fillMaxSize().padding(top = 16.dp),
       state = listState,
-      contentPadding = PaddingValues(16.dp),
-      verticalArrangement = Arrangement.spacedBy(8.dp),
   ) {
     // key MUST use .value as it should be savable in bundle
     items(topics, key = { it.id.value }) { topic ->
-      TopicItemCard(
+      HomeTopicListItem(
           topic = topic,
           isContextMenuVisible = activeMenuTopicId == topic.id,
           onDismissContextMenu = { activeMenuTopicId = null },
@@ -115,7 +113,6 @@ private fun TopicItemListContent(
             activeMenuTopicId = null
             onClickTopicSetting(topic.id)
           },
-          modifier = modifier,
       )
     }
   }

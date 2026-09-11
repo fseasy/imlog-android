@@ -35,6 +35,15 @@ private val LightColorScheme =
         surfaceVariant = SurfaceVariantLight,
         onSurfaceVariant = OnSurfaceVariantLight,
         error = ErrorLight,
+        onError = OnErrorLight,
+        errorContainer = ErrorContainerLight,
+        onErrorContainer = OnErrorContainerLight,
+        outline = OutlineLight,
+        outlineVariant = OutlineVariantLight,
+        inversePrimary = InversePrimaryLight,
+        inverseOnSurface = InverseOnSurfaceLight,
+        inverseSurface = InverseSurfaceLight,
+        scrim = ScrimLight,
     )
 
 private val DarkColorScheme =
@@ -58,6 +67,15 @@ private val DarkColorScheme =
         surfaceVariant = SurfaceVariantDark,
         onSurfaceVariant = OnSurfaceVariantDark,
         error = ErrorDark,
+        onError = OnErrorDark,
+        errorContainer = ErrorContainerDark,
+        onErrorContainer = OnErrorContainerDark,
+        outline = OutlineDark,
+        outlineVariant = OutlineVariantDark,
+        inversePrimary = InversePrimaryDark,
+        inverseOnSurface = InverseOnSurfaceDark,
+        inverseSurface = InverseSurfaceDark,
+        scrim = ScrimDark,
     )
 
 @Composable

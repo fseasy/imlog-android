@@ -23,13 +23,13 @@ import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import javax.inject.Inject
 
-data class TopicsUiState(
+data class HomeTopicListUiState(
   val loading: Boolean = true,
-  val topics: List<TopicUiModel> = emptyList(),
+  val topics: List<HomeTopicUiModel> = emptyList(),
 )
 
 @HiltViewModel
-class TopicListViewModel
+class HomeTopicListViewModel
 @Inject
 constructor(
     userRepository: UserRepository,
@@ -41,12 +41,12 @@ constructor(
   private val _authStateFlow = userRepository.authState
 
   @OptIn(ExperimentalCoroutinesApi::class)
-  val topicsUiStateFlow: StateFlow<TopicsUiState> =
+  val topicListUiStateFlow: StateFlow<HomeTopicListUiState> =
       _authStateFlow
           .filterIsInstance<AuthState.Authenticated>()
           .flatMapLatest { state ->
             topicRepository.observeHomeTopics(state.userId).map { topics ->
-              TopicsUiState(
+              HomeTopicListUiState(
                   loading = false,
                   topics =
                       topics.map {
@@ -63,7 +63,7 @@ constructor(
           .stateIn(
               scope = viewModelScope,
               started = SharingStarted.WhileSubscribed(5000),
-              initialValue = TopicsUiState(),
+              initialValue = HomeTopicListUiState(),
           )
 
   fun pinTopic(topicId: TopicId, currentPinState: Boolean) {
