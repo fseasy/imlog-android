@@ -66,7 +66,6 @@ fun HomeTopicListItem(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-      // 1. 头像
       TopicAvatar(
           name = topic.name,
           avatar = topic.avatarUiModel,
@@ -75,12 +74,10 @@ fun HomeTopicListItem(
 
       Spacer(modifier = Modifier.width(16.dp))
 
-      // 2. 右侧主体内容（上下两行独立约束）
       Column(
           modifier = Modifier.weight(1f),
           verticalArrangement = Arrangement.Center,
       ) {
-        // 第一行：联系人/群名 + 时间戳
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -92,7 +89,6 @@ fun HomeTopicListItem(
               color = MaterialTheme.colorScheme.onSurface,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
-              // fill = false 保证名字短时按实际宽度绘制，名字超长时才截断，绝不挤压时间
               modifier = Modifier.weight(1f, fill = false),
           )
 
@@ -101,7 +97,6 @@ fun HomeTopicListItem(
           Text(
               text = topic.messageFormatedUpdatedAt,
               style = MaterialTheme.typography.labelSmall,
-              // WhatsApp 细节：有未读消息时，时间戳文字会变成高亮绿色
               color =
                   if (topic.hasUnread) {
                     MaterialTheme.colorScheme.primary
@@ -113,7 +108,6 @@ fun HomeTopicListItem(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // 第二行：消息摘要 + 状态标记（置顶 / 未读）
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -124,11 +118,9 @@ fun HomeTopicListItem(
               color = MaterialTheme.colorScheme.onSurfaceVariant,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis,
-              // weight(1f) 会吃满第二行所有的剩余空间
               modifier = Modifier.weight(1f),
           )
 
-          // 关键点：仅在有图标时介入布局；无状态时整个 Row 不存在，Snippet 直接顶到最右侧
           if (topic.isPinned || topic.hasUnread) {
             Spacer(modifier = Modifier.width(8.dp))
             Row(
@@ -145,7 +137,6 @@ fun HomeTopicListItem(
               }
 
               if (topic.hasUnread) {
-                // 如果后续需要支持未读数量，这里可以替换为带数字的绿色 Badge
                 Box(
                     modifier =
                         Modifier.size(8.dp)

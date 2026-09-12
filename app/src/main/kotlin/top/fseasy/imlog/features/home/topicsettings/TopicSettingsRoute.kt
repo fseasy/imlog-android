@@ -1,23 +1,28 @@
 package top.fseasy.imlog.features.home.topicsettings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,17 +32,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.R
+import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.features.home.getArchiveListItemResource
 import top.fseasy.imlog.features.home.getPinListItemResource
 import top.fseasy.imlog.ui.components.AppCircularProgress
 import top.fseasy.imlog.ui.components.AppInternalErrorContent
+import top.fseasy.imlog.ui.model.AvatarUiModel
+import top.fseasy.imlog.ui.model.random
+import top.fseasy.imlog.ui.theme.ImlogTheme
 
 @Composable
-fun TopicSettingsSheet(
+fun TopicSettingsRoute(
     onBack: () -> Unit,
     afterDeleteNavigate: () -> Unit,
     viewModel: TopicSettingsViewModel = hiltViewModel(),
@@ -50,7 +60,7 @@ fun TopicSettingsSheet(
         AppInternalErrorContent((uiState as TopicSettingsUiState.Error).userFriendlyReason)
     is TopicSettingsUiState.Success,
     ->
-        TopicSettingsSheetContent(
+        TopicSettingsContent(
             uiState = uiState as TopicSettingsUiState.Success,
             onBack = onBack,
             onTogglePin = { viewModel.togglePin() },
@@ -66,85 +76,97 @@ fun TopicSettingsSheet(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TopicSettingsSheetContent(
+internal fun TopicSettingsContent(
     uiState: TopicSettingsUiState.Success,
     onBack: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleArchive: () -> Unit,
     onDeleteTopic: () -> Unit,
     onUpdateTopicName: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-  val sheetState = rememberModalBottomSheetState()
-
   var showEditNameDialog by remember { mutableStateOf(false) }
   var showDeleteDialog by remember { mutableStateOf(false) }
 
-  ModalBottomSheet(
-      onDismissRequest = onBack,
-      sheetState = sheetState,
-  ) {
-    Column(modifier = Modifier.padding(16.dp)) {
-      Text(
-          text = stringResource(R.string.topic_settings_title),
-          style = MaterialTheme.typography.titleLarge,
-          modifier = Modifier.padding(bottom = 16.dp),
-      )
-
+  Scaffold(
+      modifier = modifier.fillMaxSize(),
+      topBar = {
+        TopAppBar(
+            title = { Text(stringResource(R.string.topic_settings_title)) },
+            navigationIcon = {
+              IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.term_back),
+                )
+              }
+            },
+        )
+      },
+  ) { innerPadding ->
+    Column(
+        modifier =
+            Modifier.fillMaxSize().padding(innerPadding).verticalScroll(rememberScrollState())
+    ) {
       ListItem(
           headlineContent = { Text(stringResource(R.string.topic_settings_edit_name)) },
           supportingContent = { Text(uiState.topic.name) },
           leadingContent = { Icon(painterResource(R.drawable.icon_image), null) },
-          modifier = Modifier.fillMaxWidth(),
+          modifier = Modifier.fillMaxWidth().clickable { showEditNameDialog = true },
       )
+      HorizontalDivider()
 
       TopicPinSetting(
-          isPinned = uiState.preference.isPinned,
+          isPinned = uiState.topic.isPinned,
           onTogglePin = onTogglePin,
           modifier = Modifier,
       )
 
       TopicArchiveSetting(
-          isArchived = uiState.preference.isArchived,
+          isArchived = uiState.topic.isArchived,
           onToggleArchive = onToggleArchive,
           modifier = Modifier,
       )
 
-      Spacer(modifier = Modifier.height(32.dp))
+      HorizontalDivider()
 
-      TextButton(
-          onClick = { showDeleteDialog = true },
-          modifier = Modifier.fillMaxWidth(),
-      ) {
-        Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            stringResource(R.string.topic_settings_delete_topic),
-            color = MaterialTheme.colorScheme.error,
-        )
-      }
-
-      Spacer(modifier = Modifier.height(32.dp))
+      ListItem(
+          headlineContent = {
+            Text(
+                text = stringResource(R.string.topic_settings_delete_topic),
+                color = MaterialTheme.colorScheme.error,
+            )
+          },
+          leadingContent = {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+            )
+          },
+          modifier = Modifier.fillMaxWidth().clickable { showDeleteDialog = true },
+      )
     }
-  }
 
-  if (showEditNameDialog) {
-    EditTopicNameDialog(
-        onDismiss = { showEditNameDialog = false },
-        onConfirm = { newName ->
-          onUpdateTopicName(newName)
-          showEditNameDialog = false
-        },
-    )
-  }
+    if (showEditNameDialog) {
+      EditTopicNameDialog(
+          onDismiss = { showEditNameDialog = false },
+          onConfirm = { newName ->
+            onUpdateTopicName(newName)
+            showEditNameDialog = false
+          },
+      )
+    }
 
-  if (showDeleteDialog) {
-    DeleteTopicDialog(
-        onDismiss = { showDeleteDialog = false },
-        onConfirm = {
-          showDeleteDialog = false
-          onDeleteTopic()
-        },
-    )
+    if (showDeleteDialog) {
+      DeleteTopicDialog(
+          onDismiss = { showDeleteDialog = false },
+          onConfirm = {
+            showDeleteDialog = false
+            onDeleteTopic()
+          },
+      )
+    }
   }
 }
 
@@ -168,12 +190,13 @@ private fun TopicPinSetting(
             contentDescription = null,
         )
       },
-      modifier = modifier.fillMaxWidth(),
       trailingContent = {
-        TextButton(onClick = onTogglePin) {
-          Text(stringResource(res.buttonStringRes))
-        }
+        Switch(
+            checked = isPinned,
+            onCheckedChange = { onTogglePin() },
+        )
       },
+      modifier = modifier.fillMaxWidth().clickable { onTogglePin() },
   )
 }
 
@@ -197,12 +220,13 @@ private fun TopicArchiveSetting(
             contentDescription = null,
         )
       },
-      modifier = modifier.fillMaxWidth(),
       trailingContent = {
-        TextButton(onClick = onToggleArchive) {
-          Text(stringResource(res.buttonStringRes))
-        }
+        Switch(
+            checked = isArchived,
+            onCheckedChange = { onToggleArchive() },
+        )
       },
+      modifier = modifier.fillMaxWidth().clickable { onToggleArchive() },
   )
 }
 
@@ -257,4 +281,32 @@ fun DeleteTopicDialog(
         }
       },
   )
+}
+
+@Preview("Topic Setting Content", showBackground = true, showSystemUi = true)
+@Composable
+fun TopicSettingContentPreview() {
+  val uiState =
+      TopicSettingsUiState.Success(
+          userId = UserId.random(),
+          topic =
+              SettingsTopicUiModel(
+                  id = TopicId.random(),
+                  name = "Dummy Topic",
+                  avatarUiModel = AvatarUiModel.Preset.random(),
+                  description = null,
+                  isPinned = false,
+                  isArchived = false,
+              ),
+      )
+  ImlogTheme() {
+    TopicSettingsContent(
+        uiState = uiState,
+        onBack = {},
+        onTogglePin = {},
+        onToggleArchive = {},
+        onDeleteTopic = {},
+        onUpdateTopicName = {},
+    )
+  }
 }

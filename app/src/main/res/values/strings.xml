@@ -118,4 +118,5 @@
     <string name="composer_recording_fail_on_permission">Failed to Record Due to No Permissions</string>
     <string name="topic_log_empty_text">No Logs Yet.</string>
     <string name="term_pinned">Pinned</string>
+    <string name="term_back">Back</string>
 </resources>

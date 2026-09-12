@@ -1,8 +1,5 @@
 package top.fseasy.imlog.navigation
 
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.core.tween
-import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
@@ -11,7 +8,7 @@ import kotlinx.serialization.Serializable
 import top.fseasy.imlog.features.MainTabsRoute
 import top.fseasy.imlog.features.home.createtopic.CreateTopicRoute
 import top.fseasy.imlog.features.home.topiclog.TopicLogRoute
-import top.fseasy.imlog.features.home.topicsettings.TopicSettingsSheet
+import top.fseasy.imlog.features.home.topicsettings.TopicSettingsRoute
 import top.fseasy.imlog.features.settings.AboutScreen
 import top.fseasy.imlog.features.settings.AppSettingsRoute
 import top.fseasy.imlog.features.settings.FeedbackScreen
@@ -46,13 +43,9 @@ fun NavGraphBuilder.mainGraph(
     onSignedOutNavigate: () -> Unit,
 ) {
 
-  fun AnimatedContentTransitionScope<NavBackStackEntry>.slideOutAnimation() =
-      slideOutOfContainer(
-          towards = AnimatedContentTransitionScope.SlideDirection.End,
-          animationSpec = tween(300),
-      )
-
-  navigation<MainGraph>(startDestination = MainScreen.MainTabs) {
+  navigation<MainGraph>(
+      startDestination = MainScreen.MainTabs,
+  ) {
     composable<MainScreen.MainTabs> {
       MainTabsRoute(
           onNavigateToTopic = { topicId ->
@@ -65,10 +58,7 @@ fun NavGraphBuilder.mainGraph(
           onNavigateToCreateTopic = { navController.navigate(MainScreen.CreateTopic) },
       )
     }
-    composable<MainScreen.TopicLog>(
-        exitTransition = { slideOutAnimation() },
-        popExitTransition = { slideOutAnimation() },
-    ) {
+    composable<MainScreen.TopicLog> {
       TopicLogRoute(
           onNavigateBack = { navController.popBackStack() },
           onSettingsClick = { topicId ->
@@ -77,7 +67,7 @@ fun NavGraphBuilder.mainGraph(
       )
     }
     composable<MainScreen.TopicSettings> {
-      TopicSettingsSheet(
+      TopicSettingsRoute(
           onBack = { navController.popBackStack() },
           afterDeleteNavigate = {
             navController.popBackStack(MainScreen.MainTabs, inclusive = false)

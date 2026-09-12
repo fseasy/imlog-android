@@ -17,23 +17,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.AuthState
-import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.domain.model.TopicPreference
-import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
+import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.navigation.MainScreen
 import javax.inject.Inject
-
-sealed interface TopicSettingsUiState {
-  data object Loading : TopicSettingsUiState
-
-  data class Error(val userFriendlyReason: String) : TopicSettingsUiState
-
-  data class Success(val userId: UserId, val topic: Topic, val preference: TopicPreference) :
-      TopicSettingsUiState
-}
 
 @HiltViewModel
 class TopicSettingsViewModel
@@ -41,7 +30,8 @@ class TopicSettingsViewModel
 constructor(
     savedStateHandle: SavedStateHandle,
     private val topicRepository: TopicRepository,
-    private val userRepository: UserRepository,
+    userRepository: UserRepository,
+    storagePathUseCase: StoragePathUseCase,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -66,8 +56,13 @@ constructor(
               } else {
                 TopicSettingsUiState.Success(
                     userId = preference.userId,
-                    topic = topic,
-                    preference = preference,
+                    topic =
+                        buildSettingsTopicUiModel(
+                            storagePathUseCase = storagePathUseCase,
+                            context = context,
+                            topic = topic,
+                            preference = preference,
+                        ),
                 )
               }
             }
@@ -93,7 +88,7 @@ constructor(
       topicRepository.pinTopic(
           userId = state.userId,
           topicId = topicId,
-          pinned = !state.preference.isPinned,
+          pinned = !state.topic.isPinned,
       )
     }
   }
@@ -103,7 +98,7 @@ constructor(
       topicRepository.archiveTopic(
           userId = state.userId,
           topicId = topicId,
-          archived = !state.preference.isArchived,
+          archived = !state.topic.isArchived,
       )
     }
   }
