@@ -8,6 +8,10 @@ val SurfaceLight = BackgroundLight
 val OnSurfaceLight = OnBackgroundLight
 val SurfaceVariantLight = Color(0xFFEBEFED)
 val OnSurfaceVariantLight = Color(0xFF5B625E)
+val SurfaceContainerLowLight = Color(0xFFF3F5F3)
+val SurfaceContainerLight = Color(0xFFEDEFEC)
+val SurfaceContainerHighLight = Color(0xFFFFFFFF) // or WeChat Color(0xFFE7E9E6)
+val SurfaceContainerHighestLight = Color(0xFFE1E4E1)
 
 val BackgroundDark = Color(0xFF111413)
 val OnBackgroundDark = Color(0xFFE1E3E0)
@@ -15,6 +19,10 @@ val SurfaceDark = Color(0xFF191C1B)
 val OnSurfaceDark = Color(0xFFE1E3E0)
 val SurfaceVariantDark = Color(0xFF2D3330)
 val OnSurfaceVariantDark = Color(0xFFC0C7C3)
+val SurfaceContainerLowDark = Color(0xFF1D201F)
+val SurfaceContainerDark = Color(0xFF222523)
+val SurfaceContainerHighDark = Color(0xFF2C302E)
+val SurfaceContainerHighestDark = Color(0xFF373B39)
 
 val PrimaryLight = Color(0xFF4E7C6D)
 val OnPrimaryLight = Color(0xFFFFFFFF)

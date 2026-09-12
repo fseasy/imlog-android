@@ -2,7 +2,6 @@ package top.fseasy.imlog.features.home.main
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,8 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,23 +40,10 @@ import top.fseasy.imlog.ui.model.toCoilModel
 @Composable
 fun HomeTopicListItem(
     topic: HomeTopicUiModel,
-    isContextMenuVisible: Boolean,
-    onDismissContextMenu: () -> Unit,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onPinClick: () -> Unit,
-    onSettingClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
   Box(
-      modifier =
-          modifier
-              .fillMaxWidth()
-              .combinedClickable(
-                  onClick = onClick,
-                  onLongClick = onLongClick,
-              )
-              .padding(horizontal = 16.dp, vertical = 16.dp),
+      modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
       contentAlignment = Alignment.CenterStart,
   ) {
     Row(
@@ -149,14 +133,6 @@ fun HomeTopicListItem(
         }
       }
     }
-
-    TopicDropdownMenuContent(
-        topic = topic,
-        isContextMenuVisible = isContextMenuVisible,
-        onDismissContextMenu = onDismissContextMenu,
-        onPinClick = onPinClick,
-        onSettingClick = onSettingClick,
-    )
   }
 }
 
@@ -192,31 +168,5 @@ private fun MessageSnippet.toAnnotatedString(): AnnotatedString {
       }
     }
     append(content)
-  }
-}
-
-/** menu is short, so choose the Dropdown menu in each TopicCard. */
-@Composable
-private fun TopicDropdownMenuContent(
-    isContextMenuVisible: Boolean,
-    onDismissContextMenu: () -> Unit,
-    topic: HomeTopicUiModel,
-    onPinClick: () -> Unit,
-    onSettingClick: () -> Unit,
-) {
-  val pinButtonRes =
-      if (topic.isPinned) R.string.topic_settings_btn_unpin else R.string.topic_settings_btn_pin
-  DropdownMenu(
-      expanded = isContextMenuVisible,
-      onDismissRequest = onDismissContextMenu,
-  ) {
-    DropdownMenuItem(
-        text = { Text(stringResource(pinButtonRes)) },
-        onClick = onPinClick,
-    )
-    DropdownMenuItem(
-        text = { Text(stringResource(R.string.btn_setting)) },
-        onClick = onSettingClick,
-    )
   }
 }

@@ -1,27 +1,34 @@
 package top.fseasy.imlog.features.home.main
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.features.home.getPinListItemResource
 import top.fseasy.imlog.ui.components.AppCircularProgress
+import top.fseasy.imlog.ui.components.contextmenu.ContextMenuItem
+import top.fseasy.imlog.ui.components.contextmenu.VerticalContextMenu
+import top.fseasy.imlog.ui.components.contextmenu.contextMenuClickable
+import top.fseasy.imlog.ui.components.contextmenu.rememberContextMenuState
 
 @Composable
 internal fun HomeTopicList(
@@ -50,7 +57,12 @@ private fun TopicItemListDispatcher(
     onClickTopicSetting: (TopicId) -> Unit,
 ) {
   if (topicsState.loading) {
-    AppCircularProgress(modifier = modifier)
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+      Row {
+        AppCircularProgress(modifier = modifier)
+        Text(stringResource(R.string.term_loading))
+      }
+    }
   } else if (topicsState.topics.isEmpty()) {
     Box(
         modifier = modifier,
@@ -77,13 +89,13 @@ internal fun TopicItemListContent(
     onClickTopicSetting: (TopicId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-  var activeMenuTopicId by remember { mutableStateOf<TopicId?>(null) }
+  val contextMenuState = rememberContextMenuState<HomeTopicUiModel>()
   val listState = rememberLazyListState()
 
   // When scrolling, dismiss the dropdown menu
   LaunchedEffect(listState.isScrollInProgress) {
     if (listState.isScrollInProgress) {
-      activeMenuTopicId = null
+      contextMenuState.dismiss()
     }
   }
 
@@ -96,24 +108,36 @@ internal fun TopicItemListContent(
     items(topics, key = { it.id.value }) { topic ->
       HomeTopicListItem(
           topic = topic,
-          isContextMenuVisible = activeMenuTopicId == topic.id,
-          onDismissContextMenu = { activeMenuTopicId = null },
-          onClick = {
-            activeMenuTopicId = null
-            onClickTopic(topic.id)
-          },
-          onLongClick = {
-            activeMenuTopicId = topic.id
-          },
-          onPinClick = {
-            activeMenuTopicId = null
-            onTogglePin(topic.id, topic.isPinned)
-          },
-          onSettingClick = {
-            activeMenuTopicId = null
-            onClickTopicSetting(topic.id)
-          },
+          modifier =
+              Modifier.contextMenuClickable(
+                  onClick = { onClickTopic(topic.id) },
+                  onLongClickWithPosition = { position ->
+                    contextMenuState.show(topic, position)
+                  },
+              ),
       )
     }
   }
+  // Context Menu in Global level, it's an independent tree, don't need to be wrap with the
+  // lazyColumn
+  VerticalContextMenu(
+      state = contextMenuState,
+      items = { currentTopic ->
+        val pinRes = getPinListItemResource(currentTopic.isPinned)
+        listOf(
+            ContextMenuItem(
+                title = stringResource(pinRes.buttonStringRes),
+                iconVector = ImageVector.vectorResource(pinRes.iconRes),
+                isDestructive = false,
+                onClick = { onTogglePin(currentTopic.id, currentTopic.isPinned) },
+            ),
+            ContextMenuItem(
+                title = stringResource(R.string.btn_setting),
+                iconVector = Icons.Default.Settings,
+                isDestructive = false,
+                onClick = { onClickTopicSetting(currentTopic.id) },
+            ),
+        )
+      },
+  )
 }
