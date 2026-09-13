@@ -6,7 +6,12 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.DividerDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -199,8 +204,12 @@ fun MessageComposerContent(
     }
   }
 
-  Surface(tonalElevation = 2.dp, contentColor = MaterialTheme.colorScheme.secondary) {
-    Column(modifier = modifier) {
+  Surface(modifier = modifier.imePadding()) {
+    Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
+      HorizontalDivider(
+          thickness = DividerDefaults.Thickness,
+          color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+      )
       // TODO: add the QuoteMessage Panel
       CompositionLocalProvider(LocalComposerFocusRequester provides focusRequester) {
         UserInputRow(

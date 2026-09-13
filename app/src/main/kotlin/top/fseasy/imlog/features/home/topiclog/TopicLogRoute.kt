@@ -10,9 +10,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -265,13 +265,13 @@ private fun TopicLogContent(
       snackbarHost = { SnackbarHost(snackbarHostState) },
       modifier = modifier.fillMaxSize(),
   ) { paddingValues ->
+    val topPadding = paddingValues.calculateTopPadding()
     Column(
         modifier =
             Modifier.fillMaxSize()
-                //                .padding(top = paddingValues.calculateTopPadding())
-                .padding(paddingValues)
-                .consumeWindowInsets(paddingValues)
-                .imePadding()
+                // NOTE: only consider top padding, leaving the bottom padding to the composer
+                .padding(top = topPadding)
+                .consumeWindowInsets(PaddingValues(top = topPadding))
     ) {
       timelineSection(Modifier.weight(1f))
 
