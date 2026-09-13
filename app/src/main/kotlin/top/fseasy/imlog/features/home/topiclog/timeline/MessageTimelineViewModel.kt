@@ -11,6 +11,7 @@ import androidx.paging.insertSeparators
 import androidx.paging.map
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterIsInstance
@@ -23,9 +24,7 @@ import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.navigation.MainScreen
 import top.fseasy.imlog.ui.util.ImTimeUtils
-import top.fseasy.imlog.ui.util.toJavaInstant
 import top.fseasy.imlog.ui.util.toLocaleEpochDays
-import javax.inject.Inject
 
 @HiltViewModel
 class MessageTimelineViewModel
@@ -60,7 +59,11 @@ constructor(
             }
             .map { pagingMessageUiModel ->
               pagingMessageUiModel.insertSeparators { newer, older ->
-                pagingDataInsertSeparators(newerMessageItem = newer, olderMessageItem = older)
+                pagingDataInsertSeparators(
+                    context,
+                    newerMessageItem = newer,
+                    olderMessageItem = older,
+                )
               }
             }
             .cachedIn(viewModelScope)
@@ -91,6 +94,7 @@ constructor(
  * So don't worry about any weird separator occurs after new paging data loaded
  */
 private fun pagingDataInsertSeparators(
+    context: Context,
     newerMessageItem: TimelineItemUiModel?,
     olderMessageItem: TimelineItemUiModel?,
 ): TimelineItemUiModel? {
@@ -103,7 +107,7 @@ private fun pagingDataInsertSeparators(
     val keyInstant = newerMessage.createdAt
     return TimelineItemUiModel.DateSeparator(
         separatingDateMs = keyInstant.toEpochMilliseconds(),
-        formatedText = ImTimeUtils.formatImDay(keyInstant.toJavaInstant()),
+        formatedText = ImTimeUtils.formatImDay(context, instant = keyInstant),
     )
   }
   val newerMessageDay = newerMessage.createdAt.toLocaleEpochDays()
@@ -113,7 +117,7 @@ private fun pagingDataInsertSeparators(
     val keyInstant = newerMessage.createdAt
     return TimelineItemUiModel.DateSeparator(
         separatingDateMs = keyInstant.toEpochMilliseconds(),
-        formatedText = ImTimeUtils.formatImDay(keyInstant.toJavaInstant()),
+        formatedText = ImTimeUtils.formatImDay(context, instant = keyInstant),
     )
   }
   // same day. no separator

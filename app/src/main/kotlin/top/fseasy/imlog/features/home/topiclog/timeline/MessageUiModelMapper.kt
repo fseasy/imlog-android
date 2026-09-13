@@ -31,7 +31,6 @@ import kotlin.math.absoluteValue
 import kotlin.math.sin
 import kotlin.time.Duration
 import kotlin.time.Instant
-import kotlin.time.toJavaInstant
 
 fun QuotedMessageSender.toUiModel(
     signInUserId: UserId,
@@ -275,7 +274,7 @@ fun TimelineMessage.toUiModel(
               context = context,
           ),
       createdAt = createdAt,
-      formatedCreatedAt = ImTimeUtils.formatImTime(createdAt.toJavaInstant()),
+      formatedCreatedAt = ImTimeUtils.formatMessageTime(context, instant = createdAt),
   )
 }
 

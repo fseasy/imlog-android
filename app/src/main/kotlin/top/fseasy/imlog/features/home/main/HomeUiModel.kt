@@ -14,7 +14,6 @@ import top.fseasy.imlog.ui.model.TopicAvatarUiModel
 import top.fseasy.imlog.ui.model.buildTopicAvatarNioPath
 import top.fseasy.imlog.ui.model.toUiModel
 import top.fseasy.imlog.ui.util.ImTimeUtils
-import top.fseasy.imlog.ui.util.toJavaInstant
 
 /** Used in Home Top Bar More Menu */
 @Immutable
@@ -65,7 +64,8 @@ fun HomeTopic.toUiModel(
       avatarUiModel = avatarUiModel,
       isPinned = isPinned,
       hasUnread = hasUnread,
-      messageFormatedUpdatedAt = ImTimeUtils.formatImTime(messageUpdatedAt.toJavaInstant()),
+      messageFormatedUpdatedAt =
+          ImTimeUtils.formatImTimeSummary(context, instant = messageUpdatedAt),
       messageSnippet = messageSnippet,
   )
 }
