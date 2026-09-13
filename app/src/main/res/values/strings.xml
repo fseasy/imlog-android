@@ -42,7 +42,7 @@
     <string name="select_storage_all_set">All Set</string>
     <string name="topic_initial_name">The Moment</string>
     <string name="topic_initial_description">Time is the luggage I carry, through every laugh and tear.\n- Lyrics by Justin Chen</string>
-    <string name="welcome_headline">Living with @string/app_name</string>
+    <string name="welcome_headline">Living with %1$s</string>
     <string name="welcome_body">Record the moment, Connect the dots, Shape the future</string>
     <string name="btn_start">Start</string>
     <string name="common_ui_unknown_error_and_auto_retry">Oops! Something broke. Retrying</string>
@@ -51,7 +51,7 @@
     <string name="composer_attachment_icon_files">File</string>
     <string name="composer_mic_icon_desc">Microphone</string>
     <string name="composer_voice_button_text">Voice</string>
-    <string name="composer_text_input_placeholder">Log…</string>
+    <string name="composer_text_input_placeholder" translatable="false">Log…</string>
     <string name="composer_send_btn_desc">Send Message</string>
     <string name="composer_attachment_icon_desc">Send Attachments</string>
     <string name="composer_send_voice_btn_desc">Send Voice</string>

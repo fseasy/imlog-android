@@ -204,7 +204,9 @@ fun MessageComposerContent(
     }
   }
 
-  Surface(modifier = modifier.imePadding()) {
+  Surface(
+      modifier = modifier.imePadding(),
+  ) {
     Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
       HorizontalDivider(
           thickness = DividerDefaults.Thickness,

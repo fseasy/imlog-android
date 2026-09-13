@@ -41,7 +41,7 @@
     <string name="select_storage_all_set">设置完成</string>
     <string name="topic_initial_name">这一刻</string>
     <string name="topic_initial_description">「时间变成行李，越过生命悲喜，陪伴着我前进」\n—— 林忠义</string>
-    <string name="welcome_headline">让 @string/app_name 伴你左右</string>
+    <string name="welcome_headline">让 %1$s 伴你左右</string>
     <string name="welcome_body">记录此刻，串联过往，指引未来</string>
     <string name="btn_start">开始</string>
     <string name="common_ui_unknown_error_and_auto_retry">不好，出了不知道什么问题。正在重试中</string>
@@ -50,7 +50,6 @@
     <string name="composer_attachment_icon_files">文件</string>
     <string name="composer_mic_icon_desc">麦克风</string>
     <string name="composer_voice_button_text">语音</string>
-    <string name="composer_text_input_placeholder">记录…</string>
     <string name="composer_send_btn_desc">发送消息</string>
     <string name="composer_attachment_icon_desc">发送附件</string>
     <string name="composer_send_voice_btn_desc">发送语音</string>

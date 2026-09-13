@@ -61,7 +61,7 @@ fun WelcomeEntry(
 
   Column(modifier = Modifier.fillMaxSize()) {
     HighlightedText(
-        stringResource(R.string.welcome_headline),
+        stringResource(R.string.welcome_headline, R.string.app_name),
         style = MaterialTheme.typography.headlineMedium,
         highlight = HighlightConfig(),
         textAlign = TextAlign.Start,
