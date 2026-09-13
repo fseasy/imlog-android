@@ -12,7 +12,6 @@ import top.fseasy.imlog.features.home.topiclog.toSharedTransitionElementId
 fun ImageMessageBubble(
     messageId: MessageId,
     content: MessageContentUiModel.Image,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
   val imageAspectRatio = content.aspectRatio
@@ -20,7 +19,6 @@ fun ImageMessageBubble(
       thumbnailUrl = content.thumbnailPath?.toActualFileOrUri(),
       aspectRatio = imageAspectRatio,
       sharedElementId = toSharedTransitionElementId(messageId),
-      onClick = onClick,
       modifier = modifier,
       overlayContent = null,
   )

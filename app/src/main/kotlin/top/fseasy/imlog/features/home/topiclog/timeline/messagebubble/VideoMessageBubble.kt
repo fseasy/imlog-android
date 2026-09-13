@@ -28,7 +28,6 @@ import top.fseasy.imlog.features.home.topiclog.toSharedTransitionElementId
 fun VideoMessageBubble(
     messageId: MessageId,
     content: MessageContentUiModel.Video,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
 
@@ -38,7 +37,6 @@ fun VideoMessageBubble(
       thumbnailUrl = content.thumbnailPath?.toActualFileOrUri(),
       aspectRatio = aspectRatio,
       sharedElementId = toSharedTransitionElementId(messageId),
-      onClick = onClick,
       modifier = modifier,
   ) {
     // Play button

@@ -14,16 +14,22 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
+import top.fseasy.imlog.R
 import top.fseasy.imlog.features.home.topiclog.MediaPlaybackStateAndAction
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.MessageBubble
 import top.fseasy.imlog.ui.components.AppCircularProgress
+import top.fseasy.imlog.ui.components.contextmenu.ContextMenuItem
+import top.fseasy.imlog.ui.components.contextmenu.VerticalContextMenu
+import top.fseasy.imlog.ui.components.contextmenu.rememberContextMenuState
 
 @Composable
 fun MessageTimeline(
@@ -88,6 +94,8 @@ fun TimelineContent(
   val isInitialLoading =
       pagedItems.loadState.refresh is LoadState.Loading && pagedItems.itemCount == 0
 
+  val contextMenuState = rememberContextMenuState<MessageUiModel>()
+
   Box(
       modifier =
           modifier.fillMaxSize().pointerInput(Unit) {
@@ -116,6 +124,9 @@ fun TimelineContent(
                   onShowImage = onShowImage,
                   onShowVideo = onShowVideo,
                   onOpenFile = onOpenFile,
+                  onShowContextMenu = { position ->
+                    contextMenuState.show(item.message, position)
+                  },
               )
           null -> Unit
         }
@@ -129,5 +140,18 @@ fun TimelineContent(
     if (isInitialLoading) {
       AppCircularProgress(modifier = Modifier.align(Alignment.Center))
     }
+    VerticalContextMenu(
+        contextMenuState,
+        items = { message ->
+          listOf(
+              ContextMenuItem(
+                  title = "copy",
+                  iconVector = ImageVector.vectorResource(R.drawable.icon_error),
+                  isDestructive = false,
+                  onClick = {},
+              )
+          )
+        },
+    )
   }
 }

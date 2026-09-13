@@ -1,6 +1,5 @@
 package top.fseasy.imlog.features.home.topiclog.timeline.messagebubble
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.aspectRatio
@@ -40,14 +39,14 @@ fun Modifier.imMediaConstraints(
         .heightIn(min = minHeight, max = maxHeight)
         .aspectRatio(aspectRatio.coerceIn(minRatio, maxRatio))
 
+/** NOTE: there is no click function, please put click function to the upper level */
 @Composable
 fun MediaThumbnailBubble(
-  thumbnailUrl: Any?,
-  aspectRatio: Float,
-  sharedElementId: String,
-  onClick: () -> Unit,
-  modifier: Modifier = Modifier,
-  overlayContent: (@Composable BoxScope.() -> Unit)? = null,
+    thumbnailUrl: Any?,
+    aspectRatio: Float,
+    sharedElementId: String,
+    modifier: Modifier = Modifier,
+    overlayContent: (@Composable BoxScope.() -> Unit)? = null,
 ) {
   val sharedTransitionScope = LocalTopicLogSharedTransitionScope.current
   val visibilityScope = LocalTopicLogVisibilityScope.current
@@ -65,11 +64,7 @@ fun MediaThumbnailBubble(
       }
 
   Box(
-      modifier =
-          modifier
-              .imMediaConstraints(aspectRatio)
-              .clickable(onClick = onClick)
-              .then(sharedTransitionModifier),
+      modifier = modifier.imMediaConstraints(aspectRatio).then(sharedTransitionModifier),
       contentAlignment = Alignment.Center,
   ) {
     // 1.unified thumbnail
