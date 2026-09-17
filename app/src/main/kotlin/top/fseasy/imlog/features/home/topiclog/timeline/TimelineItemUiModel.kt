@@ -3,7 +3,7 @@ package top.fseasy.imlog.features.home.topiclog.timeline
 sealed interface TimelineItemUiModel {
   val key: String
 
-  data class MessageItem(val message: MessageUiModel) : TimelineItemUiModel {
+  data class MessageItem(val message: AnyMessageUiModel) : TimelineItemUiModel {
     override val key: String
       get() = message.id.value
   }

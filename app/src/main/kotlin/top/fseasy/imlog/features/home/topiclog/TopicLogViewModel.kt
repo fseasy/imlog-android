@@ -1,10 +1,7 @@
 package top.fseasy.imlog.features.home.topiclog
 
 import android.content.Context
-import android.net.Uri
 import androidx.annotation.StringRes
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.State
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -30,11 +27,9 @@ import top.fseasy.imlog.R
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.data.util.ExoPlayerStateHolder
 import top.fseasy.imlog.data.util.MediaInput
-import top.fseasy.imlog.data.util.MediaPlaybackState
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.MessageId
-import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.StorageRepository
@@ -42,10 +37,11 @@ import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.util.runSuspendCatching
-import top.fseasy.imlog.features.home.topiclog.timeline.FullScreenMessageUiModel
+import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainerUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.buildFileUri
+import top.fseasy.imlog.features.home.topiclog.timeline.narrow
 import top.fseasy.imlog.navigation.MainScreen
 
 /**
@@ -55,8 +51,9 @@ import top.fseasy.imlog.navigation.MainScreen
  * 1. media-play (ExoPlayer) interface, used in timeline(message bubble) & fullscreen part
  *    play/pause, playing state. => Unstable Api annotation source, propagated from the lower
  *    ExoPlayer.
- * 2. UiEffect, especially showing-snackbar, which will be used in children components
- * 3. uiState: topic model.
+ * 2. FullScreen model building
+ * 3. UiEffect, especially showing-snackbar, which will be used in children components
+ * 4. uiState: topic model.
  *
  * Special Logic:
  * - mark topic read when init
@@ -155,13 +152,8 @@ constructor(
   }
 
   /** Build MediaInput without cache as the db data may change */
-  fun seekMedia(message: MessageUiModel, ratio: Float) {
-    val content =
-        message.content as? MessageContentUiModel.AudioPlaySupported
-            ?: run {
-              Timber.w("Call seek audio for content-type: ${message.content::class.qualifiedName}")
-              return
-            }
+  fun seekMedia(message: MessageUiModel<MessageContentUiModel.AudioPlaySupported>, ratio: Float) {
+    val content = message.content
 
     launchWithUserId { userId ->
       val uri =
@@ -195,15 +187,8 @@ constructor(
   }
 
   /** Build MediaInput without cache as the db data may change */
-  fun toggleMediaPlay(message: MessageUiModel) {
-    val content =
-        message.content as? MessageContentUiModel.AudioPlaySupported
-            ?: run {
-              Timber.w(
-                  "Call play/pause audio for content-type: ${message.content::class.qualifiedName}"
-              )
-              return
-            }
+  fun toggleMediaPlay(message: MessageUiModel<MessageContentUiModel.AudioPlaySupported>) {
+    val content = message.content
 
     launchWithUserId { userId ->
       val uri =
@@ -238,13 +223,10 @@ constructor(
   }
 
   /** Create the OpenFileChoose intent for GenericFile Message. Send UI Effect when success */
-  fun createOpenFileIntentForGenericFileMessage(message: MessageUiModel) {
-    val fileMessageContent =
-        message.content as? MessageContentUiModel.GenericFile
-            ?: run {
-              Timber.w("Invalid message content when call FileClicked: $message")
-              return
-            }
+  fun createOpenFileIntentForGenericFileMessage(
+      message: MessageUiModel<MessageContentUiModel.GenericFile>
+  ) {
+    val fileMessageContent = message.content
     launchWithUserId { userId ->
       val uri =
           runSuspendCatching {
@@ -276,28 +258,16 @@ constructor(
     }
   }
 
-  fun prepareFullScreenViewMessage(message: MessageUiModel): Unit {
+  fun showImageLikeFullScreenMessage(message: MessageUiModel<MessageContentUiModel.ImageLike>) {
     launchWithUserId { userId ->
-      // currently fullscreen only support Image/Video
-      val content = message.content as? MessageContentUiModel.ImageLike ?: return@launchWithUserId
-      val uri =
-          runSuspendCatching {
-            content.buildFileUri(
-                signInUserId = userId,
-                topicId = topicId,
-                messageCreatedAt = message.createdAt,
-                storagePathUseCase = storagePathUseCase,
-                storageRepository = storageRepository,
-            )
+      val path = buildImageLikeFileUri(userId, message = message) ?: return@launchWithUserId
+      val model =
+          when (message.content) {
+            is MessageContentUiModel.Image ->
+                FullScreenContainerUiModel.ImageShow(message.narrow(), path = path)
+            is MessageContentUiModel.Video ->
+                FullScreenContainerUiModel.VideoShow(message.narrow(), path = path)
           }
-              .onFailure { e -> Timber.w(e, "FullScreenView build storage uri failed") }
-              .getOrNull()
-              ?: run {
-                _uiEffect.send(TopicLogUiEffect.ShowSnackBar("Failed to resolve file"))
-                return@launchWithUserId
-              }
-      val path = AbsolutePathModel.UriStrModel(uri.toUriStr())
-      val model = FullScreenMessageUiModel(message = message, path = path)
       _uiEffect.send(TopicLogUiEffect.SetFullScreenViewMessage(model))
     }
   }
@@ -307,38 +277,27 @@ constructor(
       viewModelScope.launch { block(uid) }
     }
   }
+
+  private suspend fun buildImageLikeFileUri(
+      userId: UserId,
+      message: MessageUiModel<MessageContentUiModel.ImageLike>,
+  ): AbsolutePathModel.UriStrModel? {
+    val uri =
+        runSuspendCatching {
+          message.content.buildFileUri(
+              signInUserId = userId,
+              topicId = topicId,
+              messageCreatedAt = message.createdAt,
+              storagePathUseCase = storagePathUseCase,
+              storageRepository = storageRepository,
+          )
+        }
+            .onFailure { e -> Timber.w(e, "FullScreenView build storage uri failed") }
+            .getOrNull()
+            ?: run {
+              _uiEffect.send(TopicLogUiEffect.ShowSnackBar("Failed to resolve file"))
+              return null
+            }
+    return AbsolutePathModel.UriStrModel(uri.toUriStr())
+  }
 }
-
-sealed interface ContextState {
-  object Loading : ContextState
-
-  data class Error(val reason: String) : ContextState
-
-  data class Success(
-      val topic: Topic,
-      val currentUserId: UserId,
-  ) : ContextState
-}
-
-sealed interface TopicLogUiEffect {
-  data class ShowSnackBar(val message: String) : TopicLogUiEffect
-
-  data class OpenFileChooser(
-      val uri: Uri,
-      val mimeType: String?,
-      val displayName: String,
-  ) : TopicLogUiEffect
-
-  data class SetFullScreenViewMessage(val fullScreenMessage: FullScreenMessageUiModel) :
-      TopicLogUiEffect
-}
-
-@Immutable
-data class MediaPlaybackStateAndAction(
-    val activePlaybackStateHolder: State<MediaPlaybackState>,
-    val activePlayPositionHolder: State<kotlin.time.Duration>,
-    val inactivePlayPositionGetter: (MessageId) -> kotlin.time.Duration,
-    val onTogglePlay: (MessageUiModel) -> Unit,
-    val onSeek: (MessageUiModel, ratio: Float) -> Unit,
-    val onCyclePlaybackSpeed: (MessageId) -> Unit,
-)

@@ -32,6 +32,8 @@ data class ContextMenuItem(
     val title: String,
     val iconVector: ImageVector? = null,
     val isDestructive: Boolean = false,
+    // Building `ContextMenuItem` will pass the Message, so it doesn't need any param
+    val isApplicable: () -> Boolean = { true },
     val onClick: () -> Unit,
 )
 
@@ -77,13 +79,9 @@ fun <T> VerticalContextMenu(
               dismissOnClickOutside = true,
           ),
   ) {
-    // 纵向卡片遵循 M3 标准弹层配色（高对比度 elevated container）
+    // elevated container
     Surface(
-        modifier =
-            modifier
-                // 宽度按内容最大项自适应，并设定最小宽度（符合 M3 菜单规范）
-                .width(IntrinsicSize.Max)
-                .widthIn(min = 160.dp),
+        modifier = modifier.width(IntrinsicSize.Max).widthIn(min = 160.dp),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
@@ -91,43 +89,44 @@ fun <T> VerticalContextMenu(
         tonalElevation = 0.dp,
     ) {
       Column(modifier = Modifier.padding(vertical = 6.dp)) {
-        items(currentTarget).forEach { action ->
-          // 如果是危险操作，颜色切换为系统标准的 error 红色
-          val itemColor =
-              if (action.isDestructive) {
-                MaterialTheme.colorScheme.error
-              } else {
-                LocalContentColor.current
+        items(currentTarget)
+            .filter { action -> action.isApplicable() }
+            .forEach { action ->
+              val itemColor =
+                  if (action.isDestructive) {
+                    MaterialTheme.colorScheme.error
+                  } else {
+                    LocalContentColor.current
+                  }
+
+              Row(
+                  modifier =
+                      Modifier.fillMaxWidth()
+                          .clickable {
+                            state.dismiss()
+                            action.onClick()
+                          }
+                          .padding(horizontal = 16.dp, vertical = 12.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+              ) {
+                // 如果有图标，在左侧显示
+                if (action.iconVector != null) {
+                  Icon(
+                      action.iconVector,
+                      contentDescription = null,
+                      tint = itemColor,
+                      modifier = Modifier.size(20.dp),
+                  )
+                  Spacer(modifier = Modifier.width(12.dp))
+                }
+
+                Text(
+                    text = action.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = itemColor,
+                )
               }
-
-          Row(
-              modifier =
-                  Modifier.fillMaxWidth()
-                      .clickable {
-                        state.dismiss()
-                        action.onClick()
-                      }
-                      .padding(horizontal = 16.dp, vertical = 12.dp),
-              verticalAlignment = Alignment.CenterVertically,
-          ) {
-            // 如果有图标，在左侧显示
-            if (action.iconVector != null) {
-              Icon(
-                  action.iconVector,
-                  contentDescription = null,
-                  tint = itemColor,
-                  modifier = Modifier.size(20.dp),
-              )
-              Spacer(modifier = Modifier.width(12.dp))
             }
-
-            Text(
-                text = action.title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = itemColor,
-            )
-          }
-        }
       }
     }
   }
@@ -167,7 +166,7 @@ fun <T> HorizontalContextMenu(
           modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp).height(IntrinsicSize.Min),
           verticalAlignment = Alignment.CenterVertically,
       ) {
-        val renderItems = items(currentTarget)
+        val renderItems = items(currentTarget).filter { it.isApplicable() }
         renderItems.forEachIndexed { index, action ->
           Column(
               modifier =

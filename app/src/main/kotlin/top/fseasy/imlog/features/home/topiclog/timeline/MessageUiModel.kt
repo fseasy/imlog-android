@@ -4,6 +4,8 @@ import android.net.Uri
 import android.os.Parcelable
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
+import java.nio.file.Path
+import kotlin.time.Duration
 import kotlinx.parcelize.Parcelize
 import kotlinx.parcelize.TypeParceler
 import top.fseasy.imlog.data.mapper.AbsolutePathModelParceler
@@ -15,8 +17,6 @@ import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel.ImageLike
 import top.fseasy.imlog.ui.model.UserAvatarUiModel
-import java.nio.file.Path
-import kotlin.time.Duration
 
 @Parcelize
 sealed interface QuotedMessageSenderUiModel : Parcelable {
@@ -165,28 +165,36 @@ sealed interface MessageContentUiModel : Parcelable {
   ) : SourceUriAttachment
 }
 
+val ImageLike.aspectRatio: Float
+  get() = if (height == 0) 1.0f else width.toFloat() / height
+
 @Immutable
 @Parcelize
 @TypeParceler<MessageId, MessageIdParceler>
-data class MessageUiModel(
+data class MessageUiModel<out T : MessageContentUiModel>(
     val id: MessageId,
     val sender: MessageSenderUiModel,
     val quotedMessage: QuotedMessageUiModel? = null,
-    val content: MessageContentUiModel,
+    val content: T,
     val createdAt: kotlin.time.Instant,
     val formatedCreatedAt: String,
 ) : Parcelable {
   fun supportAudioPlay() = content is MessageContentUiModel.AudioPlaySupported
 }
 
-val ImageLike.aspectRatio: Float
-  get() = if (height == 0) 1.0f else width.toFloat() / height
+typealias AnyMessageUiModel = MessageUiModel<MessageContentUiModel>
 
-/** For Full Screen show. */
-@Immutable
-@Parcelize
-@TypeParceler<AbsolutePathModel, AbsolutePathModelParceler>()
-data class FullScreenMessageUiModel(
-    val message: MessageUiModel,
-    val path: AbsolutePathModel,
-) : Parcelable
+/**
+ * Very painful point: if sub-field is already narrowed to the specific type, the top data still
+ * can't be changed to the narrow type. eg: MessageUiModel<MessageContentUiModel> when
+ * MessageContentUiModel -> MessageContentUiModel.Image compiler now
+ * - can smart cast content from MessageContentUiModel to MessageContentUiModel.Image
+ * - but can't cast MessageUiModel<MessageContentUiModel> to
+ *   MessageUiModel<MessageContentUiModel.Image> The unchecked cast is a bit dangerous as human will
+ *   always typo. BUT I don't want to verbose the code anymore by make a new sealed interface type,
+ *   or split the model to `meta` and `content` part. Maybe we should do in this way, but I just
+ *   don't want to do it.
+ */
+@Suppress("UNCHECKED_CAST")
+fun <T : MessageContentUiModel> MessageUiModel<*>.narrow(): MessageUiModel<T> =
+    this as MessageUiModel<T>

@@ -167,7 +167,7 @@ private fun UserInputTextField(
           modifier = Modifier.fillMaxWidth(),
           contentAlignment = Alignment.CenterStart,
       ) {
-        if (!isFocused) {
+        if (textFieldValue.text.isEmpty() && !isFocused) {
           Text(
               text = stringResource(R.string.composer_text_input_placeholder),
               color = Color.Gray,

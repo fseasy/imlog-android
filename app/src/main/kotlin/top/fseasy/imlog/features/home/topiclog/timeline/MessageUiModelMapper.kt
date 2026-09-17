@@ -244,12 +244,13 @@ fun MessageContent.toUiModel(
   }
 }
 
+/** We can only transform it to the general type. */
 fun TimelineMessage.toUiModel(
     signInUserId: UserId,
     topicId: TopicId,
     storagePathUseCase: StoragePathUseCase,
     context: Context,
-): MessageUiModel {
+): MessageUiModel<MessageContentUiModel> {
   return MessageUiModel(
       id = id,
       sender =

@@ -120,4 +120,9 @@
     <string name="term_pinned">Pinned</string>
     <string name="term_back">Back</string>
     <string name="term_loading">Loading</string>
+    <string name="message_text_copied">Text Copied.</string>
+    <string name="term_copy">Copy</string>
+    <string name="term_select_text">Select Text</string>
+    <string name="term_deselect">Deselect</string>
+    <string name="term_select_all">Select All</string>
 </resources>

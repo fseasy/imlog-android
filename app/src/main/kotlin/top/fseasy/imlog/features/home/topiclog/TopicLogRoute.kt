@@ -49,7 +49,7 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposer
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
 import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainer
-import top.fseasy.imlog.features.home.topiclog.timeline.FullScreenMessageUiModel
+import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainerUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimeline
 import top.fseasy.imlog.ui.util.openFileWithChooser
 
@@ -79,7 +79,7 @@ fun TopicLogRoute(
   val context = LocalContext.current
   // MessageUiModel supports parcelable, so it's ok to use rememberSavable!
   var currentFullScreenViewMessage by
-      rememberSaveable() { mutableStateOf<FullScreenMessageUiModel?>(null) }
+      rememberSaveable() { mutableStateOf<FullScreenContainerUiModel?>(null) }
 
   // Effect listener, belongs to Smart level
   LaunchedEffect(Unit) {
@@ -115,6 +115,16 @@ fun TopicLogRoute(
           onCyclePlaybackSpeed = viewModel::cycleMediaPlaybackSpeed,
       )
 
+  val showFullScreenMessage =
+      ShowFullScreenMessageUiModelAction(
+          showImage = viewModel::showImageLikeFullScreenMessage,
+          showVideo = viewModel::showImageLikeFullScreenMessage,
+          // It's trivial, just do it in UI side
+          showTextSelection = { textMessage ->
+            currentFullScreenViewMessage = FullScreenContainerUiModel.TextSelection(textMessage)
+          },
+      )
+
   val messageListState = rememberLazyListState()
   val coroutineScope = rememberCoroutineScope()
   fun messageListScrollToBottom() {
@@ -142,9 +152,7 @@ fun TopicLogRoute(
                   messageListState = messageListState,
                   onTapEmptyArea = handleComposerDismiss,
                   onDragList = handleComposerDismiss,
-                  onFullScreenViewMessage = { message ->
-                    viewModel.prepareFullScreenViewMessage(message)
-                  },
+                  onShowFullScreenMessage = showFullScreenMessage,
                   mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
                   onOpenFile = viewModel::createOpenFileIntentForGenericFileMessage,
                   modifier = modifier,
@@ -189,9 +197,9 @@ val LocalTopicLogSharedTransitionScope = compositionLocalOf<SharedTransitionScop
  */
 @Composable
 private fun TopicLogSharedTransitionLayoutContainer(
-    currentFullScreenViewMessage: FullScreenMessageUiModel?,
+    currentFullScreenViewMessage: FullScreenContainerUiModel?,
     logContent: @Composable () -> Unit,
-    fullScreenOverlay: @Composable (message: FullScreenMessageUiModel) -> Unit,
+    fullScreenOverlay: @Composable (message: FullScreenContainerUiModel) -> Unit,
 ) {
 
   SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {

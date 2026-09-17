@@ -12,23 +12,21 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
-import top.fseasy.imlog.R
 import top.fseasy.imlog.features.home.topiclog.MediaPlaybackStateAndAction
+import top.fseasy.imlog.features.home.topiclog.ShowFullScreenMessageUiModelAction
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.MessageBubble
-import top.fseasy.imlog.ui.components.AppCircularProgress
-import top.fseasy.imlog.ui.components.contextmenu.ContextMenuItem
-import top.fseasy.imlog.ui.components.contextmenu.VerticalContextMenu
 import top.fseasy.imlog.ui.components.contextmenu.rememberContextMenuState
 
 @Composable
@@ -36,8 +34,8 @@ fun MessageTimeline(
     messageListState: LazyListState,
     onTapEmptyArea: () -> Unit,
     onDragList: () -> Unit,
-    onFullScreenViewMessage: (MessageUiModel) -> Unit,
-    onOpenFile: (MessageUiModel) -> Unit,
+    onShowFullScreenMessage: ShowFullScreenMessageUiModelAction,
+    onOpenFile: (MessageUiModel<MessageContentUiModel.GenericFile>) -> Unit,
     mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
     modifier: Modifier = Modifier,
     viewModel: MessageTimelineViewModel = hiltViewModel(),
@@ -50,8 +48,7 @@ fun MessageTimeline(
       onTapEmptyArea = onTapEmptyArea,
       onDragList = onDragList,
       mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
-      onShowImage = onFullScreenViewMessage,
-      onShowVideo = onFullScreenViewMessage,
+      onShowFullScreenMessage = onShowFullScreenMessage,
       onOpenFile = onOpenFile,
       modifier = modifier,
   )
@@ -65,9 +62,8 @@ fun TimelineContent(
     onTapEmptyArea: () -> Unit,
     onDragList: () -> Unit,
     mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
-    onShowImage: (MessageUiModel) -> Unit,
-    onShowVideo: (MessageUiModel) -> Unit,
-    onOpenFile: (MessageUiModel) -> Unit,
+    onShowFullScreenMessage: ShowFullScreenMessageUiModelAction,
+    onOpenFile: (MessageUiModel<MessageContentUiModel.GenericFile>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
 
@@ -91,10 +87,9 @@ fun TimelineContent(
 
   val isListEmpty =
       pagedItems.loadState.refresh is LoadState.NotLoading && pagedItems.itemCount == 0
-  val isInitialLoading =
-      pagedItems.loadState.refresh is LoadState.Loading && pagedItems.itemCount == 0
 
-  val contextMenuState = rememberContextMenuState<MessageUiModel>()
+  val contextMenuState = rememberContextMenuState<AnyMessageUiModel>()
+  var textSelectionBottomSheetPayload by rememberSaveable { mutableStateOf<String?>(null) }
 
   Box(
       modifier =
@@ -121,8 +116,7 @@ fun TimelineContent(
               MessageBubble(
                   message = item.message,
                   mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
-                  onShowImage = onShowImage,
-                  onShowVideo = onShowVideo,
+                  onShowFullScreenMessage = onShowFullScreenMessage,
                   onOpenFile = onOpenFile,
                   onShowContextMenu = { position ->
                     contextMenuState.show(item.message, position)
@@ -136,22 +130,26 @@ fun TimelineContent(
     if (isListEmpty) {
       EmptyTimelinePlaceholder(modifier = Modifier.align(Alignment.Center))
     }
-    // Items Loading when entering
-    if (isInitialLoading) {
-      AppCircularProgress(modifier = Modifier.align(Alignment.Center))
+
+    // Text-Selection Bottom Sheet (for Context Menu action)
+    // -- Assign to `val` to enable smart cast
+    val currentTextSelectionBottomSheetPayload = textSelectionBottomSheetPayload
+    if (!currentTextSelectionBottomSheetPayload.isNullOrEmpty()) {
+      MessageTextSelectionBottomSheet(
+          text = currentTextSelectionBottomSheetPayload,
+          onDismiss = { textSelectionBottomSheetPayload = null },
+      )
     }
-    VerticalContextMenu(
-        contextMenuState,
-        items = { message ->
-          listOf(
-              ContextMenuItem(
-                  title = "copy",
-                  iconVector = ImageVector.vectorResource(R.drawable.icon_error),
-                  isDestructive = false,
-                  onClick = {},
-              )
-          )
-        },
-    )
   }
+  MessageContextMenu(
+      contextMenuState,
+      onShowTextSelection = { textMessage ->
+        val textLength = textMessage.content.text.length
+        if (textLength > 1_000) {
+          onShowFullScreenMessage.showTextSelection(textMessage)
+        } else {
+          textSelectionBottomSheetPayload = textMessage.content.text
+        }
+      },
+  )
 }

@@ -18,18 +18,20 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import top.fseasy.imlog.features.home.topiclog.MediaPlaybackStateAndAction
 import top.fseasy.imlog.features.home.topiclog.ReadMediaPlaybackStateAndRender
+import top.fseasy.imlog.features.home.topiclog.ShowFullScreenMessageUiModelAction
+import top.fseasy.imlog.features.home.topiclog.timeline.AnyMessageUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageSenderUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
+import top.fseasy.imlog.features.home.topiclog.timeline.narrow
 import top.fseasy.imlog.ui.components.contextmenu.contextMenuClickable
 
 @Composable
 fun MessageBubble(
-    message: MessageUiModel,
+    message: AnyMessageUiModel,
     mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
-    onShowImage: (MessageUiModel) -> Unit,
-    onShowVideo: (MessageUiModel) -> Unit,
-    onOpenFile: (MessageUiModel) -> Unit,
+    onShowFullScreenMessage: ShowFullScreenMessageUiModelAction,
+    onOpenFile: (MessageUiModel<MessageContentUiModel.GenericFile>) -> Unit,
     onShowContextMenu: (IntOffset) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -46,14 +48,17 @@ fun MessageBubble(
             containerColor = getCardContainerColor(isOwn),
         ) {
           ColumnWithTimeText(message.formatedCreatedAt) {
-            TextMessageBubble(text = content.text)
+            TextMessageBubble(
+                messageId = message.id,
+                text = content.text,
+            )
           }
         }
       }
 
       is MessageContentUiModel.Image -> {
         BubbleCard(
-            onClick = { onShowImage(message) },
+            onClick = { onShowFullScreenMessage.showImage(message.narrow()) },
             onShowContextMenu = onShowContextMenu,
             containerColor = Color.Transparent,
         ) {
@@ -68,7 +73,7 @@ fun MessageBubble(
 
       is MessageContentUiModel.Video -> {
         BubbleCard(
-            onClick = { onShowVideo(message) },
+            onClick = { onShowFullScreenMessage.showVideo(message.narrow()) },
             onShowContextMenu = onShowContextMenu,
             containerColor = Color.Transparent,
         ) {
@@ -100,8 +105,8 @@ fun MessageBubble(
                   playbackState = currentPlaybackState,
                   activePlayPositionHolder = mediaPlaybackStateAndAction.activePlayPositionHolder,
                   inactivePlayPosition = inactivePlayPosition,
-                  onTogglePlay = { mediaPlaybackStateAndAction.onTogglePlay(message) },
-                  onSeek = { ratio -> mediaPlaybackStateAndAction.onSeek(message, ratio) },
+                  onTogglePlay = { mediaPlaybackStateAndAction.onTogglePlay(message.narrow()) },
+                  onSeek = { ratio -> mediaPlaybackStateAndAction.onSeek(message.narrow(), ratio) },
                   onSpeedChange = { mediaPlaybackStateAndAction.onCyclePlaybackSpeed(message.id) },
               )
             }
@@ -127,8 +132,8 @@ fun MessageBubble(
                   playbackState = currentPlaybackState,
                   activePlayPositionHolder = mediaPlaybackStateAndAction.activePlayPositionHolder,
                   inactivePlayPosition = inactivePlayPosition,
-                  onTogglePlay = { mediaPlaybackStateAndAction.onTogglePlay(message) },
-                  onSeek = { ratio -> mediaPlaybackStateAndAction.onSeek(message, ratio) },
+                  onTogglePlay = { mediaPlaybackStateAndAction.onTogglePlay(message.narrow()) },
+                  onSeek = { ratio -> mediaPlaybackStateAndAction.onSeek(message.narrow(), ratio) },
                   onSpeedChange = { mediaPlaybackStateAndAction.onCyclePlaybackSpeed(message.id) },
               )
             }
@@ -138,7 +143,7 @@ fun MessageBubble(
 
       is MessageContentUiModel.GenericFile -> {
         BubbleCard(
-            onClick = { onOpenFile(message) },
+            onClick = { onOpenFile(message.narrow()) },
             onShowContextMenu = onShowContextMenu,
             containerColor = getCardContainerColor(isOwn),
         ) {
