@@ -151,7 +151,7 @@ fun VideoFullScreenPlayerContent(
         ) {
           Icon(
               imageVector = Icons.Default.Close,
-              contentDescription = stringResource(R.string.btn_close),
+              contentDescription = stringResource(R.string.term_close),
               tint = tintColor,
           )
         }

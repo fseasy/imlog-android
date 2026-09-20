@@ -9,7 +9,7 @@
     <string name="btn_save">Save</string>
     <string name="btn_signin">Sign In</string>
     <string name="btn_signup">Sign Up</string>
-    <string name="btn_close">Close</string>
+    <string name="term_close">Close</string>
     <string name="btn_continue">Continue</string>
     <string name="btn_choose_storage">Choose Storage Location</string>
     <string name="btn_retry">Retry</string>

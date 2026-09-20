@@ -26,6 +26,8 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import top.fseasy.imlog.features.home.topiclog.MediaPlaybackStateAndAction
 import top.fseasy.imlog.features.home.topiclog.ShowFullScreenMessageUiModelAction
+import top.fseasy.imlog.features.home.topiclog.timeline.contextmenu.MessageContextMenu
+import top.fseasy.imlog.features.home.topiclog.timeline.contextmenu.MessageTextSelectionBottomSheet
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.MessageBubble
 import top.fseasy.imlog.ui.components.contextmenu.rememberContextMenuState
 
@@ -145,7 +147,7 @@ fun TimelineContent(
       contextMenuState,
       onShowTextSelection = { textMessage ->
         val textLength = textMessage.content.text.length
-        if (textLength > 1_000) {
+        if (textLength > 1) {
           onShowFullScreenMessage.showTextSelection(textMessage)
         } else {
           textSelectionBottomSheetPayload = textMessage.content.text

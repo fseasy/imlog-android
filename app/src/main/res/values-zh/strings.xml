@@ -8,7 +8,7 @@
     <string name="btn_save">保存</string>
     <string name="btn_signin">注册</string>
     <string name="btn_signup">登录</string>
-    <string name="btn_close">关闭</string>
+    <string name="term_close">关闭</string>
     <string name="signinup_create_account_intro">现在将为你创建一个账户</string>
     <string name="signinup_create_user_sample_success_tip">你可以在稍后修改它</string>
     <string name="btn_continue">继续</string>

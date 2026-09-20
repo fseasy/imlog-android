@@ -55,11 +55,10 @@ fun FullScreenContainer(
             },
         )
     is FullScreenContainerUiModel.TextSelection ->
-        MessageTextSelection(
+        MessageTextSelectionFullScreen(
             messageId = model.message.id,
             text = model.message.content.text,
             onDismiss = onClose,
-            onForward = {},
             modifier = modifier,
         )
   }

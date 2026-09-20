@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.topiclog.timeline
+package top.fseasy.imlog.features.home.topiclog.timeline.contextmenu
 
 import android.content.ClipData
 import androidx.compose.runtime.Composable
@@ -10,6 +10,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import kotlinx.coroutines.launch
 import top.fseasy.imlog.R
+import top.fseasy.imlog.features.home.topiclog.timeline.AnyMessageUiModel
+import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
+import top.fseasy.imlog.features.home.topiclog.timeline.MessageUiModel
+import top.fseasy.imlog.features.home.topiclog.timeline.narrow
 import top.fseasy.imlog.ui.components.contextmenu.ContextMenuItem
 import top.fseasy.imlog.ui.components.contextmenu.ContextMenuState
 import top.fseasy.imlog.ui.components.contextmenu.VerticalContextMenu
@@ -17,8 +21,8 @@ import top.fseasy.imlog.ui.components.contextmenu.VerticalContextMenu
 /** @param contextMenuState define it in the parent component */
 @Composable
 fun MessageContextMenu(
-    contextMenuState: ContextMenuState<AnyMessageUiModel>,
-    onShowTextSelection: (MessageUiModel<MessageContentUiModel.Text>) -> Unit,
+  contextMenuState: ContextMenuState<AnyMessageUiModel>,
+  onShowTextSelection: (MessageUiModel<MessageContentUiModel.Text>) -> Unit,
 ) {
   val clipboard = LocalClipboard.current
   val coroutineScope = rememberCoroutineScope()
