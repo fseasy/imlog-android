@@ -156,7 +156,7 @@ fun MessageBubble(
   }
 }
 
-/** Bind the [contextMenuClickable] */
+/** set the bubble card with binding the [contextMenuClickable] */
 @Composable
 private fun BubbleCard(
     containerColor: Color,
@@ -170,7 +170,7 @@ private fun BubbleCard(
       color = containerColor,
       modifier =
           modifier
-              .widthIn(min = 48.dp, max = 280.dp)
+              .widthIn(min = BUBBLE_MIN_WIDTH_IN_DP.dp, max = BUBBLE_MAX_WIDTH_IN_DP.dp)
               .contextMenuClickable(
                   onClick = { onClick?.invoke() },
                   onLongClickWithPosition = onShowContextMenu,

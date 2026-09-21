@@ -12,9 +12,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -27,7 +24,6 @@ import androidx.paging.compose.itemKey
 import top.fseasy.imlog.features.home.topiclog.MediaPlaybackStateAndAction
 import top.fseasy.imlog.features.home.topiclog.ShowFullScreenMessageUiModelAction
 import top.fseasy.imlog.features.home.topiclog.timeline.contextmenu.MessageContextMenu
-import top.fseasy.imlog.features.home.topiclog.timeline.contextmenu.MessageTextSelectionBottomSheet
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.MessageBubble
 import top.fseasy.imlog.ui.components.contextmenu.rememberContextMenuState
 
@@ -91,7 +87,6 @@ fun TimelineContent(
       pagedItems.loadState.refresh is LoadState.NotLoading && pagedItems.itemCount == 0
 
   val contextMenuState = rememberContextMenuState<AnyMessageUiModel>()
-  var textSelectionBottomSheetPayload by rememberSaveable { mutableStateOf<String?>(null) }
 
   Box(
       modifier =
@@ -132,26 +127,9 @@ fun TimelineContent(
     if (isListEmpty) {
       EmptyTimelinePlaceholder(modifier = Modifier.align(Alignment.Center))
     }
-
-    // Text-Selection Bottom Sheet (for Context Menu action)
-    // -- Assign to `val` to enable smart cast
-    val currentTextSelectionBottomSheetPayload = textSelectionBottomSheetPayload
-    if (!currentTextSelectionBottomSheetPayload.isNullOrEmpty()) {
-      MessageTextSelectionBottomSheet(
-          text = currentTextSelectionBottomSheetPayload,
-          onDismiss = { textSelectionBottomSheetPayload = null },
-      )
-    }
   }
   MessageContextMenu(
       contextMenuState,
-      onShowTextSelection = { textMessage ->
-        val textLength = textMessage.content.text.length
-        if (textLength > 1) {
-          onShowFullScreenMessage.showTextSelection(textMessage)
-        } else {
-          textSelectionBottomSheetPayload = textMessage.content.text
-        }
-      },
+      onShowFullScreenTextSelection = onShowFullScreenMessage.showTextSelection,
   )
 }
