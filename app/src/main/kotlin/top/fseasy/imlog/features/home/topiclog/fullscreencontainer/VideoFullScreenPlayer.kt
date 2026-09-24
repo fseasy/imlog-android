@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -45,6 +46,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.compose.PlayerSurface
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import top.fseasy.imlog.R
 import top.fseasy.imlog.data.util.MediaPlaybackState
 import top.fseasy.imlog.data.util.PlayerStatus
@@ -55,9 +58,10 @@ import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.aspectRatio
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.WaveformSlider
 import top.fseasy.imlog.features.home.topiclog.toMediaInputId
+import top.fseasy.imlog.features.home.topiclog.toSharedTransitionElementId
+import top.fseasy.imlog.ui.components.sharedtransition.LocalSharedImageController
+import top.fseasy.imlog.ui.components.sharedtransition.sharedFullScreen
 import top.fseasy.imlog.ui.theme.ImlogTheme
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
 @Composable
 fun VideoFullScreenPlayer(
@@ -85,13 +89,24 @@ fun VideoFullScreenPlayer(
       onSpeedCycle = onSpeedCycle,
       onExit = onExit,
       videoSurface = {
+        val controller = LocalSharedImageController.current
+
+        Box(
+            modifier =
+                Modifier.fillMaxSize()
+                    .graphicsLayer { alpha = controller?.bgAlpha?.value ?: 1f }
+                    .background(Color.Black)
+        )
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
           PlayerSurface(
               player = player,
-              modifier = Modifier.fillMaxWidth().aspectRatio(content.aspectRatio),
+              modifier =
+                  Modifier.fillMaxWidth()
+                      .aspectRatio(content.aspectRatio)
+                      .sharedFullScreen(toSharedTransitionElementId(messageId)),
           )
         }
       },

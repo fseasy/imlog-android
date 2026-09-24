@@ -21,9 +21,9 @@ import top.fseasy.imlog.R
 import top.fseasy.imlog.ui.components.sharedtransition.sharedThumbnail
 
 object IMMediaDefaults {
-  val MinWidth = 80.dp
+  val MinWidth = 40.dp
   val MaxWidth = 220.dp
-  val MinHeight = 80.dp
+  val MinHeight = 40.dp
   val MaxHeight = 300.dp
   const val MIN_ASPECT_RATIO = 0.5f
   const val MAX_ASPECT_RATIO = 2.5f
@@ -69,9 +69,10 @@ fun MediaThumbnailBubble(
     AsyncImage(
         model = imageRequest,
         contentDescription = null,
-        contentScale = ContentScale.Crop,
+        contentScale = ContentScale.Inside,
         filterQuality = FilterQuality.Medium,
-        modifier = Modifier.matchParentSize().sharedThumbnail(sharedElementId), // fill box
+//        modifier = Modifier.matchParentSize().sharedThumbnail(sharedElementId), // fill box
+        modifier = Modifier.matchParentSize(), // fill box
         fallback = painterResource(R.drawable.icon_broken_image),
         error = painterResource(R.drawable.icon_error),
         //        placeholder = painterResource(R.drawable.icon_donut_large),

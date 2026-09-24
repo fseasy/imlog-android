@@ -115,19 +115,6 @@ fun TopicLogRoute(
           },
       )
 
-  val messageListState = rememberLazyListState()
-  val coroutineScope = rememberCoroutineScope()
-  fun messageListScrollToBottom() {
-    coroutineScope.launch {
-      // too much, directly scroll w/o animation
-      if (messageListState.firstVisibleItemIndex > 5) {
-        messageListState.scrollToItem(0)
-      } else {
-        messageListState.animateScrollToItem(0)
-      }
-    }
-  }
-
   SharedTransitionImageOverlayLayout(
       activeItem = currentFullScreenViewMessage,
       itemKey = { m -> toSharedTransitionElementId(m.id) },
@@ -140,7 +127,6 @@ fun TopicLogRoute(
             onSettingsClick = onSettingsClick,
             timelineSection = { modifier ->
               MessageTimeline(
-                  messageListState = messageListState,
                   onTapEmptyArea = handleComposerDismiss,
                   onDragList = handleComposerDismiss,
                   onShowFullScreenMessage = showFullScreenMessage,
@@ -152,7 +138,6 @@ fun TopicLogRoute(
             composerSection = {
               MessageComposer(
                   onNavigateBack = onNavigateBack,
-                  onSendMessageCallback = ::messageListScrollToBottom,
                   onShowSnackbar = viewModel::showSnackbar,
                   viewModel = composerViewModel,
               )

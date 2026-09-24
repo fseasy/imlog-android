@@ -46,7 +46,6 @@ fun ImageFullScreenViewer(
         rememberZoomableState(onDismiss = onDismissRequest, animateDismiss = false),
 ) {
   val controller = LocalSharedImageController.current
-  val coroutineScope = rememberCoroutineScope()
 
   PredictiveBackHandler { progressFlow ->
     try {

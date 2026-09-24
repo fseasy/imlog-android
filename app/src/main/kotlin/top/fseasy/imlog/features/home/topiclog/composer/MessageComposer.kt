@@ -42,7 +42,6 @@ import top.fseasy.imlog.domain.model.MessageType
 @Composable
 fun MessageComposer(
     onNavigateBack: () -> Unit,
-    onSendMessageCallback: () -> Unit,
     onShowSnackbar: (messageResId: Int) -> Unit,
     viewModel: MessageComposerViewModel = hiltViewModel(),
 ) {
@@ -121,12 +120,10 @@ fun MessageComposer(
       onInputTextChange = { text -> viewModel.updateInputText(text) },
       onSendText = {
         viewModel.sendTextMessage(inputText)
-        onSendMessageCallback()
       },
       onSendVoice = {
         viewModel.stopVoiceRecordingAndSendVoiceMessage()
         viewModel.clearInputMode() // return to idle composer ui
-        onSendMessageCallback()
       },
       onCancelVoiceRecoding = {
         viewModel.cancelVoiceRecording()
@@ -135,21 +132,18 @@ fun MessageComposer(
       },
       onSelectAlbums = { uris ->
         viewModel.sendMultipleAttachments(uris)
-        onSendMessageCallback()
       },
       onSelectAudios = { uris ->
         viewModel.sendMultipleAttachments(
             uris,
             MessageType.Audio,
         )
-        onSendMessageCallback()
       },
       onSelectFiles = { uris ->
         viewModel.sendMultipleAttachments(
             uris,
             MessageType.GenericFile,
         )
-        onSendMessageCallback()
       },
       onCloseExpanded = { viewModel.clearInputMode() },
   )
