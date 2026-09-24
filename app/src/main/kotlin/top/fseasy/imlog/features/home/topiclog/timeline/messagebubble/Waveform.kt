@@ -1,8 +1,8 @@
 package top.fseasy.imlog.features.home.topiclog.timeline.messagebubble
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,9 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -31,7 +29,7 @@ import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
 import kotlin.time.Duration
 
 /**
- * @param progress Current progress in [0, 1]
+ * @param progressProvider Function that provides current progress in [0, 1]
  * @param amplitudes Normalized amplitude values in [0, 1]
  * @param stretchToFit If true, stretches waveform across full width; otherwise adapts between min
  *   and max count based on amplitude size
@@ -39,7 +37,7 @@ import kotlin.time.Duration
  */
 @Composable
 fun WaveformSlider(
-    progress: Float,
+    progressProvider: () -> Float,
     amplitudes: List<Float>,
     tintColor: Color,
     onSeek: (Float) -> Unit,
@@ -52,38 +50,52 @@ fun WaveformSlider(
   val density = LocalDensity.current
   val barWidthPx = with(density) { barWidth.toPx() }
   val barGapPx = with(density) { barGap.toPx() }
+  val totalBarSpace = barWidthPx + barGapPx
   val inactiveColor = tintColor.copy(alpha = 0.3f)
 
-  var activeWaveformWidthPx by remember { mutableFloatStateOf(1f) }
+  val currentOnSeek by rememberUpdatedState(onSeek)
 
   Canvas(
       modifier =
-          modifier
-              .pointerInput(stretchToFit) {
-                detectTapGestures { offset ->
-                  val effectiveWidth =
-                      if (stretchToFit) size.width.toFloat() else activeWaveformWidthPx
-                  val newProgress = (offset.x / effectiveWidth).coerceIn(0f, 1f)
-                  onSeek(newProgress)
-                }
+          modifier.pointerInput(stretchToFit, totalBarSpace) {
+            awaitEachGesture {
+              val down = awaitFirstDown(requireUnconsumed = false)
+              val canvasWidth = size.width.toFloat()
+
+              val maxCount = (canvasWidth / totalBarSpace).toInt().coerceAtLeast(1)
+              val minCount = (maxCount / 2).coerceAtLeast(1)
+              val targetCount =
+                  if (stretchToFit) {
+                    maxCount
+                  } else {
+                    if (amplitudes.isEmpty()) minCount
+                    else amplitudes.size.coerceIn(minCount, maxCount)
+                  }
+              val effectiveWidth = targetCount * totalBarSpace
+
+              // 点击即触发 Seek
+              val initialProgress = (down.position.x / effectiveWidth).coerceIn(0f, 1f)
+              currentOnSeek(initialProgress)
+              down.consume()
+
+              // 持续拖拽（Drag）实时 Seek
+              while (true) {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break // 手指抬起结束
+
+                val dragProgress = (change.position.x / effectiveWidth).coerceIn(0f, 1f)
+                currentOnSeek(dragProgress)
+                change.consume()
               }
-              .pointerInput(stretchToFit) {
-                detectHorizontalDragGestures { change, _ ->
-                  change.consume()
-                  val effectiveWidth =
-                      if (stretchToFit) size.width.toFloat() else activeWaveformWidthPx
-                  val newProgress = (change.position.x / effectiveWidth).coerceIn(0f, 1f)
-                  onSeek(newProgress)
-                }
-              }
+            }
+          }
   ) {
     val canvasWidth = size.width
     val canvasHeight = size.height
 
-    val totalBarSpace = barWidthPx + barGapPx
     val maxCount = (canvasWidth / totalBarSpace).toInt().coerceAtLeast(1)
     val minCount = (maxCount / 2).coerceAtLeast(1)
-
     val targetCount =
         if (stretchToFit) {
           maxCount
@@ -91,29 +103,25 @@ fun WaveformSlider(
           if (amplitudes.isEmpty()) minCount else amplitudes.size.coerceIn(minCount, maxCount)
         }
 
-    activeWaveformWidthPx = targetCount * totalBarSpace
+    val currentProgress = progressProvider()
+    val ampSize = amplitudes.size
 
-    val sampledAmplitudes =
-        if (amplitudes.isEmpty()) {
-          List(targetCount) { barMinHeightRatio }
-        } else {
-          List(targetCount) { index ->
+    for (index in 0 until targetCount) {
+      val amp =
+          if (ampSize == 0) {
+            barMinHeightRatio
+          } else {
             val dataIndex =
-                ((index.toFloat() / targetCount) * amplitudes.size)
-                    .toInt()
-                    .coerceIn(0, amplitudes.size - 1)
+                ((index.toFloat() / targetCount) * ampSize).toInt().coerceIn(0, ampSize - 1)
             amplitudes[dataIndex]
           }
-        }
 
-    sampledAmplitudes.forEachIndexed { index, amp ->
-      val x = index * totalBarSpace + barWidthPx / 2
-      val isPlayed = (index.toFloat() / targetCount) <= progress
-
+      val isPlayed = (index.toFloat() / targetCount) <= currentProgress
       val finalAmp = amp.coerceIn(barMinHeightRatio, 1f)
       val barHeight = canvasHeight * finalAmp
-      val startY = (canvasHeight - barHeight) / 2
+      val startY = (canvasHeight - barHeight) / 2f
       val endY = startY + barHeight
+      val x = index * totalBarSpace + barWidthPx / 2f
 
       drawLine(
           color = if (isPlayed) tintColor else inactiveColor,
@@ -139,13 +147,14 @@ fun WaveformWithProgressColumn(
     modifier: Modifier = Modifier,
 ) {
   val playPosition = if (isActive) activePlayPositionHolder.value else inactivePlayPosition
-  val progress =
-      if (duration > Duration.ZERO) {
-        (playPosition.inWholeMilliseconds.toFloat() / duration.inWholeMilliseconds.toFloat())
-            .coerceIn(0f, 1f)
-      } else {
-        0f
-      }
+  val progressProvider = {
+    if (duration > Duration.ZERO) {
+      (playPosition.inWholeMilliseconds.toFloat() / duration.inWholeMilliseconds.toFloat())
+          .coerceIn(0f, 1f)
+    } else {
+      0f
+    }
+  }
 
   Column(
       modifier = modifier,
@@ -153,7 +162,7 @@ fun WaveformWithProgressColumn(
   ) {
     // Waveform Visualizer & Seek Area
     WaveformSlider(
-        progress = progress,
+        progressProvider = progressProvider,
         amplitudes = amplitudes,
         tintColor = tintColor,
         onSeek = onSeek,

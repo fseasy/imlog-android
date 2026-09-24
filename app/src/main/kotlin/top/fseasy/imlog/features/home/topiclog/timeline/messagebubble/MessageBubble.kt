@@ -49,7 +49,6 @@ fun MessageBubble(
         ) {
           ColumnWithTimeText(message.formatedCreatedAt) {
             TextMessageBubble(
-                messageId = message.id,
                 text = content.text,
             )
           }

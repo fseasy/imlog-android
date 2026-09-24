@@ -1,14 +1,5 @@
 package top.fseasy.imlog.features.home.topiclog
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -27,9 +18,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +40,7 @@ import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
 import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainer
 import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainerUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimeline
+import top.fseasy.imlog.ui.components.sharedtransition.SharedTransitionImageOverlayLayout
 import top.fseasy.imlog.ui.util.openFileWithChooser
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -138,9 +128,10 @@ fun TopicLogRoute(
     }
   }
 
-  TopicLogSharedTransitionLayoutContainer(
-      currentFullScreenViewMessage = currentFullScreenViewMessage,
-      logContent = {
+  SharedTransitionImageOverlayLayout(
+      activeItem = currentFullScreenViewMessage,
+      itemKey = { m -> toSharedTransitionElementId(m.id) },
+      content = {
         TopicLogContent(
             topicId = viewModel.topicId,
             topicName = topicName,
@@ -169,73 +160,13 @@ fun TopicLogRoute(
             snackbarHostState = snackbarHostState,
         )
       },
-      fullScreenOverlay = { fullScreenViewMessage ->
-        FullScreenContainer(
-            model = fullScreenViewMessage,
-            onClose = { currentFullScreenViewMessage = null },
-            player = viewModel.player,
-            mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
-        )
-      },
-  )
-}
-
-/**
- * For SharedTransitionLayout. It's like a local var, The same compositionLocal can provide
- * different values, so that the composable get the current value according to its position of the
- * component tree - from the nearest parent node that provides the value.
- */
-val LocalTopicLogVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
-
-/** For SharedTransitionLayout. */
-val LocalTopicLogSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { null }
-
-/**
- * The container wraps the shared-transition-layout between the LogContent and FullScreen Overlay.
- *
- * NOTE: we pass the scope by `compositionLocalOf` instead of param-passing-through
- */
-@Composable
-private fun TopicLogSharedTransitionLayoutContainer(
-    currentFullScreenViewMessage: FullScreenContainerUiModel?,
-    logContent: @Composable () -> Unit,
-    fullScreenOverlay: @Composable (message: FullScreenContainerUiModel) -> Unit,
-) {
-
-  SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
-    CompositionLocalProvider(LocalTopicLogSharedTransitionScope provides this) {
-      Box(modifier = Modifier.fillMaxSize()) {
-        // Why use a AnimatedVisibility with a constant `visible = true`
-        // 1. SharedTransitionLayout must need a animatedVisibility scope!
-        // 2. We can't use AnimatedContent as it will distroy the content when swith to the overlay
-        // part
-        // 3. so finally, we have to hack it to build a dummy always-visible scope.
-        // Why top level instead of the level of the leaf node? -> it's the most efficient one, as
-        // only 1 scope is created and never destroied as user scroll the message timeline.
-        AnimatedVisibility(
-            visible = true,
-            enter = EnterTransition.None,
-            exit = ExitTransition.None,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-          CompositionLocalProvider(LocalTopicLogVisibilityScope provides this) {
-            logContent()
-          }
-        }
-        AnimatedVisibility(
-            visible = currentFullScreenViewMessage != null,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-          CompositionLocalProvider(LocalTopicLogVisibilityScope provides this) {
-            currentFullScreenViewMessage?.let {
-              fullScreenOverlay(it)
-            }
-          }
-        }
-      }
-    }
+  ) { fullScreenViewMessage ->
+    FullScreenContainer(
+        model = fullScreenViewMessage,
+        onDismissRequest = { currentFullScreenViewMessage = null },
+        player = viewModel.player,
+        mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
+    )
   }
 }
 

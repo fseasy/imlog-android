@@ -10,21 +10,24 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,9 +52,9 @@ import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.util.safeDivision
 import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
+import top.fseasy.imlog.features.home.topiclog.timeline.aspectRatio
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.WaveformSlider
 import top.fseasy.imlog.features.home.topiclog.toMediaInputId
-import top.fseasy.imlog.ui.components.AppCircularProgress
 import top.fseasy.imlog.ui.theme.ImlogTheme
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -70,6 +73,7 @@ fun VideoFullScreenPlayer(
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+
   VideoFullScreenPlayerContent(
       content = content,
       messageId = messageId,
@@ -81,10 +85,15 @@ fun VideoFullScreenPlayer(
       onSpeedCycle = onSpeedCycle,
       onExit = onExit,
       videoSurface = {
-        PlayerSurface(
-            player = player,
+        Box(
             modifier = Modifier.fillMaxSize(),
-        )
+            contentAlignment = Alignment.Center,
+        ) {
+          PlayerSurface(
+              player = player,
+              modifier = Modifier.fillMaxWidth().aspectRatio(content.aspectRatio),
+          )
+        }
       },
       modifier = modifier,
   )
@@ -104,33 +113,18 @@ fun VideoFullScreenPlayerContent(
     videoSurface: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-
   var areControlsVisible by remember { mutableStateOf(true) }
-
-  LaunchedEffect(messageId) {
-    onTogglePlay()
-  }
-
-  val isPlaying = playbackState.isThisMediaPlaying(toMediaInputId(messageId))
-  val isActive = playbackState.isThisMediaActive(toMediaInputId(messageId))
 
   Box(
       modifier =
           modifier.fillMaxSize().background(Color.Black).clickable(
               interactionSource = remember { MutableInteractionSource() },
-              indication = null, // disable indication
+              indication = null,
           ) {
-            // Switch visibility when click on the empty area
             areControlsVisible = !areControlsVisible
           }
   ) {
     videoSurface()
-
-    if (playbackState.status == PlayerStatus.Buffering) {
-      AppCircularProgress(
-          modifier = Modifier.align(Alignment.Center),
-      )
-    }
 
     AnimatedVisibility(
         visible = areControlsVisible,
@@ -138,129 +132,155 @@ fun VideoFullScreenPlayerContent(
         exit = fadeOut(),
         modifier = Modifier.fillMaxSize(),
     ) {
-      Box(
-          modifier =
-              Modifier.fillMaxSize()
-                  .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))
-      ) {
-        val tintColor = MaterialTheme.colorScheme.onSurface
+      Box(modifier = Modifier.fillMaxSize()) {
         // close button
         IconButton(
             onClick = onExit,
-            modifier = Modifier.align(Alignment.TopStart).padding(top = 16.dp, start = 16.dp),
+            modifier =
+                Modifier.align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(16.dp)
+                    .background(
+                        color = Color.Black.copy(alpha = 0.5f),
+                        shape = CircleShape,
+                    ),
         ) {
           Icon(
-              imageVector = Icons.Default.Close,
+              imageVector = Icons.Rounded.Close,
               contentDescription = stringResource(R.string.term_close),
-              tint = tintColor,
+              tint = Color.White,
           )
         }
 
-        PlayControllerRow(
-            amplitudes = content.amplitudes,
-            isActive = isActive,
-            isPlaying = isPlaying,
+        val isVideoActive = playbackState.isThisMediaActive(toMediaInputId(messageId))
+        PlayControllerDock(
+            tintColor = Color.White,
+            modifier =
+                Modifier.fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 20.dp)
+                    .background(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(24.dp),
+                    )
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            isPlaying = playbackState.isThisMediaPlaying(toMediaInputId(messageId)),
             duration = playbackState.duration,
             speed = playbackState.speed,
-            activePlayPositionHolder = activePlayPositionHolder,
-            inactivePlayPosition = inactivePlayPosition,
+            amplitudes = content.amplitudes,
             onTogglePlay = onTogglePlay,
             onSeek = onSeek,
             onSpeedCycle = onSpeedCycle,
-            tintColor = tintColor,
-            modifier = Modifier.fillMaxWidth().align(Alignment.BottomEnd).padding(16.dp, 32.dp),
+            positionProvider = {
+              if (isVideoActive) {
+                activePlayPositionHolder.value
+              } else {
+                inactivePlayPosition
+              }
+            },
         )
       }
     }
   }
 }
 
-/** Used for Audio/Voice bubble */
 @Composable
-fun PlayControllerRow(
-    amplitudes: List<Float>,
-    isActive: Boolean,
+fun PlayControllerDock(
     isPlaying: Boolean,
     duration: Duration,
     speed: Float,
-    activePlayPositionHolder: State<Duration>,
-    inactivePlayPosition: Duration,
+    amplitudes: List<Float>,
     onTogglePlay: () -> Unit,
     onSeek: (Float) -> Unit,
     onSpeedCycle: () -> Unit,
+    positionProvider: () -> Duration,
     tintColor: Color,
     modifier: Modifier = Modifier,
 ) {
-  val playPosition = if (isActive) activePlayPositionHolder.value else inactivePlayPosition
-
   Row(
       modifier = modifier.height(48.dp),
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically,
   ) {
-    // play/pause
     val playPauseDescription =
         stringResource(if (isPlaying) R.string.term_media_pause else R.string.term_media_play)
-    IconButton(onClick = onTogglePlay, Modifier.fillMaxHeight()) {
+    IconButton(
+        onClick = onTogglePlay,
+        modifier = Modifier.fillMaxHeight(),
+    ) {
       Icon(
           imageVector =
-              if (isPlaying) ImageVector.vectorResource(R.drawable.icon_pause)
-              else Icons.Default.PlayArrow,
+              if (isPlaying) {
+                ImageVector.vectorResource(R.drawable.icon_pause)
+              } else {
+                Icons.Default.PlayArrow
+              },
           contentDescription = playPauseDescription,
           tint = tintColor,
       )
     }
-    // === waveform slider
-    // === TIME ---- Speed
-    Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-      val progress = playPosition.safeDivision(duration).coerceIn(0f, 1f)
-      // === waveform slider
-      Row(modifier = Modifier.fillMaxWidth()) {
-        WaveformSlider(
-            progress = progress,
-            amplitudes = amplitudes,
-            tintColor = tintColor,
-            onSeek = onSeek,
-            stretchToFit = true,
-            modifier = Modifier.fillMaxWidth().height(32.dp), // waveform height
-        )
-      }
-      // === TIME ---- Speed
-      Row(
-          modifier = Modifier.fillMaxWidth().height(16.dp),
-          horizontalArrangement = Arrangement.SpaceBetween,
-      ) {
-        // TIME
-        Row() {
-          Text(
-              text = playPosition.toAppMessageTimeFormat(),
-              style = MaterialTheme.typography.labelSmall,
-              color = tintColor.copy(alpha = 0.6f),
-          )
-          Text(
-              text = "/",
-              style = MaterialTheme.typography.labelSmall,
-              color = tintColor.copy(0.6f),
-          )
 
-          Text(
-              text = duration.toAppMessageTimeFormat(),
-              style = MaterialTheme.typography.labelSmall,
-              color = tintColor.copy(alpha = 0.6f),
-          )
-        }
-        Text(
-            text = "${speed}x",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = tintColor,
-            modifier =
-                Modifier.clip(RoundedCornerShape(4.dp))
-                    .clickable(onClick = onSpeedCycle)
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-        )
-      }
+    Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+      WaveformSlider(
+          progressProvider = {
+            val current = positionProvider()
+            current.safeDivision(duration).coerceIn(0f, 1f)
+          },
+          amplitudes = amplitudes,
+          tintColor = tintColor,
+          onSeek = onSeek,
+          stretchToFit = true,
+          modifier = Modifier.fillMaxWidth().height(32.dp),
+      )
+
+      TimeAndSpeedLine(
+          duration = duration,
+          speed = speed,
+          positionProvider = positionProvider,
+          onSpeedCycle = onSpeedCycle,
+          tintColor = tintColor,
+      )
     }
+  }
+}
+
+@Composable
+private fun TimeAndSpeedLine(
+    duration: Duration,
+    speed: Float,
+    positionProvider: () -> Duration,
+    onSpeedCycle: () -> Unit,
+    tintColor: Color,
+) {
+  Row(
+      modifier = Modifier.fillMaxWidth().height(16.dp),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Row {
+      Text(
+          text = positionProvider().toAppMessageTimeFormat(),
+          style = MaterialTheme.typography.labelSmall,
+          color = tintColor.copy(alpha = 0.7f),
+      )
+      Text(
+          text = " / ${duration.toAppMessageTimeFormat()}",
+          style = MaterialTheme.typography.labelSmall,
+          color = tintColor.copy(alpha = 0.7f),
+      )
+    }
+
+    Text(
+        text = "${speed}x",
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = tintColor,
+        modifier =
+            Modifier.clip(RoundedCornerShape(4.dp))
+                .clickable(onClick = onSpeedCycle)
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+    )
   }
 }
 

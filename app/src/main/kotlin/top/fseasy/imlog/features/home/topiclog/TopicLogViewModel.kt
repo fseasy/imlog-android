@@ -282,6 +282,7 @@ constructor(
       userId: UserId,
       message: MessageUiModel<MessageContentUiModel.ImageLike>,
   ): AbsolutePathModel.UriStrModel? {
+    Timber.d("before build file uri")
     val uri =
         runSuspendCatching {
           message.content.buildFileUri(
@@ -298,6 +299,7 @@ constructor(
               _uiEffect.send(TopicLogUiEffect.ShowSnackBar("Failed to resolve file"))
               return null
             }
+    Timber.d("build file uri done")
     return AbsolutePathModel.UriStrModel(uri.toUriStr())
   }
 }

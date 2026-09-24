@@ -20,10 +20,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import top.fseasy.imlog.R
-import top.fseasy.imlog.domain.model.MessageId
-import top.fseasy.imlog.features.home.topiclog.LocalTopicLogSharedTransitionScope
-import top.fseasy.imlog.features.home.topiclog.LocalTopicLogVisibilityScope
-import top.fseasy.imlog.features.home.topiclog.toSharedTransitionElementId
 import top.fseasy.imlog.ui.components.contextmenu.FillFixedHeightTextSelectionField
 import top.fseasy.imlog.ui.components.contextmenu.TextSelectionActionBar
 import top.fseasy.imlog.ui.components.contextmenu.rememberTextSelectionState
@@ -40,15 +36,13 @@ import top.fseasy.imlog.ui.theme.ImlogTheme
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun MessageTextSelectionFullScreen(
-    messageId: MessageId,
-    text: String,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
+  text: String,
+  onDismissRequest: () -> Unit,
+  modifier: Modifier = Modifier,
 ) {
   MessageTextSelectionFullScreenContent(
       text = text.trimEnd(),
-      sharedTransitionElementId = toSharedTransitionElementId(messageId),
-      onDismiss = onDismiss,
+      onDismiss = onDismissRequest,
       modifier = modifier,
   )
 }
@@ -57,24 +51,9 @@ fun MessageTextSelectionFullScreen(
 @Composable
 fun MessageTextSelectionFullScreenContent(
     text: String,
-    sharedTransitionElementId: String,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-  val sharedTransitionScope = LocalTopicLogSharedTransitionScope.current
-  val visibilityScope = LocalTopicLogVisibilityScope.current
-
-  val sharedTransitionModifier =
-      if (sharedTransitionScope != null && visibilityScope != null) {
-        with(sharedTransitionScope) {
-          Modifier.sharedElement(
-              rememberSharedContentState(key = sharedTransitionElementId),
-              animatedVisibilityScope = visibilityScope,
-          )
-        }
-      } else {
-        Modifier
-      }
 
   val selectionState = rememberTextSelectionState(text)
   val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -120,9 +99,8 @@ fun MessageTextSelectionFullScreenContent(
 private fun MessageTextSelectionPreview() {
   ImlogTheme {
     MessageTextSelectionFullScreen(
-        messageId = MessageId.random(),
         text = "Here is a dummy short text",
-        onDismiss = {},
+        onDismissRequest = {},
     )
   }
 }

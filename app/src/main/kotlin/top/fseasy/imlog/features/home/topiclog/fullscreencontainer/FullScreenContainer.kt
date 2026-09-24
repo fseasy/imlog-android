@@ -8,6 +8,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import top.fseasy.imlog.data.mapper.toActualFileOrUri
 import top.fseasy.imlog.features.home.topiclog.MediaPlaybackStateAndAction
 import top.fseasy.imlog.features.home.topiclog.ReadMediaPlaybackStateAndRender
+import top.fseasy.imlog.features.home.topiclog.timeline.aspectRatio
+import top.fseasy.imlog.features.home.topiclog.toMemoryCacheKey
+import top.fseasy.imlog.features.home.topiclog.toSharedTransitionElementId
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -15,19 +18,23 @@ fun FullScreenContainer(
     model: FullScreenContainerUiModel,
     player: ExoPlayer,
     mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
-    onClose: () -> Unit,
+    onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
 
-  BackHandler() { onClose() }
+  BackHandler() { onDismissRequest() }
 
   when (model) {
-    is FullScreenContainerUiModel.ImageShow ->
-        ImageFullScreenViewer(
-            imageUrl = model.path.toActualFileOrUri(),
-            onDismiss = onClose,
-            modifier = modifier,
-        )
+    is FullScreenContainerUiModel.ImageShow -> {
+      ImageFullScreenViewer(
+          imageUrl = model.path.toActualFileOrUri(),
+          aspectRatio = model.message.content.aspectRatio,
+          thumbnailCacheKey = toMemoryCacheKey(model.message.id),
+          sharedElementId = toSharedTransitionElementId(model.message.id),
+          onDismissRequest = onDismissRequest,
+          modifier = modifier,
+      )
+    }
 
     is FullScreenContainerUiModel.VideoShow ->
         ReadMediaPlaybackStateAndRender(
@@ -49,16 +56,15 @@ fun FullScreenContainer(
                   onSpeedCycle = {
                     mediaPlaybackStateAndAction.onCyclePlaybackSpeed(model.message.id)
                   },
-                  onExit = onClose,
+                  onExit = onDismissRequest,
                   modifier = modifier,
               )
             },
         )
     is FullScreenContainerUiModel.TextSelection ->
         MessageTextSelectionFullScreen(
-            messageId = model.message.id,
             text = model.message.content.text,
-            onDismiss = onClose,
+            onDismissRequest = onDismissRequest,
             modifier = modifier,
         )
   }
