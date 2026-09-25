@@ -17,19 +17,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastForEach
+import kotlin.math.abs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 /**
- * Zoomable + Swipe-to-dismiss 状态。
+ * Zoomable + Swipe-to-dismiss 状态管理
  *
  * @param animateDismiss true 时下拉超过阈值会先做滑出动画再回调 [onDismissRequest]
  */
@@ -38,13 +39,17 @@ class ZoomableState(
     val minScale: Float = 1f,
     val maxScale: Float = 4f,
     private val scope: CoroutineScope,
-    private val onDismissRequest: () -> Unit,
+    private val onDismissRequest: ZoomableState.() -> Unit,
+    private val onSingleTap: ZoomableState.() -> Unit = onDismissRequest,
     private val animateDismiss: Boolean = true,
 ) {
   // ---------- 核心动画状态 ----------
   val scale = Animatable(1f)
   val offset = Animatable(Offset.Zero, Offset.VectorConverter)
-  val dismissDragY = Animatable(0f) // 仅用于下拉关闭
+
+  // 下拉手势物理位移（X 与 Y 均为 Animatable，保证回弹平滑）
+  val dismissDragX = Animatable(0f)
+  val dismissDragY = Animatable(0f)
 
   var containerSize by mutableStateOf(IntSize.Zero)
 
@@ -68,11 +73,35 @@ class ZoomableState(
   // ---------- 内部 ----------
   private var gestureJob: Job? = null
 
+  // ==================== 物理矩形计算核心 ====================
+
+  /**
+   * 核心补全：根据传入的全屏基准 [baseRect]（即 Fit 居中全屏时的矩形）， 结合当前的放大比例、平移 offset、下拉位移及缩放， 精确计算出图片当前在屏幕/Window
+   * 坐标系上的实际视觉 [Rect]。
+   */
+  fun computeVisualRect(baseRect: Rect): Rect {
+    // 综合缩放系数（双指放大 * 下拉微缩）
+    val totalScale = scale.value * dismissScaleFraction
+    // 综合物理位移（双指移动 + 下拉跟随）
+    val totalOffset = offset.value + Offset(dismissDragX.value, dismissDragY.value)
+
+    val visualCenter = baseRect.center + totalOffset
+    val visualWidth = baseRect.width * totalScale
+    val visualHeight = baseRect.height * totalScale
+
+    return Rect(
+        left = visualCenter.x - visualWidth / 2f,
+        top = visualCenter.y - visualHeight / 2f,
+        right = visualCenter.x + visualWidth / 2f,
+        bottom = visualCenter.y + visualHeight / 2f,
+    )
+  }
+
   // ==================== 公共手势入口 ====================
 
-  fun onSingleTap() = onDismissRequest()
+  fun singleTap() = this.onSingleTap()
 
-  fun onDoubleTap(tapOffset: Offset) {
+  fun doubleTap(tapOffset: Offset) {
     gestureJob?.cancel()
     gestureJob = scope.launch {
       val targetScale = if (scale.value > 1.2f) 1f else 3f
@@ -90,6 +119,8 @@ class ZoomableState(
       launch { offset.animateTo(targetOffset, tween(250)) }
     }
   }
+
+  fun dismiss() = this.onDismissRequest()
 
   /** Predictive Back 进度 */
   suspend fun updatePredictiveBackProgress(progress: Float) {
@@ -127,11 +158,7 @@ class ZoomableState(
             val centroid = event.calculateCentroid()
 
             val newScale = (scale.value * zoom).coerceIn(minScale, maxScale)
-            val containerCenter =
-                Offset(
-                    containerSize.width / 2f,
-                    containerSize.height / 2f,
-                )
+            val containerCenter = Offset(containerSize.width / 2f, containerSize.height / 2f)
             val targetOffset =
                 if (newScale > 1f) {
                   offset.value + pan - (centroid - containerCenter) * (zoom - 1f)
@@ -158,9 +185,13 @@ class ZoomableState(
 
               if (isDismissDragging) {
                 panAccum += drag
-                // 橡皮筋阻尼
-                val damped = (panAccum.y * 0.8f).coerceAtLeast(0f)
-                scope.launch { dismissDragY.snapTo(damped) }
+                // 橡皮筋阻尼：Y 轴主导下拉，X 轴跟随偏移
+                val dampedY = (panAccum.y * 0.8f).coerceAtLeast(0f)
+                val dampedX = panAccum.x * 0.8f
+                scope.launch {
+                  dismissDragY.snapTo(dampedY)
+                  dismissDragX.snapTo(dampedX)
+                }
                 change.consume()
               }
             } else {
@@ -182,7 +213,7 @@ class ZoomableState(
 
   private fun settleAfterGesture(wasDismissDragging: Boolean) {
     if (wasDismissDragging) {
-      val threshold = containerSize.height * 0.2f
+      val threshold = containerSize.height * 0.15f
       if (dismissDragY.value > threshold) {
         scope.launch {
           if (animateDismiss) {
@@ -191,14 +222,24 @@ class ZoomableState(
                 tween(200),
             )
           }
-          onDismissRequest()
+          // 触发回调，this 作为参数自然可用
+          onDismissRequest(this@ZoomableState)
         }
       } else {
+        // 未达阈值：X 和 Y 同步弹簧复原
         scope.launch {
-          dismissDragY.animateTo(
-              0f,
-              spring(dampingRatio = 0.8f, stiffness = 400f),
-          )
+          launch {
+            dismissDragY.animateTo(
+                0f,
+                spring(dampingRatio = 0.8f, stiffness = 400f),
+            )
+          }
+          launch {
+            dismissDragX.animateTo(
+                0f,
+                spring(dampingRatio = 0.8f, stiffness = 400f),
+            )
+          }
         }
       }
     } else if (scale.value < 1f) {
@@ -221,20 +262,24 @@ class ZoomableState(
   }
 }
 
+// ==================== Modifier 与 工厂函数 ====================
+
 @Composable
-fun rememberZoomableState(
+fun rememberZoomableState2(
     minScale: Float = 1f,
     maxScale: Float = 4f,
-    onDismiss: () -> Unit,
+    onDismissRequest: ZoomableState.() -> Unit,
+    onSingleTap: ZoomableState.() -> Unit = onDismissRequest,
     animateDismiss: Boolean = true,
 ): ZoomableState {
   val scope = rememberCoroutineScope()
-  return remember(minScale, maxScale, onDismiss, animateDismiss) {
+  return remember(minScale, maxScale, onDismissRequest, onSingleTap, animateDismiss) {
     ZoomableState(
         minScale = minScale,
         maxScale = maxScale,
         scope = scope,
-        onDismissRequest = onDismiss,
+        onDismissRequest = onDismissRequest,
+        onSingleTap = onSingleTap,
         animateDismiss = animateDismiss,
     )
   }

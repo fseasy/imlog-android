@@ -21,7 +21,6 @@ import top.fseasy.imlog.data.mapper.toActualFileOrUri
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
-import top.fseasy.imlog.features.home.topiclog.timeline.aspectRatio
 import top.fseasy.imlog.features.home.topiclog.toMemoryCacheKey
 import top.fseasy.imlog.features.home.topiclog.toSharedTransitionElementId
 
@@ -32,11 +31,10 @@ fun VideoMessageBubble(
     modifier: Modifier = Modifier,
 ) {
 
-  val aspectRatio = content.aspectRatio
-
   MediaThumbnailBubble(
-      thumbnailUrl = content.thumbnailPath?.toActualFileOrUri(),
-      aspectRatio = aspectRatio,
+      url = content.thumbnailPath?.toActualFileOrUri(),
+      widthPx = content.width,
+      heightPx = content.height,
       imageMemoryCacheKey = toMemoryCacheKey(messageId),
       sharedElementId = toSharedTransitionElementId(messageId),
       modifier = modifier,

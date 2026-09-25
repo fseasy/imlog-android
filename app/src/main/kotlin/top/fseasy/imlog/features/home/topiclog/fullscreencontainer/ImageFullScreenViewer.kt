@@ -1,106 +1,106 @@
 package top.fseasy.imlog.features.home.topiclog.fullscreencontainer
 
-import androidx.activity.compose.PredictiveBackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.cancellable
 import top.fseasy.imlog.R
-import top.fseasy.imlog.ui.components.sharedtransition.LocalSharedImageController
-import top.fseasy.imlog.ui.components.sharedtransition.OverlayPhase
-import top.fseasy.imlog.ui.components.sharedtransition.sharedFullScreen
-import top.fseasy.imlog.ui.components.zoomable.ZoomableState
-import top.fseasy.imlog.ui.components.zoomable.rememberZoomableState
-import top.fseasy.imlog.ui.components.zoomable.zoomableContentOffset
-import top.fseasy.imlog.ui.components.zoomable.zoomableContentScale
-import top.fseasy.imlog.ui.components.zoomable.zoomableGesture
+import top.fseasy.imlog.ui.components.gesture.DismissibleBox
+import top.fseasy.imlog.ui.components.gesture.ZoomableBox
+import top.fseasy.imlog.ui.components.gesture.computeVisualRect
+import top.fseasy.imlog.ui.components.gesture.rememberDismissState
+import top.fseasy.imlog.ui.components.gesture.rememberZoomableState
+import top.fseasy.imlog.ui.components.overlaylayout.OverlayLayoutScope
 
 /**
  * We need the preloaded thumbnail to smooth the shared-element transition. Or the animation will
  * gitter.
  */
 @Composable
-fun ImageFullScreenViewer(
+fun OverlayLayoutScope.ImageFullScreenViewer(
+    overlayTransitionElementId: String,
     imageUrl: Any,
-    aspectRatio: Float,
     thumbnailCacheKey: String,
-    sharedElementId: String,
-    onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
-    state: ZoomableState =
-        rememberZoomableState(onDismiss = onDismissRequest, animateDismiss = false),
 ) {
-  val controller = LocalSharedImageController.current
+  //
+  //  val zoomState2: ZoomableState =
+  //      rememberZoomableState2(
+  //          onDismissRequest = {
+  //            onDismissWithTransition(this::computeVisualRect)
+  //          },
+  //          animateDismiss = false,
+  //      )
 
-  PredictiveBackHandler { progressFlow ->
-    try {
-      progressFlow.cancellable().collect { backEvent ->
-        controller?.snapAlpha(1f - backEvent.progress)
-        state.updatePredictiveBackProgress(backEvent.progress)
+  //  Box(
+  //      modifier =
+  //        Modifier.fillMaxSize()
+  //            // 1. 手势挂载在外层全屏 Box 上！
+  //            // 保证用户在屏幕边缘、上下黑色留白区下滑，都能流畅触发下拉退出或单击！
+  //            .zoomableGestures(zoomState2),
+  //      contentAlignment = Alignment.Center,
+  //  ) {
+  //    AsyncImage(
+  //        model =
+  //          ImageRequest.Builder(LocalContext.current)
+  //              .data(imageUrl)
+  //              .placeholderMemoryCacheKey(thumbnailCacheKey)
+  //              .crossfade(200)
+  //              .build(),
+  //        contentDescription = stringResource(R.string.term_full_screen_image),
+  //        // 2. 由 Fit 自动在全屏空间内保持长宽比居中显示，不要加 aspectRatio！
+  //        contentScale = ContentScale.Fit,
+  //        modifier =
+  //          Modifier.fillMaxSize()
+  //              // 3. 视觉变换挂在图片自身上（缩放和平移）
+  //              .zoomableContentTransform(zoomState2),
+  //    )
+  //  }
+
+  val zoomState = rememberZoomableState()
+  val dismissState = rememberDismissState()
+
+  val dismissFromVisualRect =
+      remember(zoomState, dismissState) {
+        {
+          this.dismiss(overlayTransitionElementId) { baseRect ->
+            computeVisualRect(baseRect, zoomableState = zoomState, dismissState = dismissState)
+          }
+        }
       }
-      onDismissRequest()
-    } catch (e: CancellationException) {
-      controller?.snapAlpha(1f)
-      state.resetBackState()
-      throw e
-    }
-  }
+  this.bindBackgroundAlpha { dismissState.backgroundAlpha }
 
-  LaunchedEffect(state.backgroundAlpha) {
-    if (controller?.phase is OverlayPhase.Showing) {
-      controller.snapAlpha(state.backgroundAlpha)
-    }
-  }
-
-  // Background color. Make it independent of the Shared Transition element
-  // Or it will show an alpha gitter for transition in drag-down
-  Box(
-      modifier =
-          Modifier.fillMaxSize()
-              .graphicsLayer { alpha = controller?.bgAlpha?.value ?: 1f }
-              .background(Color.Black)
-  )
-
-  Box(
-      modifier =
-          modifier
-              .fillMaxSize()
-              // bind zoomable gesture
-              .zoomableGesture(state),
-      contentAlignment = Alignment.Center,
+  DismissibleBox(
+      state = dismissState,
+      enabled = { !zoomState.isZoomed }, // 👈 传 Lambda：MediaViewerScreen 彻底脱离重组！
+      drawBackground = false,
+      onDismissRequest = dismissFromVisualRect,
+      animateSwipeDismiss = false,
+      modifier = modifier.fillMaxSize(),
   ) {
-    AsyncImage(
-        model =
-            ImageRequest.Builder(LocalContext.current)
-                .data(imageUrl)
-                .placeholderMemoryCacheKey(thumbnailCacheKey)
-                .crossfade(200)
-                .build(),
-        contentDescription = stringResource(R.string.term_full_screen_image),
-        contentScale = ContentScale.Fit,
-        modifier =
-            Modifier.aspectRatio(aspectRatio)
-                .fillMaxSize()
-                // trials and trials, We still didn't find the perfect transforming effects.
-                // We only know, must set Offset before the shared transition.
-                .zoomableContentOffset(state)
-                .sharedFullScreen(sharedElementId)
-                .zoomableContentScale(state),
-    )
+    ZoomableBox(
+        state = zoomState,
+        onSingleTap = dismissFromVisualRect,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+      AsyncImage(
+          model =
+              ImageRequest.Builder(LocalContext.current)
+                  .data(imageUrl)
+                  .placeholderMemoryCacheKey(thumbnailCacheKey)
+                  .crossfade(200)
+                  .build(),
+          contentDescription = stringResource(R.string.term_full_screen_image),
+          // 2. 由 Fit 自动在全屏空间内保持长宽比居中显示，不要加 aspectRatio！
+          contentScale = ContentScale.Fit,
+          modifier = Modifier.fillMaxSize(),
+      )
+    }
   }
 }
