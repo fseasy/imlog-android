@@ -6,9 +6,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -16,25 +13,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
 import top.fseasy.imlog.ui.components.gesture.blockTouchEvents
-import kotlin.math.roundToInt
 
 @Composable
 internal fun <T : Any> OverlayScene(
-    item: T,
-    itemKey: Any,
-    registry: OverlayLayoutThumbnailRegistry,
-    onDismissFinished: () -> Unit,
-    overlayContent: @Composable OverlayLayoutScope.(item: T) -> Unit,
+  item: T,
+  itemKey: Any,
+  registry: OverlayLayoutMetadataRegistry,
+  onDismissFinished: () -> Unit,
+  overlayContent: @Composable OverlayLayoutScope.(item: T) -> Unit,
 ) {
-  val density = LocalDensity.current
   val coroutineScope = rememberCoroutineScope()
 
   BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -115,32 +107,8 @@ internal fun <T : Any> OverlayScene(
                   .blockTouchEvents()
       )
 
-      // 🌟 3. 几何内容框
-      val currentRect =
-          if (
-              sceneState.transitionPhase == OverlayTransitionPhase.Settled &&
-                  sceneState.isGeometryMode
-          ) {
-            sceneState.fitRect
-          } else {
-            sceneState.animatedRect.value
-          }
-      val currentRadiusDp = with(density) { sceneState.cornerRadius.value.toDp() }
-
       Box(
-          modifier =
-              Modifier.offset {
-                    IntOffset(currentRect.left.roundToInt(), currentRect.top.roundToInt())
-                  }
-                  .size(
-                      width = with(density) { currentRect.width.coerceAtLeast(0f).toDp() },
-                      height = with(density) { currentRect.height.coerceAtLeast(0f).toDp() },
-                  )
-                  .then(
-                      if (sceneState.transitionPhase.isTransitioning)
-                          Modifier.clip(RoundedCornerShape(currentRadiusDp))
-                      else Modifier
-                  ),
+          modifier = Modifier.fillMaxSize().overlayContentTransition(sceneState),
           contentAlignment = Alignment.Center,
       ) {
         scope.overlayContent(item)

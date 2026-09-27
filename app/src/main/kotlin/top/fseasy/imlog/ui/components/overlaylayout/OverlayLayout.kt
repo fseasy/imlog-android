@@ -16,9 +16,9 @@ fun <T : Any> OverlayLayout(
     content: @Composable () -> Unit,
     overlayContent: @Composable OverlayLayoutScope.(item: T) -> Unit,
 ) {
-  val registry = remember { OverlayLayoutThumbnailRegistry() }
+  val registry = remember { OverlayLayoutMetadataRegistry() }
 
-  CompositionLocalProvider(LocalOverlayLayoutThumbnailRegistry provides registry) {
+  CompositionLocalProvider(LocalOverlayLayoutMetadataRegistry provides registry) {
     Box(modifier = modifier.fillMaxSize()) {
       // 1. 底层常规 UI
       content()

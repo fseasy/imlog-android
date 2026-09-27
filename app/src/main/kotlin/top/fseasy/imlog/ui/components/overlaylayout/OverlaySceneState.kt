@@ -3,6 +3,7 @@ package top.fseasy.imlog.ui.components.overlaylayout
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector4D
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.getValue
@@ -27,7 +28,7 @@ private const val TRANSITION_DURATION = 260
 class OverlaySceneState(
     val initialItemKey: Any,
     initialWindowBounds: Rect,
-    val registry: OverlayLayoutThumbnailRegistry,
+    val registry: OverlayLayoutMetadataRegistry,
     private val coroutineScope: CoroutineScope,
     private val onDismissFinished: () -> Unit,
 ) {
@@ -65,6 +66,8 @@ class OverlaySceneState(
 
   // 动画驱动器
   val animatedRect = Animatable(initialTarget?.bounds ?: fitRect, RectVectorConverter)
+  // 🌟 2. 遮罩窗口：从最初露出的 visibleRect 展开到全屏
+  val animatedClipRect = Animatable(initialTarget?.clipBounds ?: fitRect, RectVectorConverter)
   val bgAlpha = Animatable(0f)
   val cornerRadius = Animatable(initialTarget?.cornerRadius ?: 0f)
 
@@ -75,10 +78,16 @@ class OverlaySceneState(
         launch { bgAlpha.animateTo(1f, tween(TRANSITION_DURATION, easing = FastOutSlowInEasing)) }
         if (isGeometryMode) {
           launch {
-            cornerRadius.animateTo(0f, tween(TRANSITION_DURATION, easing = FastOutSlowInEasing))
+            cornerRadius.animateTo(0f, tween(TRANSITION_DURATION, easing = LinearOutSlowInEasing))
           }
           launch {
             animatedRect.animateTo(
+                fitRect,
+                tween(TRANSITION_DURATION, easing = FastOutSlowInEasing),
+            )
+          }
+          launch {
+            animatedClipRect.animateTo(
                 fitRect,
                 tween(TRANSITION_DURATION, easing = FastOutSlowInEasing),
             )
@@ -110,27 +119,37 @@ class OverlaySceneState(
     coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
       bgAlpha.snapTo(currentVisualAlpha)
       animatedRect.snapTo(startVRect)
+      val startClip = if (isGeometryMode) windowBounds else animatedClipRect.value
+      animatedClipRect.snapTo(startClip)
 
       // 查询退出目的地的缩略图状态
       val targetThumbnail = registry.queryVisibleThumbnail(targetKey, windowBounds)
+      val finalRadius = targetThumbnail?.cornerRadius ?: 0f
       val screenCenter = Offset(windowBounds.width / 2f, windowBounds.height / 2f)
       val finalRect =
           targetThumbnail?.bounds
               ?: Rect(screenCenter.x, screenCenter.y, screenCenter.x, screenCenter.y)
-      val finalRadius = targetThumbnail?.cornerRadius ?: 0f
+      val finalClip = targetThumbnail?.clipBounds ?: finalRect
 
       coroutineScope {
         launch { bgAlpha.animateTo(0f, tween(TRANSITION_DURATION, easing = FastOutSlowInEasing)) }
         if (isGeometryMode || targetThumbnail != null) {
           launch {
+            // LinearOutSlowInEasing to show radius longer
             cornerRadius.animateTo(
                 finalRadius,
-                tween(TRANSITION_DURATION, easing = FastOutSlowInEasing),
+                tween(TRANSITION_DURATION, easing = LinearOutSlowInEasing),
             )
           }
           launch {
             animatedRect.animateTo(
                 finalRect,
+                tween(TRANSITION_DURATION, easing = FastOutSlowInEasing),
+            )
+          }
+          launch {
+            animatedClipRect.animateTo(
+                finalClip,
                 tween(TRANSITION_DURATION, easing = FastOutSlowInEasing),
             )
           }

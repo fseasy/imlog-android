@@ -33,6 +33,7 @@ import top.fseasy.imlog.features.home.topiclog.ShowFullScreenMessageUiModelActio
 import top.fseasy.imlog.features.home.topiclog.timeline.contextmenu.MessageContextMenu
 import top.fseasy.imlog.features.home.topiclog.timeline.messagebubble.MessageBubble
 import top.fseasy.imlog.ui.components.contextmenu.rememberContextMenuState
+import top.fseasy.imlog.ui.components.overlaylayout.overlayRegisterViewport
 
 @Composable
 fun MessageTimeline(
@@ -122,11 +123,14 @@ fun TimelineContent(
 
   Box(
       modifier =
-          modifier.fillMaxSize().pointerInput(Unit) {
-            detectTapGestures {
-              onTapEmptyArea()
-            }
-          }
+          modifier
+              .fillMaxSize()
+              .pointerInput(Unit) {
+                detectTapGestures {
+                  onTapEmptyArea()
+                }
+              }
+              .overlayRegisterViewport()
   ) {
     // Items
     LazyColumn(

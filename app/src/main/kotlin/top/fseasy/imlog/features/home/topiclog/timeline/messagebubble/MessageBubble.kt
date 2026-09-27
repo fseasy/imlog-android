@@ -165,7 +165,7 @@ private fun BubbleCard(
     content: @Composable () -> Unit,
 ) {
   Surface(
-      shape = RoundedCornerShape(16.dp),
+      shape = RoundedCornerShape(BUBBLE_CARD_ROUNDED_CORNER_RADIUS_IN_DP.dp),
       color = containerColor,
       modifier =
           modifier

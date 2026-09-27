@@ -114,8 +114,11 @@ fun MediaThumbnailBubble(
         filterQuality = FilterQuality.Medium,
         modifier =
             Modifier.fillMaxSize()
-                .recordThumbnailBounds(sharedElementId, aspectRatio = mediaRatio), // fill box
-        //        modifier = Modifier.matchParentSize(), // fill box
+                .recordThumbnailBounds(
+                    sharedElementId,
+                    cornerRadius = BUBBLE_CARD_ROUNDED_CORNER_RADIUS_IN_DP.dp,
+                    aspectRatio = mediaRatio,
+                ),
         fallback = painterResource(R.drawable.icon_broken_image),
         error = painterResource(R.drawable.icon_error),
         //        placeholder = painterResource(R.drawable.icon_donut_large),
