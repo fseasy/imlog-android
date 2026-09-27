@@ -2,11 +2,8 @@ package top.fseasy.imlog.features.home.topiclog.timeline.messagebubble
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -22,7 +19,6 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import timber.log.Timber
 import top.fseasy.imlog.R
 import top.fseasy.imlog.ui.components.overlaylayout.recordThumbnailBounds
 
@@ -52,7 +48,6 @@ fun calculateIMMediaSize(
 
   val originalWidthDp = with(density) { srcWidthPx.toDp() }
   val originalHeightDp = with(density) { srcHeightPx.toDp() }
-  Timber.d("original dp = $originalWidthDp, $originalHeightDp")
 
   // 1. 先限制极端宽高比，得到受控的基准尺寸（可能比原图略大/略小）
   val rawRatio = srcWidthPx.toFloat() / srcHeightPx
@@ -81,19 +76,6 @@ fun calculateIMMediaSize(
   )
 }
 
-fun Modifier.imMediaConstraints(
-    aspectRatio: Float,
-    minWidth: Dp = IMMediaDefaults.MinWidth,
-    maxWidth: Dp = IMMediaDefaults.MaxWidth,
-    minHeight: Dp = IMMediaDefaults.MinHeight,
-    maxHeight: Dp = IMMediaDefaults.MaxHeight,
-    minRatio: Float = IMMediaDefaults.MIN_ASPECT_RATIO,
-    maxRatio: Float = IMMediaDefaults.MAX_ASPECT_RATIO,
-): Modifier =
-    this.widthIn(min = minWidth, max = maxWidth)
-        .heightIn(min = minHeight, max = maxHeight)
-        .aspectRatio(aspectRatio.coerceIn(minRatio, maxRatio))
-
 /** NOTE: there is no click function, please put click function to the upper level */
 @Composable
 fun MediaThumbnailBubble(
@@ -115,7 +97,6 @@ fun MediaThumbnailBubble(
             density = density,
         )
       }
-  Timber.d("input size = $widthPx, $heightPx, result size = $mediaSize")
   val mediaRatio = widthPx / heightPx.toFloat().coerceAtLeast(1f)
   Box(
       modifier = modifier.size(mediaSize),

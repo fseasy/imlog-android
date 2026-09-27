@@ -39,7 +39,7 @@ enum class DismissSource {
 }
 
 @Stable
-class DismissState {
+class DismissState : TransformHandoverLayer {
   var containerSize by mutableStateOf(IntSize.Zero)
     internal set
 
@@ -144,11 +144,23 @@ class DismissState {
     }
     activeSource = DismissSource.None
   }
+
+  // Handover apis
+  override fun mapRect(input: Rect): Rect {
+    return input.applyTransform(contentScale, contentOffset)
+  }
+
+  override fun reset() {
+    activeSource = DismissSource.None
+    swipeOffset = Offset.Zero
+    backProgress = 0f
+  }
 }
 
+/** @param key only used for invalidation state */
 @Composable
-fun rememberDismissState(): DismissState {
-  return remember { DismissState() }
+fun rememberDismissState(key: String): DismissState {
+  return remember(key) { DismissState() }
 }
 
 @Composable
@@ -243,52 +255,4 @@ fun DismissibleBox(
   ) {
     content()
   }
-}
-
-/** 几何投影纯函数：计算最终物理视觉矩形 */
-fun ZoomableState.computeVisualRect(
-    baseRect: Rect,
-    dismissState: DismissState? = null,
-): Rect {
-  val dismissScale = dismissState?.contentScale ?: 1f
-  val dismissOffset = dismissState?.contentOffset ?: Offset.Zero
-
-  val totalScale = scale * dismissScale
-  val totalOffset = offset + dismissOffset
-
-  val visualCenter = baseRect.center + totalOffset
-  val visualWidth = baseRect.width * totalScale
-  val visualHeight = baseRect.height * totalScale
-
-  return Rect(
-      left = visualCenter.x - visualWidth / 2f,
-      top = visualCenter.y - visualHeight / 2f,
-      right = visualCenter.x + visualWidth / 2f,
-      bottom = visualCenter.y + visualHeight / 2f,
-  )
-}
-
-fun computeVisualRect(
-    baseRect: Rect,
-    zoomableState: ZoomableState? = null,
-    dismissState: DismissState? = null,
-): Rect {
-  val zoomScale = zoomableState?.scale ?: 1f
-  val zoomOffset = zoomableState?.offset ?: Offset.Zero
-  val dismissScale = dismissState?.contentScale ?: 1f
-  val dismissOffset = dismissState?.contentOffset ?: Offset.Zero
-
-  val totalScale = zoomScale * dismissScale
-  val totalOffset = zoomOffset + dismissOffset
-
-  val visualCenter = baseRect.center + totalOffset
-  val visualWidth = baseRect.width * totalScale
-  val visualHeight = baseRect.height * totalScale
-
-  return Rect(
-      left = visualCenter.x - visualWidth / 2f,
-      top = visualCenter.y - visualHeight / 2f,
-      right = visualCenter.x + visualWidth / 2f,
-      bottom = visualCenter.y + visualHeight / 2f,
-  )
 }

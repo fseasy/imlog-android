@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -20,7 +21,7 @@ import kotlinx.coroutines.launch
 class ZoomableState(
     val minScale: Float = 1f,
     val maxScale: Float = 4f,
-) {
+) : TransformHandoverLayer {
   var scale by mutableFloatStateOf(1f)
     internal set
 
@@ -108,12 +109,24 @@ class ZoomableState(
         y = target.y.coerceIn(-maxY, maxY),
     )
   }
+
+  // Handover apis
+  override fun mapRect(input: Rect): Rect {
+    return input.applyTransform(scale, offset)
+  }
+
+  override fun reset() {
+    scale = 1f
+    offset = Offset.Zero
+  }
 }
 
+/** @param key is used for state invalidation when source change */
 @Composable
 fun rememberZoomableState(
+    key: String,
     minScale: Float = 1f,
     maxScale: Float = 4f,
 ): ZoomableState {
-  return remember(minScale, maxScale) { ZoomableState(minScale, maxScale) }
+  return remember(key, minScale, maxScale) { ZoomableState(minScale, maxScale) }
 }
