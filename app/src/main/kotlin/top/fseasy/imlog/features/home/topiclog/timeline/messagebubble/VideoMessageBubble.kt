@@ -22,7 +22,7 @@ import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.toMemoryCacheKey
-import top.fseasy.imlog.features.home.topiclog.toSharedTransitionElementId
+import top.fseasy.imlog.features.home.topiclog.toOverlayItemKey
 
 @Composable
 fun VideoMessageBubble(
@@ -36,7 +36,7 @@ fun VideoMessageBubble(
       widthPx = content.width,
       heightPx = content.height,
       imageMemoryCacheKey = toMemoryCacheKey(messageId),
-      sharedElementId = toSharedTransitionElementId(messageId),
+      overlayItemKey = toOverlayItemKey(messageId),
       modifier = modifier,
   ) {
     // Play button

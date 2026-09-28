@@ -63,4 +63,5 @@
     <string name="topic_settings_unpinned_status">未置顶</string>
     <string name="topic_settings_btn_unpin">取消置顶</string>
     <string name="topic_settings_btn_pin">置顶</string>
+    <string name="term_media_play_speed">倍速</string>
 </resources>

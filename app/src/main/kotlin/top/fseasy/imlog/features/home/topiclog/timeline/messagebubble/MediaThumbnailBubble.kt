@@ -83,7 +83,7 @@ fun MediaThumbnailBubble(
     widthPx: Int,
     heightPx: Int,
     imageMemoryCacheKey: String,
-    sharedElementId: String,
+    overlayItemKey: String,
     modifier: Modifier = Modifier,
     overlayContent: (@Composable BoxScope.() -> Unit)? = null,
 ) {
@@ -102,7 +102,6 @@ fun MediaThumbnailBubble(
       modifier = modifier.size(mediaSize),
       contentAlignment = Alignment.Center,
   ) {
-    // 1.unified thumbnail
     val imageRequest =
         remember(url, imageMemoryCacheKey) {
           ImageRequest.Builder(context).data(url).memoryCacheKey(imageMemoryCacheKey).build()
@@ -115,13 +114,12 @@ fun MediaThumbnailBubble(
         modifier =
             Modifier.fillMaxSize()
                 .recordThumbnailBounds(
-                    sharedElementId,
+                    overlayItemKey,
                     cornerRadius = BUBBLE_CARD_ROUNDED_CORNER_RADIUS_IN_DP.dp,
                     aspectRatio = mediaRatio,
                 ),
         fallback = painterResource(R.drawable.icon_broken_image),
         error = painterResource(R.drawable.icon_error),
-        //        placeholder = painterResource(R.drawable.icon_donut_large),
     )
 
     // 2. overlay contents

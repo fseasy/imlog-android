@@ -71,7 +71,7 @@ fun DismissibleBox(
               )
               .pointerInput(Unit) {
                 awaitEachGesture {
-                  val down = awaitFirstDown(requireUnconsumed = false)
+                  awaitFirstDown(requireUnconsumed = false)
                   if (!currentEnabled() || state.activeSource == DismissSource.PredictiveBack) {
                     return@awaitEachGesture
                   }

@@ -7,6 +7,9 @@ import androidx.compose.ui.platform.InspectorInfo
 import top.fseasy.imlog.ui.components.gesture.TransformHandoverChain
 
 interface OverlayLayoutScope {
+
+  val transitionPhase: OverlayTransitionPhase
+
   /** 手动触发退出 */
   fun dismiss(itemKey: Any? = null)
 
@@ -24,7 +27,7 @@ interface OverlayLayoutScope {
   ): Modifier
 
   /** 全屏背景手势统一配置（不配置则默认单击退出） */
-  fun configureBackground(
+  fun configureBackgroundTap(
       onTap: (() -> Unit)? = null,
       onDoubleTap: ((Offset) -> Unit)? = null,
   )
@@ -35,21 +38,24 @@ internal class OverlayLayoutScopeImpl(
     private val state: OverlaySceneState,
 ) : OverlayLayoutScope {
 
+  override val transitionPhase: OverlayTransitionPhase
+    get() = state.transitionPhase
+
   override fun dismiss(itemKey: Any?) {
     state.triggerDismiss(
         itemKey,
     )
   }
 
-  override fun configureBackground(onTap: (() -> Unit)?, onDoubleTap: ((Offset) -> Unit)?) {
+  override fun configureBackgroundTap(onTap: (() -> Unit)?, onDoubleTap: ((Offset) -> Unit)?) {
     state.onBgTap = onTap
     state.onBgDoubleTap = onDoubleTap
   }
 
   override fun Modifier.overlayInteractiveTarget(
-    itemKey: Any?,
-    backgroundAlphaProvider: (() -> Float)?,
-    dismissTransformHandoverProvider: (() -> TransformHandoverChain)?,
+      itemKey: Any?,
+      backgroundAlphaProvider: (() -> Float)?,
+      dismissTransformHandoverProvider: (() -> TransformHandoverChain)?,
   ): Modifier =
       this.then(
           OverlayInteractiveTargetElement(

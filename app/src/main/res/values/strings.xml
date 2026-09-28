@@ -125,4 +125,5 @@
     <string name="term_select_text">Select Text</string>
     <string name="term_deselect">Deselect</string>
     <string name="term_select_all">Select All</string>
+    <string name="term_media_play_speed">Speed</string>
 </resources>

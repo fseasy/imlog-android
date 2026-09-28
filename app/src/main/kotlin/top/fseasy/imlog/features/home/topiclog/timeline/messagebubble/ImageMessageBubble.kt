@@ -6,7 +6,7 @@ import top.fseasy.imlog.data.mapper.toActualFileOrUri
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
 import top.fseasy.imlog.features.home.topiclog.toMemoryCacheKey
-import top.fseasy.imlog.features.home.topiclog.toSharedTransitionElementId
+import top.fseasy.imlog.features.home.topiclog.toOverlayItemKey
 
 @Composable
 fun ImageMessageBubble(
@@ -19,8 +19,7 @@ fun ImageMessageBubble(
       widthPx = content.width,
       heightPx = content.height,
       imageMemoryCacheKey = toMemoryCacheKey(messageId),
-      sharedElementId = toSharedTransitionElementId(messageId),
+      overlayItemKey = toOverlayItemKey(messageId),
       modifier = modifier,
-      overlayContent = null,
   )
 }

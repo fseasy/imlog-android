@@ -114,7 +114,7 @@ fun TopicLogRoute(
 
   OverlayLayout(
       activeItem = currentFullScreenViewMessage,
-      itemKey = { m -> toSharedTransitionElementId(m.id) },
+      itemKey = { m -> toOverlayItemKey(m.id) },
       onDismissFinished = { currentFullScreenViewMessage = null },
       content = {
         TopicLogContent(

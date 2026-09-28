@@ -8,7 +8,7 @@ import top.fseasy.imlog.data.mapper.toActualFileOrUri
 import top.fseasy.imlog.features.home.topiclog.MediaPlaybackStateAndAction
 import top.fseasy.imlog.features.home.topiclog.ReadMediaPlaybackStateAndRender
 import top.fseasy.imlog.features.home.topiclog.toMemoryCacheKey
-import top.fseasy.imlog.features.home.topiclog.toOverlayTransitionElementId
+import top.fseasy.imlog.features.home.topiclog.toOverlayItemKey
 import top.fseasy.imlog.ui.components.overlaylayout.OverlayLayoutScope
 
 /** It's under OverlayLayoutScope, so it hold `dismiss` call */
@@ -24,7 +24,7 @@ fun OverlayLayoutScope.FullScreenContainer(
   when (model) {
     is FullScreenContainerUiModel.ImageShow -> {
       ImageFullScreenViewer(
-          overlayTransitionElementId = toOverlayTransitionElementId(model.id),
+          overlayItemKey = toOverlayItemKey(model.id),
           imageUrl = model.path.toActualFileOrUri(),
           thumbnailCacheKey = toMemoryCacheKey(model.id),
           modifier = modifier,
@@ -51,7 +51,6 @@ fun OverlayLayoutScope.FullScreenContainer(
                   onSpeedCycle = {
                     mediaPlaybackStateAndAction.onCyclePlaybackSpeed(model.message.id)
                   },
-                  onExit = {},
                   modifier = modifier,
               )
             },

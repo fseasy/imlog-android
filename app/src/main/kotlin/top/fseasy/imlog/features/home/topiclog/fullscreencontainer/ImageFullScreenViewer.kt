@@ -30,23 +30,23 @@ import top.fseasy.imlog.ui.components.overlaylayout.OverlayLayoutScope
  */
 @Composable
 fun OverlayLayoutScope.ImageFullScreenViewer(
-    overlayTransitionElementId: String,
+    overlayItemKey: String,
     imageUrl: Any,
     thumbnailCacheKey: String,
     modifier: Modifier = Modifier,
 ) {
-  val zoomState = rememberZoomableState(overlayTransitionElementId)
-  val dismissState = rememberDismissState(overlayTransitionElementId)
+  val zoomState = rememberZoomableState(overlayItemKey)
+  val dismissState = rememberDismissState(overlayItemKey)
 
   val dismissFromVisualRect =
-      remember(overlayTransitionElementId) {
-        { this.dismiss(overlayTransitionElementId) }
+      remember(overlayItemKey) {
+        { this.dismiss(overlayItemKey) }
       }
 
   val coroutineScope = rememberCoroutineScope()
   var zoomJob by remember { mutableStateOf<Job?>(null) }
 
-  this.configureBackground(
+  this.configureBackgroundTap(
       onTap = dismissFromVisualRect,
       onDoubleTap = { offset ->
         // only reset room. this offset maybe weird as it's out of the image, so don't zoom in
@@ -79,7 +79,7 @@ fun OverlayLayoutScope.ImageFullScreenViewer(
           modifier
               .fillMaxSize()
               .overlayInteractiveTarget(
-                  itemKey = overlayTransitionElementId,
+                  itemKey = overlayItemKey,
                   backgroundAlphaProvider = { dismissState.backgroundAlpha },
                   dismissTransformHandoverProvider = { handoverChain },
               ),
