@@ -46,6 +46,11 @@ constructor(
             fileSource = MessageAttachmentSource.FromUriStr(srcUriStr),
             taskStartTime = messageTimestamp,
         )
+        topicRepository.syncUpdateTopicLastReadMessageId(
+            userId = senderId,
+            topicId = topicId,
+            messageId = messageId
+        )
         messageId
       }
 
