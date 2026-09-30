@@ -10,7 +10,11 @@ interface OverlayLayoutScope {
 
   val transitionPhase: OverlayTransitionPhase
 
-  /** 手动触发退出 */
+  /**
+   * 手动触发退出
+   *
+   * @param itemKey you can set it to null if it's not in geometry mode
+   */
   fun dismiss(itemKey: Any? = null)
 
   /**
@@ -26,7 +30,7 @@ interface OverlayLayoutScope {
       dismissTransformHandoverProvider: (() -> TransformHandoverChain)?,
   ): Modifier
 
-  /** 全屏背景手势统一配置（不配置则默认单击退出） */
+  /** 全屏背景手势统一配置（不配置则 do nothing） */
   fun configureBackgroundTap(
       onTap: (() -> Unit)? = null,
       onDoubleTap: ((Offset) -> Unit)? = null,

@@ -23,6 +23,8 @@ import top.fseasy.imlog.R
 import top.fseasy.imlog.ui.components.contextmenu.FillFixedHeightTextSelectionField
 import top.fseasy.imlog.ui.components.contextmenu.TextSelectionActionBar
 import top.fseasy.imlog.ui.components.contextmenu.rememberTextSelectionState
+import top.fseasy.imlog.ui.components.overlaylayout.OverlayLayoutScope
+import top.fseasy.imlog.ui.components.overlaylayout.PreviewOverlayLayoutScope
 import top.fseasy.imlog.ui.theme.ImlogTheme
 
 /**
@@ -35,25 +37,24 @@ import top.fseasy.imlog.ui.theme.ImlogTheme
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun MessageTextSelectionFullScreen(
-  text: String,
-  onDismissRequest: () -> Unit,
-  modifier: Modifier = Modifier,
+fun OverlayLayoutScope.MessageTextSelectionFullScreen(
+    text: String,
+    modifier: Modifier = Modifier,
 ) {
   MessageTextSelectionFullScreenContent(
       text = text.trimEnd(),
-      onDismiss = onDismissRequest,
       modifier = modifier,
   )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MessageTextSelectionFullScreenContent(
+fun OverlayLayoutScope.MessageTextSelectionFullScreenContent(
     text: String,
-    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+
+  val onDismissRequest = { this.dismiss() }
 
   val selectionState = rememberTextSelectionState(text)
   val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -69,7 +70,7 @@ fun MessageTextSelectionFullScreenContent(
               )
             },
             navigationIcon = {
-              IconButton(onClick = onDismiss) {
+              IconButton(onClick = onDismissRequest) {
                 Icon(
                     imageVector = Icons.Rounded.Close,
                     contentDescription = stringResource(R.string.term_close),
@@ -82,7 +83,7 @@ fun MessageTextSelectionFullScreenContent(
       bottomBar = {
         TextSelectionActionBar(
             state = selectionState,
-            onDismiss = onDismiss,
+            onDismiss = onDismissRequest,
             modifier = Modifier.navigationBarsPadding(),
         )
       },
@@ -98,9 +99,10 @@ fun MessageTextSelectionFullScreenContent(
 @Composable
 private fun MessageTextSelectionPreview() {
   ImlogTheme {
-    MessageTextSelectionFullScreen(
-        text = "Here is a dummy short text",
-        onDismissRequest = {},
-    )
+    with(PreviewOverlayLayoutScope) {
+      MessageTextSelectionFullScreen(
+          text = "Here is a dummy short text",
+      )
+    }
   }
 }

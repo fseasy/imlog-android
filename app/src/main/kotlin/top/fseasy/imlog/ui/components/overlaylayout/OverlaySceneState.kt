@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import kotlinx.coroutines.CoroutineScope
@@ -46,14 +47,24 @@ class OverlaySceneState(
 
   // Geometry define and setting
   private val initialTarget: ThumbnailTarget? =
-      if (initialWindowBounds.width > 0f && initialWindowBounds.height > 0f) {
-        registry.queryVisibleThumbnail(initialItemKey, initialWindowBounds)
-      } else null
-  val isGeometryMode = initialTarget != null
+      registry.queryVisibleThumbnail(initialItemKey, initialWindowBounds)
 
+  /**
+   * If you don't report the thumbnail coordinates with [Modifier.recordThumbnailBounds], it'll be
+   * in non-geometry mode, which means only background-alpha animation, without size transition.
+   *
+   * Mainly used for text element.
+   */
+  val transitionMode =
+      if (initialTarget == null) OverlayTransitionMode.Fade else OverlayTransitionMode.Geometry
+  val isGeometryMode: Boolean
+    get() = transitionMode == OverlayTransitionMode.Geometry
+
+  /** Content layer full screen window */
   var windowBounds by mutableStateOf(initialWindowBounds)
     private set
 
+  /** Content layer target rect */
   var fitRect by mutableStateOf(calculateFitRect(initialWindowBounds, initialTarget?.aspectRatio))
     private set
 
@@ -64,9 +75,18 @@ class OverlaySceneState(
     }
   }
 
-  // 动画驱动器
+  // Animation for the content layer
+  // 1. target -> full-screen rect animation.
   val animatedRect = Animatable(initialTarget?.bounds ?: fitRect, RectVectorConverter)
-  // 🌟 2. 遮罩窗口：从最初露出的 visibleRect 展开到全屏
+  // 2. target clip rect animation. Used to mask the target part that should be cover by the visual
+  // upper part.
+  // For example: if an image that is partially out of the timeline screen, then transition of
+  //   the out-of-viewport part should be covered by the timeline top-bar.
+  //   But because the transition content layer is on the top of the timeline top-bar, so it can't
+  //   keep the mask attributes without the clip.
+  //   And the clip rect is also very simple: just equal to the original shown part of the target.
+  // NOTE: if there is no corner radius of the content, we can just keep the clip rect, the
+  // [animatedRect] only works for the condition that draws the clipped corners properly.
   val animatedClipRect = Animatable(initialTarget?.clipBounds ?: fitRect, RectVectorConverter)
   val bgAlpha = Animatable(0f)
   val cornerRadius = Animatable(initialTarget?.cornerRadius ?: 0f)
@@ -105,57 +125,68 @@ class OverlaySceneState(
     if (transitionPhase == OverlayTransitionPhase.Dismissing) return
     transitionPhase = OverlayTransitionPhase.Dismissing
 
-    val targetKey = key ?: currentItemKeyProvider?.invoke() ?: initialItemKey
-
-    // MUST get the alpha first. As following `dismissTransformHandover` will reset the source
-    // alpha!
+    // 1. 同步取 Alpha（必须在 handover 重置前获取）
     val currentVisualAlpha = contentAlphaProvider?.invoke() ?: bgAlpha.value
-    // 🌟 计算起始 Rect：取绑定的 dismissTransformHandover -> 兜底当前状态
-    val startVRect =
-        dismissTransformHandoverProvider?.invoke()?.captureVisualRectAndReset(fitRect)
-            ?: if (isGeometryMode) fitRect else animatedRect.value
 
-    // NOTE: DO IT in current main thread immediately! To avoid the transform handover frame-flash
-    coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-      bgAlpha.snapTo(currentVisualAlpha)
-      animatedRect.snapTo(startVRect)
-      val startClip = if (isGeometryMode) windowBounds else animatedClipRect.value
-      animatedClipRect.snapTo(startClip)
+    when (transitionMode) {
+      OverlayTransitionMode.Fade ->
+          coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            bgAlpha.snapTo(currentVisualAlpha)
+            bgAlpha.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(TRANSITION_DURATION, easing = FastOutSlowInEasing),
+            )
+            onDismissFinished()
+          }
+      OverlayTransitionMode.Geometry -> {
+        val targetKey = key ?: currentItemKeyProvider?.invoke() ?: initialItemKey
 
-      // 查询退出目的地的缩略图状态
-      val targetThumbnail = registry.queryVisibleThumbnail(targetKey, windowBounds)
-      val finalRadius = targetThumbnail?.cornerRadius ?: 0f
-      val screenCenter = Offset(windowBounds.width / 2f, windowBounds.height / 2f)
-      val finalRect =
-          targetThumbnail?.bounds
-              ?: Rect(screenCenter.x, screenCenter.y, screenCenter.x, screenCenter.y)
-      val finalClip = targetThumbnail?.clipBounds ?: finalRect
+        // 🌟 必须在主线程同步抓取并重置源视图，绝对不能延迟
+        val startVRect =
+            dismissTransformHandoverProvider?.invoke()?.captureVisualRectAndReset(fitRect)
+                ?: fitRect
 
-      coroutineScope {
-        launch { bgAlpha.animateTo(0f, tween(TRANSITION_DURATION, easing = FastOutSlowInEasing)) }
-        if (isGeometryMode || targetThumbnail != null) {
-          launch {
-            // LinearOutSlowInEasing to show radius longer
-            cornerRadius.animateTo(
-                finalRadius,
-                tween(TRANSITION_DURATION, easing = LinearOutSlowInEasing),
-            )
+        coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
+          // 第一时间接管 overlay 的视觉状态，杜绝任何跳帧闪烁
+          bgAlpha.snapTo(currentVisualAlpha)
+          animatedRect.snapTo(startVRect)
+          animatedClipRect.snapTo(windowBounds)
+
+          // 接管视觉后再查询目标缩略图位置
+          val targetThumbnail = registry.queryVisibleThumbnail(targetKey, windowBounds)
+          val finalRadius = targetThumbnail?.cornerRadius ?: 0f
+          val screenCenter = Offset(windowBounds.width / 2f, windowBounds.height / 2f)
+          val finalRect =
+              targetThumbnail?.bounds
+                  ?: Rect(screenCenter.x, screenCenter.y, screenCenter.x, screenCenter.y)
+          val finalClip = targetThumbnail?.clipBounds ?: finalRect
+
+          coroutineScope {
+            launch {
+              bgAlpha.animateTo(0f, tween(TRANSITION_DURATION, easing = FastOutSlowInEasing))
+            }
+            launch {
+              cornerRadius.animateTo(
+                  finalRadius,
+                  tween(TRANSITION_DURATION, easing = LinearOutSlowInEasing),
+              )
+            }
+            launch {
+              animatedRect.animateTo(
+                  finalRect,
+                  tween(TRANSITION_DURATION, easing = FastOutSlowInEasing),
+              )
+            }
+            launch {
+              animatedClipRect.animateTo(
+                  finalClip,
+                  tween(TRANSITION_DURATION, easing = FastOutSlowInEasing),
+              )
+            }
           }
-          launch {
-            animatedRect.animateTo(
-                finalRect,
-                tween(TRANSITION_DURATION, easing = FastOutSlowInEasing),
-            )
-          }
-          launch {
-            animatedClipRect.animateTo(
-                finalClip,
-                tween(TRANSITION_DURATION, easing = FastOutSlowInEasing),
-            )
-          }
+          onDismissFinished()
         }
       }
-      onDismissFinished()
     }
   }
 

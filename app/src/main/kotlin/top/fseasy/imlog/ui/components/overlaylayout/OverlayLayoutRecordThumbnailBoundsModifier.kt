@@ -13,34 +13,34 @@ import androidx.compose.ui.unit.dp
 
 /** 🌟 现代 Modifier.Node 实现： 挂载在列表中的缩略图上，负责捕获物理坐标、等比比例、以及自动完成 Dp -> Px 转换！ */
 fun Modifier.recordThumbnailBounds(
-    sharedElementId: Any,
+    itemKey: Any,
     cornerRadius: Dp = 0.dp,
     aspectRatio: Float?,
 ): Modifier =
     this.then(
         RecordThumbnailBoundsElement(
-            sharedElementId = sharedElementId,
+            itemKey = itemKey,
             cornerRadius = cornerRadius,
             aspectRatio = aspectRatio,
         )
     )
 
 private data class RecordThumbnailBoundsElement(
-    val sharedElementId: Any,
+    val itemKey: Any,
     val cornerRadius: Dp,
     val aspectRatio: Float?,
 ) : ModifierNodeElement<RecordThumbnailBoundsNode>() {
 
   override fun create(): RecordThumbnailBoundsNode =
       RecordThumbnailBoundsNode(
-          sharedElementId = sharedElementId,
+          itemKey = itemKey,
           cornerRadiusDp = cornerRadius,
           aspectRatio = aspectRatio,
       )
 
   override fun update(node: RecordThumbnailBoundsNode) {
     node.update(
-        sharedElementId = sharedElementId,
+        itemKey = itemKey,
         cornerRadiusDp = cornerRadius,
         aspectRatio = aspectRatio,
     )
@@ -48,7 +48,7 @@ private data class RecordThumbnailBoundsElement(
 
   override fun InspectorInfo.inspectableProperties() {
     name = "recordThumbnailBounds"
-    properties["sharedElementId"] = sharedElementId
+    properties["itemKey"] = itemKey
     properties["cornerRadius"] = cornerRadius
     properties["aspectRatio"] = aspectRatio
   }
@@ -56,7 +56,7 @@ private data class RecordThumbnailBoundsElement(
 
 /** 🌟 核心：让 Node 自己直接实现你的 Provider 接口！ 这样它既是 Modifier.Node，又是 Registry 存储的 Provider，没有任何中间商赚差价！ */
 private class RecordThumbnailBoundsNode(
-    var sharedElementId: Any,
+    var itemKey: Any,
     var cornerRadiusDp: Dp,
     override var aspectRatio: Float?, // 实现接口属性
 ) :
@@ -74,39 +74,39 @@ private class RecordThumbnailBoundsNode(
 
   override fun onAttach() {
     updateCornerRadiusPx()
-    registerToRegistry(sharedElementId)
+    registerToRegistry(itemKey)
   }
 
   /** 坐标变化时：原地赋值！完全不重新 new 任何对象！ */
   override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
     this.coordinates = coordinates
     // 保证 attached 状态下已注册
-    registerToRegistry(sharedElementId)
+    registerToRegistry(itemKey)
   }
 
   /** 参数更新时：原地修改属性！ */
-  fun update(sharedElementId: Any, cornerRadiusDp: Dp, aspectRatio: Float?) {
-    val oldKey = this.sharedElementId
-    this.sharedElementId = sharedElementId
+  fun update(itemKey: Any, cornerRadiusDp: Dp, aspectRatio: Float?) {
+    val oldKey = this.itemKey
+    this.itemKey = itemKey
     this.cornerRadiusDp = cornerRadiusDp
     this.aspectRatio = aspectRatio
 
-    if (oldKey != sharedElementId) {
+    if (oldKey != itemKey) {
       unregisterFromRegistry(oldKey)
-      registerToRegistry(sharedElementId)
+      registerToRegistry(itemKey)
     }
 
     updateCornerRadiusPx()
   }
 
   override fun onDetach() {
-    unregisterFromRegistry(sharedElementId)
+    unregisterFromRegistry(itemKey)
     this.coordinates = null
   }
 
   /** LazyColumn 复用池清理 */
   override fun onReset() {
-    unregisterFromRegistry(sharedElementId)
+    unregisterFromRegistry(itemKey)
     this.coordinates = null
   }
 

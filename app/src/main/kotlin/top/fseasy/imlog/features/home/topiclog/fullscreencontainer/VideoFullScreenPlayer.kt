@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -100,9 +102,7 @@ fun OverlayLayoutScope.VideoFullScreenPlayer(
       videoSurface = {
         PlayerSurface(
             player = player,
-            modifier = Modifier
-                .fillMaxSize()
-                .aspectRatio(content.aspectRatio),
+            modifier = Modifier.fillMaxSize().aspectRatio(content.aspectRatio),
         )
       },
       modifier = modifier,
@@ -199,6 +199,9 @@ fun OverlayLayoutScope.VideoFullScreenPlayerContent(
   }
 }
 
+/** For single hand operation convenience */
+private const val EXTRA_START_PADDING_IN_DP = 12
+
 @Composable
 private fun ControlsOverlay(
     messageId: MessageId,
@@ -215,28 +218,36 @@ private fun ControlsOverlay(
     // close button
     IconButton(
         onClick = onExit,
+        colors = IconButtonDefaults.iconButtonColors(containerColor = Color.Transparent),
         modifier =
-            Modifier
-                .align(Alignment.TopStart)
+            Modifier.align(Alignment.TopStart)
                 .statusBarsPadding()
-                .padding(16.dp)
-                .background(
-                    color = Color.Black.copy(alpha = 0.5f),
-                    shape = CircleShape,
-                ),
+                .padding(8.dp)
+                .padding(start = EXTRA_START_PADDING_IN_DP.dp)
+                .size(48.dp), // 保持 48dp 的点击手感
     ) {
-      Icon(
-          imageVector = Icons.Rounded.Close,
-          contentDescription = stringResource(R.string.term_close),
-          tint = Color.White,
-      )
+      Box(
+          modifier =
+              Modifier.size(32.dp) // 视觉小黑圈
+                  .background(
+                      color = Color.Black.copy(alpha = 0.5f),
+                      shape = CircleShape,
+                  ),
+          contentAlignment = Alignment.Center,
+      ) {
+        Icon(
+            imageVector = Icons.Rounded.Close,
+            contentDescription = stringResource(R.string.term_close),
+            tint = Color.White,
+            modifier = Modifier.size(24.dp),
+        )
+      }
     }
 
     val isVideoActive = playbackState.isThisMediaActive(toMediaInputId(messageId))
     PlayControllerDock(
         modifier =
-            Modifier
-                .fillMaxWidth()
+            Modifier.fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 24.dp),
@@ -291,9 +302,8 @@ private fun PlayControllerDock(
     // 因右列上下对称，大按钮垂直居中时，其尖尖自然对准波形中轴，上沿与 time/duration 平齐
     IconButton(
         onClick = onTogglePlay,
-        modifier = Modifier
-            .fillMaxHeight()
-            .aspectRatio(1f),
+        modifier =
+            Modifier.fillMaxHeight().aspectRatio(1f).padding(start = EXTRA_START_PADDING_IN_DP.dp),
     ) {
       Icon(
           imageVector =
@@ -315,9 +325,7 @@ private fun PlayControllerDock(
     ) {
       // 1. 顶部行：time / duration（靠左对齐）
       Row(
-          modifier = Modifier
-              .fillMaxWidth()
-              .height(timeLineHeight),
+          modifier = Modifier.fillMaxWidth().height(timeLineHeight),
           horizontalArrangement = Arrangement.Start,
           verticalAlignment = Alignment.CenterVertically,
       ) {
@@ -335,25 +343,23 @@ private fun PlayControllerDock(
 
       // 2. 中间行：amplitudes
 
-        WaveformSlider(
-            progressProvider = {
-              val current = positionProvider()
-              current.safeDivision(duration).coerceIn(0f, 1f)
-            },
-            amplitudes = amplitudes,
-            tintColor = tintColor,
-            onSeek = onSeek,
-            stretchToFit = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp),
-        )
+      WaveformSlider(
+          progressProvider = {
+            val current = positionProvider()
+            current.safeDivision(duration).coerceIn(0f, 1f)
+          },
+          amplitudes = amplitudes,
+          tintColor = tintColor,
+          onSeek = onSeek,
+          stretchToFit = true,
+          modifier = Modifier.fillMaxWidth().height(12.dp),
+      )
       // 3. 底部占位行：高度与顶部 timeLineHeight 完全一致，构成垂直镜像平衡
       Spacer(modifier = Modifier.height(timeLineHeight))
     }
 
-      // 倍速展示：未点击显示“倍速”，点击后显示数字
-      val speedText =
+    // 倍速展示：未点击显示“倍速”，点击后显示数字
+    val speedText =
         if (!hasInteractedSpeed) {
           stringResource(R.string.term_media_play_speed)
         } else {
@@ -366,13 +372,12 @@ private fun PlayControllerDock(
         fontWeight = FontWeight.Bold,
         color = tintColor,
         modifier =
-          Modifier
-              .clip(RoundedCornerShape(4.dp))
-              .clickable {
-                hasInteractedSpeed = true
-                onSpeedCycle()
-              }
-              .padding(horizontal = 8.dp, vertical = 4.dp),
+            Modifier.clip(RoundedCornerShape(4.dp))
+                .clickable {
+                  hasInteractedSpeed = true
+                  onSpeedCycle()
+                }
+                .padding(horizontal = 8.dp, vertical = 4.dp),
     )
   }
 }
@@ -408,9 +413,7 @@ private fun VideoFullScreenPlayerPreview() {
           videoSurface = {
             // placeholder
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFF1E1E1E)),
+                modifier = Modifier.fillMaxSize().background(Color(0xFF1E1E1E)),
                 contentAlignment = Alignment.Center,
             ) {
               Text("Video Surface Preview", color = Color.DarkGray)

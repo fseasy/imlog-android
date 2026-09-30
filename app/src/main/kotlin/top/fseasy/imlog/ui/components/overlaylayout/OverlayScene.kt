@@ -19,13 +19,18 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import top.fseasy.imlog.ui.components.gesture.blockTouchEvents
 
+/**
+ * A box holds 2 layers: overlay + content Render rules:
+ * 1. geometry mode: overlayer BLACK, content do geometry transforming
+ * 2. fade mode: overlay transparent (no background), content do alpha animation
+ */
 @Composable
 internal fun <T : Any> OverlayScene(
-  item: T,
-  itemKey: Any,
-  registry: OverlayLayoutMetadataRegistry,
-  onDismissFinished: () -> Unit,
-  overlayContent: @Composable OverlayLayoutScope.(item: T) -> Unit,
+    item: T,
+    itemKey: Any,
+    registry: OverlayLayoutMetadataRegistry,
+    onDismissFinished: () -> Unit,
+    overlayContent: @Composable OverlayLayoutScope.(item: T) -> Unit,
 ) {
   val coroutineScope = rememberCoroutineScope()
 
@@ -71,19 +76,29 @@ internal fun <T : Any> OverlayScene(
                     else Modifier
                 )
     ) {
-      // 🌟 2. 背景层：支持外部绑定的单击/双击，默认兜底为“单击退出”
+      // 🌟 2. 背景层：
+      // 作用 1： 支持外部绑定的单击/双击, 此外吞掉所有点击事件防止点击穿透
+      // 作用 2： provides the background color. [geometry mode only].
       Box(
           modifier =
               Modifier.fillMaxSize()
-                  .graphicsLayer {
-                    alpha =
-                        if (sceneState.transitionPhase == OverlayTransitionPhase.Settled) {
-                          sceneState.contentAlphaProvider?.invoke() ?: 1f
-                        } else {
-                          sceneState.bgAlpha.value
-                        }
-                  }
-                  .background(Color.Black)
+                  .then(
+                      if (sceneState.isGeometryMode) {
+                        Modifier.graphicsLayer {
+                              alpha =
+                                  if (
+                                      sceneState.transitionPhase == OverlayTransitionPhase.Settled
+                                  ) {
+                                    sceneState.contentAlphaProvider?.invoke() ?: 1f
+                                  } else {
+                                    sceneState.bgAlpha.value
+                                  }
+                            }
+                            .background(Color.Black)
+                      } else {
+                        Modifier
+                      }
+                  )
                   .pointerInput(
                       sceneState.transitionPhase,
                       sceneState.onBgTap,
@@ -97,8 +112,8 @@ internal fun <T : Any> OverlayScene(
                         },
                         onTap = {
                           if (sceneState.transitionPhase == OverlayTransitionPhase.Settled) {
-                            // 如果业务方绑定了 Tap 则执行；否则默认行为：单击空白退出
-                            sceneState.onBgTap?.invoke() ?: sceneState.triggerDismiss()
+                            // 如果业务方绑定了 Tap 则执行；否则 do noting
+                            sceneState.onBgTap?.invoke()
                           }
                         },
                     )

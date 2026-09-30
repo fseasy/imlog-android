@@ -9,32 +9,51 @@ import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.platform.InspectorInfo
 
-/** 🌟 现代 Modifier.Node 实现：全屏内容转场驱动 一个节点统一接管：视口安全裁剪 + 缩略图圆角 + 矩阵缩放平移 */
+/**
+ * 🌟Content Transition Logic:
+ * 1. fade mode: set the alpha of the content layer
+ * 2. geometry mode: animate the content size+position (with clipping) + corner radius
+ *    [Using Modifier.Node for high efficiency]
+ */
 fun Modifier.overlayContentTransition(state: OverlaySceneState): Modifier =
-    this.then(OverlayContentTransitionElement(state))
+    this.graphicsLayer {
+          // 纯渐隐模式下接管 Alpha，几何模式保持 1f
+          alpha =
+              if (
+                  state.transitionMode == OverlayTransitionMode.Fade &&
+                      state.transitionPhase.isTransitioning
+              ) {
+                state.bgAlpha.value
+              } else {
+                1f
+              }
+        }
+        .then(OverlayContentGeometryTransitionElement(state))
 
-private data class OverlayContentTransitionElement(
+private data class OverlayContentGeometryTransitionElement(
     val state: OverlaySceneState,
-) : ModifierNodeElement<OverlayContentTransitionNode>() {
+) : ModifierNodeElement<OverlayContentGeometryTransitionNode>() {
 
-  override fun create(): OverlayContentTransitionNode = OverlayContentTransitionNode(state)
+  override fun create(): OverlayContentGeometryTransitionNode =
+      OverlayContentGeometryTransitionNode(state)
 
-  override fun update(node: OverlayContentTransitionNode) {
+  override fun update(node: OverlayContentGeometryTransitionNode) {
     node.update(state)
   }
 
   override fun InspectorInfo.inspectableProperties() {
-    name = "overlayContentTransition"
+    name = "overlayContentGeometryTransition"
     properties["state"] = state
   }
 }
 
-private class OverlayContentTransitionNode(
+private class OverlayContentGeometryTransitionNode(
     var state: OverlaySceneState,
 ) : Modifier.Node(), DrawModifierNode {
 

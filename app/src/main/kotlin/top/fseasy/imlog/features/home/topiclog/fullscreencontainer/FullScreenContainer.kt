@@ -58,7 +58,6 @@ fun OverlayLayoutScope.FullScreenContainer(
     is FullScreenContainerUiModel.TextSelection ->
         MessageTextSelectionFullScreen(
             text = model.message.content.text,
-            onDismissRequest = {},
             modifier = modifier,
         )
   }
