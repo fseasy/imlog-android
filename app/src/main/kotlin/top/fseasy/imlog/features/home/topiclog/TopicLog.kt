@@ -104,10 +104,17 @@ fun TopicLogRoute(
 
   val showFullScreenMessage =
       ShowFullScreenMessageUiModelAction(
-          showImage = viewModel::showImageLikeFullScreenMessage,
-          showVideo = viewModel::showImageLikeFullScreenMessage,
+          showImage = { message ->
+            handleComposerDismiss() // first close the composer if opened
+            viewModel.showImageLikeFullScreenMessage(message)
+          },
+          showVideo = { message ->
+            handleComposerDismiss() // first close the composer if opened
+            viewModel.showImageLikeFullScreenMessage(message)
+          },
           // It's trivial, just do it in UI side
           showTextSelection = { textMessage ->
+            handleComposerDismiss()
             currentFullScreenViewMessage = FullScreenContainerUiModel.TextSelection(textMessage)
           },
       )
