@@ -171,7 +171,7 @@ private fun BubbleCard(
           modifier
               .widthIn(min = BUBBLE_MIN_WIDTH_IN_DP.dp, max = BUBBLE_MAX_WIDTH_IN_DP.dp)
               .contextMenuClickable(
-                  onClick = { onClick?.invoke() },
+                  onClick = onClick,
                   onLongClickWithPosition = onShowContextMenu,
               ),
   ) {

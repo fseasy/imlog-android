@@ -79,6 +79,7 @@ fun MessageContextMenu(
             ),
         )
       },
+      focusable = false,
   )
 
   // Text-Selection Bottom Sheet (for Context Menu action)

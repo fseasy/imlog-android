@@ -1,14 +1,18 @@
 package top.fseasy.imlog.ui.components.contextmenu
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +25,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -59,23 +65,43 @@ data class ContextMenuItem(
  *    )
  *    ```
  *
+ * @param focusable if focusable, will request focus automatically, which'll affect the IME state.
  * @see top.fseasy.imlog.features.home.main.HomeTopicList TopicItemListContent
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun <T> VerticalContextMenu(
     state: ContextMenuState<T>,
     items: @Composable (target: T) -> List<ContextMenuItem>,
     modifier: Modifier = Modifier,
+    focusable: Boolean = true,
 ) {
   val currentTarget = state.target ?: return
+
+  if (!focusable) {
+    // Dismiss menu when IME state change
+    // 统一防御：只要键盘状态发生任何改变（关->开 或 开->关），直接关掉菜单，防止位置在底部窗口 size 变化后不再对齐
+    val isImeVisible = WindowInsets.isImeVisible
+    val wasImeOpenAtStart = remember(state.target) { isImeVisible }
+    LaunchedEffect(isImeVisible) {
+      if (isImeVisible != wasImeOpenAtStart) {
+        state.dismiss()
+      }
+    }
+  }
+
+  BackHandler(enabled = !focusable) {
+    state.dismiss()
+  }
 
   Popup(
       popupPositionProvider = VerticalListMenuPositionProvider(state.position),
       onDismissRequest = state::dismiss,
       properties =
           PopupProperties(
-              focusable = true,
-              dismissOnBackPress = true,
+              focusable = focusable,
+              // if focusable, leave dismiss logic to the default action
+              dismissOnBackPress = focusable,
               dismissOnClickOutside = true,
           ),
   ) {

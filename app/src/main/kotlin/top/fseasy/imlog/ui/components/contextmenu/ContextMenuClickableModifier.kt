@@ -1,20 +1,20 @@
 package top.fseasy.imlog.ui.components.contextmenu
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.SuspendingPointerInputModifierNode
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.node.DelegatingNode
+import androidx.compose.ui.node.GlobalPositionAwareModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.PointerInputModifierNode
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import kotlin.math.roundToInt
 
 /**
@@ -27,37 +27,73 @@ import kotlin.math.roundToInt
  *
  *   Mostly, use a lambda that capture the target and then call [ContextMenuState.show]
  */
-@OptIn(ExperimentalFoundationApi::class)
 fun Modifier.contextMenuClickable(
-    onClick: () -> Unit = {},
+    onClick: (() -> Unit)? = null,
     onLongClickWithPosition: (windowOffset: IntOffset) -> Unit,
-): Modifier =
-    this.then(
-        Modifier.composed {
-          var itemPositionInWindow by remember { mutableStateOf(Offset.Zero) }
-          var touchPositionInItem by remember { mutableStateOf(Offset.Zero) }
+): Modifier = this then ContextMenuClickableElement(onClick, onLongClickWithPosition)
 
-          Modifier.onGloballyPositioned { coordinates ->
-                // 捕获 Item 在屏幕窗口内的绝对位置
-                itemPositionInWindow = coordinates.positionInWindow()
-              }
-              .pointerInput(Unit) {
-                // 静默收集触摸坐标，不拦截手势、不影响滑动与点击
-                awaitEachGesture {
-                  val down = awaitFirstDown(requireUnconsumed = false)
-                  touchPositionInItem = down.position
-                }
-              }
-              .combinedClickable(
-                  onClick = onClick,
-                  onLongClick = {
-                    val globalOffset =
-                        IntOffset(
-                            (itemPositionInWindow.x + touchPositionInItem.x).roundToInt(),
-                            (itemPositionInWindow.y + touchPositionInItem.y).roundToInt(),
-                        )
-                    onLongClickWithPosition(globalOffset)
-                  },
-              )
-        }
-    )
+private data class ContextMenuClickableElement(
+    val onClick: (() -> Unit)?,
+    val onLongClickWithPosition: (IntOffset) -> Unit,
+) : ModifierNodeElement<ContextMenuClickableNode>() {
+
+  override fun create(): ContextMenuClickableNode =
+      ContextMenuClickableNode(onClick, onLongClickWithPosition)
+
+  override fun update(node: ContextMenuClickableNode) {
+    node.onClick = onClick
+    node.onLongClickWithPosition = onLongClickWithPosition
+  }
+
+  override fun InspectorInfo.inspectableProperties() {
+    name = "contextMenuClickable"
+    properties["onClick"] = onClick
+    properties["onLongClickWithPosition"] = onLongClickWithPosition
+  }
+}
+
+private class ContextMenuClickableNode(
+    var onClick: (() -> Unit)?,
+    var onLongClickWithPosition: (IntOffset) -> Unit,
+) : DelegatingNode(), GlobalPositionAwareModifierNode, PointerInputModifierNode {
+
+  private var itemPositionInWindow: Offset = Offset.Zero
+
+  // 追踪组件在屏幕中的绝对坐标
+  override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
+    itemPositionInWindow = coordinates.positionInWindow()
+  }
+
+  // 处理手势：使用 SuspendingPointerInputModifierNode 代理底层手势
+  private val pointerInputNode =
+      delegate(
+          SuspendingPointerInputModifierNode {
+            detectTapGestures(
+                onTap = {
+                  onClick?.invoke()
+                },
+                onLongPress = { localOffset ->
+                  // detectTapGestures 原生自带 localOffset，且触发时会正确处理手势消费
+                  val globalOffset =
+                      IntOffset(
+                          (itemPositionInWindow.x + localOffset.x).roundToInt(),
+                          (itemPositionInWindow.y + localOffset.y).roundToInt(),
+                      )
+                  onLongClickWithPosition(globalOffset)
+                },
+            )
+          }
+      )
+
+  override fun onPointerEvent(
+      pointerEvent: PointerEvent,
+      pass: PointerEventPass,
+      bounds: IntSize,
+  ) {
+    pointerInputNode.onPointerEvent(pointerEvent, pass, bounds)
+  }
+
+  override fun onCancelPointerInput() {
+    pointerInputNode.onCancelPointerInput()
+  }
+}

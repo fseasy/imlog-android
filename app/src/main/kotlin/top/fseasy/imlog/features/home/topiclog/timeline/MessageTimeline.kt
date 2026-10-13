@@ -28,6 +28,7 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import timber.log.Timber
 import top.fseasy.imlog.features.home.topiclog.MediaPlaybackStateAndAction
 import top.fseasy.imlog.features.home.topiclog.ShowFullScreenMessageUiModelAction
 import top.fseasy.imlog.features.home.topiclog.timeline.contextmenu.MessageContextMenu
@@ -126,9 +127,14 @@ fun TimelineContent(
           modifier
               .fillMaxSize()
               .pointerInput(Unit) {
-                detectTapGestures {
-                  onTapEmptyArea()
-                }
+                detectTapGestures(
+                    onTap = {
+                      Timber.i("TAB EMPTY AREA HERE!!! GOGOGO")
+                      onTapEmptyArea()
+                    },
+                    // 必须声明：阻止任何未消费的长按手势回退触发 onTap
+                    onLongPress = {},
+                )
               }
               .overlayRegisterViewport()
   ) {
