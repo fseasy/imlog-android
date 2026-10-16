@@ -3,8 +3,11 @@ package top.fseasy.imlog.features.home.topiclog.timeline.contextmenu
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.BottomSheetDefaults
@@ -22,8 +25,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import top.fseasy.imlog.R
 import top.fseasy.imlog.ui.components.BottomSheetTopBar
-import top.fseasy.imlog.ui.components.contextmenu.TextSelectionActionBar
 import top.fseasy.imlog.ui.components.contextmenu.DynamicHeightTextSelectionField
+import top.fseasy.imlog.ui.components.contextmenu.TextSelectionActionBar
 import top.fseasy.imlog.ui.components.contextmenu.rememberTextSelectionState
 import top.fseasy.imlog.ui.theme.ImlogTheme
 
@@ -61,6 +64,7 @@ fun MessageTextSelectionBottomSheet(
       sheetState = sheetState,
       dragHandle = { BottomSheetDefaults.DragHandle() },
       modifier = modifier,
+      contentWindowInsets = { BottomSheetDefaults.windowInsets.exclude(WindowInsets.ime) }
   ) {
     MessageTextSelectionBottomSheetContent(
         text = text.trimEnd(),

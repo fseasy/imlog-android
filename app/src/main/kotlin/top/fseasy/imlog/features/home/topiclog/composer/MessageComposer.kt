@@ -145,7 +145,7 @@ fun MessageComposer(
             MessageType.GenericFile,
         )
       },
-      onCloseExpanded = { viewModel.clearInputMode() },
+      onCloseAttachmentExpanded = { viewModel.clearInputMode() },
   )
 }
 
@@ -154,19 +154,19 @@ val LocalComposerFocusRequester = staticCompositionLocalOf<FocusRequester?> { nu
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MessageComposerContent(
-    inputText: String,
-    inputMode: MessageInputModeUiState?,
-    voiceRecodingUiStateHolder: State<VoiceRecordingUiState>,
-    inputModeSetActions: InputModeSetActions,
-    onInputTextChange: (String) -> Unit,
-    onSendText: () -> Unit,
-    onSendVoice: () -> Unit,
-    onCancelVoiceRecoding: () -> Unit,
-    onSelectAlbums: (uris: List<Uri>) -> Unit,
-    onSelectAudios: (uris: List<Uri>) -> Unit,
-    onSelectFiles: (uris: List<Uri>) -> Unit,
-    onCloseExpanded: () -> Unit,
-    modifier: Modifier = Modifier,
+  inputText: String,
+  inputMode: MessageInputModeUiState?,
+  voiceRecodingUiStateHolder: State<VoiceRecordingUiState>,
+  inputModeSetActions: InputModeSetActions,
+  onInputTextChange: (String) -> Unit,
+  onSendText: () -> Unit,
+  onSendVoice: () -> Unit,
+  onCancelVoiceRecoding: () -> Unit,
+  onSelectAlbums: (uris: List<Uri>) -> Unit,
+  onSelectAudios: (uris: List<Uri>) -> Unit,
+  onSelectFiles: (uris: List<Uri>) -> Unit,
+  onCloseAttachmentExpanded: () -> Unit,
+  modifier: Modifier = Modifier,
 ) {
 
   // IME will first get the `back` button and then close the IME.
@@ -176,6 +176,7 @@ fun MessageComposerContent(
 
   LaunchedEffect(isImeVisible) {
     if (!isImeVisible && inputMode == MessageInputModeUiState.Text) {
+      Timber.w("HERE we set text mode to none")
       inputModeSetActions.onTextModeImeHide()
     }
   }
@@ -224,7 +225,7 @@ fun MessageComposerContent(
           onSelectAlbums = onSelectAlbums,
           onSelectAudios = onSelectAudios,
           onSelectFiles = onSelectFiles,
-          closeExpanded = onCloseExpanded,
+          closeExpanded = onCloseAttachmentExpanded,
           height = 72.dp, // TODO: set it to IME height to avoid menu row jitter
       )
     }

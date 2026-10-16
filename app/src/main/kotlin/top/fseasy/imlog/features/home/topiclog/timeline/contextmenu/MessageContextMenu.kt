@@ -18,6 +18,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import top.fseasy.imlog.R
 import top.fseasy.imlog.features.home.topiclog.timeline.AnyMessageUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageContentUiModel
@@ -86,6 +87,7 @@ fun MessageContextMenu(
   // -- Assign to `val` to enable smart cast
   val currentTextSelectionBottomSheetPayload = textSelectionBottomSheetPayload
   if (!currentTextSelectionBottomSheetPayload.isNullOrEmpty()) {
+    Timber.w("Now show bottom sheet!")
     MessageTextSelectionBottomSheet(
         text = currentTextSelectionBottomSheetPayload,
         onDismiss = { textSelectionBottomSheetPayload = null },
