@@ -1,13 +1,14 @@
 package top.fseasy.imlog.features.home.topiclog.timeline
 
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -16,7 +17,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -26,6 +26,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -45,6 +46,7 @@ import top.fseasy.imlog.ui.components.overlaylayout.overlayRegisterViewport
 
 @Composable
 fun MessageTimeline(
+    composerBaseHeightPx: Int, // 传入输入框无键盘时的基准像素高
     onTapEmptyArea: () -> Unit,
     onDragList: () -> Unit,
     onShowFullScreenMessage: ShowFullScreenMessageUiModelAction,
@@ -57,6 +59,7 @@ fun MessageTimeline(
 
   TimelineContent(
       pagedItems = lazyPagingMessages,
+      composerBaseHeightPx = composerBaseHeightPx, // 传入输入框无键盘时的基准像素高
       onTapEmptyArea = onTapEmptyArea,
       onDragList = onDragList,
       mediaPlaybackStateAndAction = mediaPlaybackStateAndAction,
@@ -70,6 +73,7 @@ fun MessageTimeline(
 @Composable
 fun TimelineContent(
     pagedItems: LazyPagingItems<TimelineItemUiModel>,
+    composerBaseHeightPx: Int, // 传入输入框无键盘时的基准像素高
     onTapEmptyArea: () -> Unit,
     onDragList: () -> Unit,
     mediaPlaybackStateAndAction: MediaPlaybackStateAndAction,
@@ -129,6 +133,22 @@ fun TimelineContent(
 
   val contextMenuState = rememberContextMenuState<AnyMessageUiModel>()
 
+  val density = LocalDensity.current
+  val imeInsets = WindowInsets.ime
+
+  // 1. 如果在最底部，键盘弹起瞬间吸底
+  val isAtBottom by remember {
+    derivedStateOf { messageListState.firstVisibleItemIndex <= 1 }
+  }
+  LaunchedEffect(Unit) {
+    snapshotFlow { imeInsets.getBottom(density) }
+        .collect { height ->
+          if (height > 0 && isAtBottom) {
+            messageListState.scrollToItem(0, 0)
+          }
+        }
+  }
+
   Box(
       modifier =
           modifier
@@ -154,6 +174,31 @@ fun TimelineContent(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+      // =========================================================================
+      // 【核心武器】：占位 Spacer
+      // 在 reverseLayout = true 下，第一个声明的 item 位于屏幕的最物理底端！
+      // 它的高度 = 输入框基础高度 + 键盘实时高度。
+      // 它像一块隐形的砖头，把所有真实消息垫在输入框和键盘上方！
+      // =========================================================================
+      item(key = "BOTTOM_IME_INSET_SPACER") {
+        Spacer(
+            modifier =
+                Modifier.fillMaxWidth().layout { measurable, constraints ->
+                  val imeBottom = imeInsets.getBottom(this)
+                  val totalSpacerHeight = composerBaseHeightPx + imeBottom
+                  val placeable =
+                      measurable.measure(
+                          constraints.copy(
+                              minHeight = totalSpacerHeight,
+                              maxHeight = totalSpacerHeight,
+                          )
+                      )
+                  layout(placeable.width, placeable.height) {
+                    placeable.place(0, 0)
+                  }
+                }
+        )
+      }
       // Key must be savable in bundle => primitive String does
       items(pagedItems.itemCount, key = pagedItems.itemKey { it.key }) { index ->
         when (val item = pagedItems[index]) {

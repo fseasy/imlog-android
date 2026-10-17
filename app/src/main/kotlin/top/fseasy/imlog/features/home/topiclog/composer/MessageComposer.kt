@@ -24,6 +24,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -44,6 +45,7 @@ fun MessageComposer(
     onNavigateBack: () -> Unit,
     onShowSnackbar: (messageResId: Int) -> Unit,
     viewModel: MessageComposerViewModel = hiltViewModel(),
+    onBaseHeightPxChanged: (Int) -> Unit = {},
 ) {
   val inputMode by viewModel.inputModeUiState.collectAsStateWithLifecycle()
   val inputText by viewModel.inputTextUiState.collectAsStateWithLifecycle()
@@ -146,6 +148,7 @@ fun MessageComposer(
         )
       },
       onCloseAttachmentExpanded = { viewModel.clearInputMode() },
+      onBaseHeightPxChanged = onBaseHeightPxChanged,
   )
 }
 
@@ -154,19 +157,20 @@ val LocalComposerFocusRequester = staticCompositionLocalOf<FocusRequester?> { nu
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MessageComposerContent(
-  inputText: String,
-  inputMode: MessageInputModeUiState?,
-  voiceRecodingUiStateHolder: State<VoiceRecordingUiState>,
-  inputModeSetActions: InputModeSetActions,
-  onInputTextChange: (String) -> Unit,
-  onSendText: () -> Unit,
-  onSendVoice: () -> Unit,
-  onCancelVoiceRecoding: () -> Unit,
-  onSelectAlbums: (uris: List<Uri>) -> Unit,
-  onSelectAudios: (uris: List<Uri>) -> Unit,
-  onSelectFiles: (uris: List<Uri>) -> Unit,
-  onCloseAttachmentExpanded: () -> Unit,
-  modifier: Modifier = Modifier,
+    inputText: String,
+    inputMode: MessageInputModeUiState?,
+    voiceRecodingUiStateHolder: State<VoiceRecordingUiState>,
+    inputModeSetActions: InputModeSetActions,
+    onInputTextChange: (String) -> Unit,
+    onSendText: () -> Unit,
+    onSendVoice: () -> Unit,
+    onCancelVoiceRecoding: () -> Unit,
+    onSelectAlbums: (uris: List<Uri>) -> Unit,
+    onSelectAudios: (uris: List<Uri>) -> Unit,
+    onSelectFiles: (uris: List<Uri>) -> Unit,
+    onCloseAttachmentExpanded: () -> Unit,
+    modifier: Modifier = Modifier,
+    onBaseHeightPxChanged: (Int) -> Unit = {},
 ) {
 
   // IME will first get the `back` button and then close the IME.
@@ -202,7 +206,12 @@ fun MessageComposerContent(
   Surface(
       modifier = modifier.imePadding(),
   ) {
-    Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
+    Column(
+        modifier =
+            Modifier.fillMaxWidth()
+                .onSizeChanged { onBaseHeightPxChanged(it.height) }
+                .navigationBarsPadding()
+    ) {
       HorizontalDivider(
           thickness = DividerDefaults.Thickness,
           color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),

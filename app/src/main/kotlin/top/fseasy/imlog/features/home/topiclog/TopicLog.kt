@@ -1,6 +1,6 @@
 package top.fseasy.imlog.features.home.topiclog
 
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,19 +19,24 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.features.home.topiclog.composer.COMPOSER_MIN_ACTION_HEIGHT_IN_DP
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposer
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
 import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainer
@@ -130,8 +135,9 @@ fun TopicLogRoute(
             // proxy to composer viewModel to handle the inputMode correctly and then navigate back
             onNavigateBack = composerViewModel::handleNavigationBack,
             onSettingsClick = onSettingsClick,
-            timelineSection = { modifier ->
+            timelineSection = { modifier, composerBaseHeightPx ->
               MessageTimeline(
+                  composerBaseHeightPx = composerBaseHeightPx,
                   onTapEmptyArea = handleComposerDismiss,
                   onDragList = handleComposerDismiss,
                   onShowFullScreenMessage = showFullScreenMessage,
@@ -140,11 +146,12 @@ fun TopicLogRoute(
                   modifier = modifier,
               )
             },
-            composerSection = {
+            composerSection = { onBaseHeightPxChanged ->
               MessageComposer(
                   onNavigateBack = onNavigateBack,
                   onShowSnackbar = viewModel::showSnackbar,
                   viewModel = composerViewModel,
+                  onBaseHeightPxChanged = onBaseHeightPxChanged,
               )
             },
             snackbarHostState = snackbarHostState,
@@ -166,12 +173,11 @@ private fun TopicLogContent(
     topicName: String?,
     onNavigateBack: () -> Unit,
     onSettingsClick: (TopicId) -> Unit,
-    timelineSection: @Composable (modifier: Modifier) -> Unit,
-    composerSection: @Composable () -> Unit,
+    timelineSection: @Composable (modifier: Modifier, composerBaseHeightPx: Int) -> Unit,
+    composerSection: @Composable (onBaseHeightChanged: (Int) -> Unit) -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
-
   Scaffold(
       topBar = {
         TopAppBar(
@@ -194,16 +200,33 @@ private fun TopicLogContent(
       modifier = modifier.fillMaxSize(),
   ) { paddingValues ->
     val topPadding = paddingValues.calculateTopPadding()
-    Column(
+
+    // 记录输入栏本身的真实高度（不包含键盘）. 初始时用预设高度，防止跳变
+    val density = LocalDensity.current
+    val initialComposerBaseHeightPx =
+        with(density) { COMPOSER_MIN_ACTION_HEIGHT_IN_DP.dp.toPx().toInt() }
+    var composerBaseHeightPx by remember { mutableIntStateOf(initialComposerBaseHeightPx) }
+
+    Box(
         modifier =
             Modifier.fillMaxSize()
-                // NOTE: only consider top padding, leaving the bottom padding to the composer
                 .padding(top = topPadding)
                 .consumeWindowInsets(PaddingValues(top = topPadding))
     ) {
-      timelineSection(Modifier.weight(1f))
+      // 1. 列表铺满整个空间，完全不再做 layout 压缩裁切！
+      timelineSection(
+          Modifier.fillMaxSize(),
+          composerBaseHeightPx,
+      )
 
-      composerSection()
+      // 2. 输入框靠底对齐，由自身的 imePadding 自行上升
+      Box(
+          modifier = Modifier.align(Alignment.BottomCenter),
+      ) {
+        composerSection { baseHeight ->
+          composerBaseHeightPx = baseHeight
+        }
+      }
     }
   }
 }
