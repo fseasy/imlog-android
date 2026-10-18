@@ -39,6 +39,7 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.home.topiclog.composer.COMPOSER_MIN_ACTION_HEIGHT_IN_DP
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposer
 import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
+import top.fseasy.imlog.features.home.topiclog.composer2.MessageComposer2
 import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainer
 import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainerUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimeline
@@ -147,7 +148,7 @@ fun TopicLogRoute(
               )
             },
             composerSection = { onBaseHeightPxChanged ->
-              MessageComposer(
+              MessageComposer2(
                   onNavigateBack = onNavigateBack,
                   onShowSnackbar = viewModel::showSnackbar,
                   viewModel = composerViewModel,
@@ -199,7 +200,7 @@ private fun TopicLogContent(
       snackbarHost = { SnackbarHost(snackbarHostState) },
       modifier = modifier.fillMaxSize(),
   ) { paddingValues ->
-    val topPadding = paddingValues.calculateTopPadding()
+//    val topPadding = paddingValues.calculateTopPadding()
 
     // 记录输入栏本身的真实高度（不包含键盘）. 初始时用预设高度，防止跳变
     val density = LocalDensity.current
@@ -210,8 +211,10 @@ private fun TopicLogContent(
     Box(
         modifier =
             Modifier.fillMaxSize()
-                .padding(top = topPadding)
-                .consumeWindowInsets(PaddingValues(top = topPadding))
+//                .padding(top = topPadding)
+//                .consumeWindowInsets(PaddingValues(top = topPadding))
+                .padding(paddingValues)
+                .consumeWindowInsets(paddingValues)
     ) {
       // 1. 列表铺满整个空间，完全不再做 layout 压缩裁切！
       timelineSection(

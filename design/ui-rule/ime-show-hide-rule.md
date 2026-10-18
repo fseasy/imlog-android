@@ -25,7 +25,8 @@
 
 ## 此 App 的 Rule
 
-1. 弹出 context menu 时，仿造 DeepSeek 的逻辑
+1. 弹出 context menu 时，仿造 DeepSeek 的逻辑，即：
+   先隐藏 IME，再弹出 context menu
 2. 滚动消息列表时，不隐藏 IME
 
 WHY:

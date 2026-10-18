@@ -7,24 +7,30 @@ import top.fseasy.imlog.features.home.topiclog.timeline.QuotedMessageUiModel
 
 /** Support parcelize */
 @Parcelize
-enum class MessageInputModeUiState : Parcelable {
+enum class MessageInputModeUi : Parcelable {
   Text,
-  Voice,
+  HoldToTalk,
+  VoiceRecording,
   Attachment,
+  Camera,
 }
 
-fun MessageInputMode.toUiState(): MessageInputModeUiState =
+fun MessageInputMode.toUiState(): MessageInputModeUi =
     when (this) {
-      MessageInputMode.Text -> MessageInputModeUiState.Text
-      MessageInputMode.Voice -> MessageInputModeUiState.Voice
-      MessageInputMode.Attachment -> MessageInputModeUiState.Attachment
+      MessageInputMode.Text -> MessageInputModeUi.Text
+      MessageInputMode.HoldToTalk -> MessageInputModeUi.HoldToTalk
+      MessageInputMode.VoiceRecording -> MessageInputModeUi.VoiceRecording
+      MessageInputMode.Attachment -> MessageInputModeUi.Attachment
+      MessageInputMode.Camera -> MessageInputModeUi.Camera
     }
 
-fun MessageInputModeUiState.toDomain(): MessageInputMode =
+fun MessageInputModeUi.toDomain(): MessageInputMode =
     when (this) {
-      MessageInputModeUiState.Text -> MessageInputMode.Text
-      MessageInputModeUiState.Voice -> MessageInputMode.Voice
-      MessageInputModeUiState.Attachment -> MessageInputMode.Attachment
+      MessageInputModeUi.Text -> MessageInputMode.Text
+      MessageInputModeUi.HoldToTalk -> MessageInputMode.HoldToTalk
+      MessageInputModeUi.VoiceRecording -> MessageInputMode.VoiceRecording
+      MessageInputModeUi.Attachment -> MessageInputMode.Attachment
+      MessageInputModeUi.Camera -> MessageInputMode.Camera
     }
 
 /**
@@ -39,7 +45,7 @@ sealed interface ComposerDraftMeta : Parcelable {
 
   @Parcelize
   data class Ready(
-      val inputMode: MessageInputModeUiState?,
+      val inputMode: MessageInputModeUi?,
       val quotedMessage: QuotedMessageUiModel?,
   ) : ComposerDraftMeta
 }

@@ -126,4 +126,8 @@
     <string name="term_deselect">Deselect</string>
     <string name="term_select_all">Select All</string>
     <string name="term_media_play_speed">Speed</string>
+    <string name="composer_input_mode_default_desc">Input with Text or Voice</string>
+    <string name="composer_input_mode_recorder_desc">Recorder</string>
+    <string name="composer_input_mode_attachment_desc">Attachment</string>
+    <string name="composer_context_action_compress_album">Compress Album</string>
 </resources>

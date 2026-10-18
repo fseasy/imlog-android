@@ -1,11 +1,13 @@
 package top.fseasy.imlog.domain.model
 
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
+import timber.log.Timber
 import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
-import kotlinx.serialization.Serializable
-import timber.log.Timber
 
 enum class MessageType(val value: String) {
   Text("text"),
@@ -183,8 +185,10 @@ data class MessagePreview(
 @Serializable
 enum class MessageInputMode(val value: String) {
   Text("text"),
-  Voice("voice"),
-  Attachment("Attachment"),
+  @OptIn(ExperimentalSerializationApi::class) @JsonNames("Voice") HoldToTalk("hold-to-talk"),
+  VoiceRecording("voice-recording"),
+  Attachment("attachment"),
+  Camera("camera"),
 }
 
 /** For composer draft */

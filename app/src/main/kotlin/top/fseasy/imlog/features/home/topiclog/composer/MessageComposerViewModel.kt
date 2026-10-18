@@ -43,7 +43,6 @@ import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.SendTextMessageUseCase
@@ -91,8 +90,8 @@ constructor(
   private val _inputTextUiState = MutableStateFlow("")
   val inputTextUiState: StateFlow<String> = _inputTextUiState.asStateFlow()
 
-  private val _inputModeUiState = MutableStateFlow<MessageInputModeUiState?>(null)
-  val inputModeUiState: StateFlow<MessageInputModeUiState?> = _inputModeUiState.asStateFlow()
+  private val _inputModeUiState = MutableStateFlow<MessageInputModeUi?>(null)
+  val inputModeUiState: StateFlow<MessageInputModeUi?> = _inputModeUiState.asStateFlow()
 
   private var _lastSavedDraft: MessageDraft? = null
 
@@ -161,7 +160,7 @@ constructor(
 
   fun clearInputMode() = updateInputMode(null)
 
-  fun updateInputMode(newInputMode: MessageInputModeUiState?) = _inputModeUiState.update {
+  fun updateInputMode(newInputMode: MessageInputModeUi?) = _inputModeUiState.update {
     newInputMode
   }
 
@@ -174,13 +173,13 @@ constructor(
         null -> _uiEffect.send(ComposerUiEffect.PopBackStack)
 
         // just clear inputMode, the UI will then update
-        MessageInputModeUiState.Attachment,
-        MessageInputModeUiState.Text,
+        MessageInputModeUi.Attachment,
+        MessageInputModeUi.Text,
         -> clearInputMode() // reset to null mode
 
         // TODO: should trigger pause and keep the state so that the state can be saved to draft db.
         // HERE we just stop the recorder and sending message, and pop back.
-        MessageInputModeUiState.Voice -> {
+        MessageInputModeUi.HoldToTalk -> {
           val recorderState = voiceRecorderStateHolder.voiceRecordingUiState.value
           if (recorderState.recorderState == VoiceRecorderState.Recording) {
             // TODO: support recording pause logic! issue #6
@@ -207,7 +206,7 @@ constructor(
       val inputMode = inputModeUiState.value
 
       // TODO: support recording pause logic! issue #6
-      if (inputMode == MessageInputModeUiState.Voice) {
+      if (inputMode == MessageInputModeUi.HoldToTalk) {
         val recorderState = voiceRecorderStateHolder.voiceRecordingUiState.value
         if (recorderState.recorderState == VoiceRecorderState.Recording) {
           stopVoiceRecordingAndSendVoiceMessage()
@@ -372,8 +371,8 @@ constructor(
 
 private object MessageDraftUtil {
   fun buildDraft(
-      inputText: String,
-      inputMode: MessageInputModeUiState?,
+    inputText: String,
+    inputMode: MessageInputModeUi?,
   ) =
       MessageDraft(
           inputMode = inputMode?.toDomain(),

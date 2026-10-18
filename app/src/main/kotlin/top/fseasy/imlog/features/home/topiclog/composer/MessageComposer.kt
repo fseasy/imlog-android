@@ -54,7 +54,7 @@ fun MessageComposer(
   val voiceRecordingUiStateHolder =
       viewModel.voiceRecorderStateHolder.voiceRecordingUiState.collectAsStateWithLifecycle()
   val onVoiceButtonSingleClick = {
-    viewModel.updateInputMode(MessageInputModeUiState.Voice)
+    viewModel.updateInputMode(MessageInputModeUi.HoldToTalk)
     // start recording NOW
     viewModel.startVoiceRecording()
   }
@@ -90,8 +90,8 @@ fun MessageComposer(
           InputModeSetActions(
               onTextInputFocusChange = { isFocused ->
                 // Avoid duplicated update the inputMode to Text as it has side effects
-                if (isFocused && inputMode != MessageInputModeUiState.Text) {
-                  viewModel.updateInputMode(MessageInputModeUiState.Text)
+                if (isFocused && inputMode != MessageInputModeUi.Text) {
+                  viewModel.updateInputMode(MessageInputModeUi.Text)
                 }
                 // Don't process unFocused here, as we don't know the reason caused unfocus
                 // The other parts will take responsibility for input mode changing.
@@ -107,8 +107,8 @@ fun MessageComposer(
                 }
               },
               onAttachmentClick = {
-                if (inputMode != MessageInputModeUiState.Attachment) {
-                  viewModel.updateInputMode(MessageInputModeUiState.Attachment)
+                if (inputMode != MessageInputModeUi.Attachment) {
+                  viewModel.updateInputMode(MessageInputModeUi.Attachment)
                 } else {
                   // NOTE: here we just clear the inputMode, it's simple and acceptable
                   // WeChat logic: set it to Text Mode.
@@ -157,20 +157,20 @@ val LocalComposerFocusRequester = staticCompositionLocalOf<FocusRequester?> { nu
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MessageComposerContent(
-    inputText: String,
-    inputMode: MessageInputModeUiState?,
-    voiceRecodingUiStateHolder: State<VoiceRecordingUiState>,
-    inputModeSetActions: InputModeSetActions,
-    onInputTextChange: (String) -> Unit,
-    onSendText: () -> Unit,
-    onSendVoice: () -> Unit,
-    onCancelVoiceRecoding: () -> Unit,
-    onSelectAlbums: (uris: List<Uri>) -> Unit,
-    onSelectAudios: (uris: List<Uri>) -> Unit,
-    onSelectFiles: (uris: List<Uri>) -> Unit,
-    onCloseAttachmentExpanded: () -> Unit,
-    modifier: Modifier = Modifier,
-    onBaseHeightPxChanged: (Int) -> Unit = {},
+  inputText: String,
+  inputMode: MessageInputModeUi?,
+  voiceRecodingUiStateHolder: State<VoiceRecordingUiState>,
+  inputModeSetActions: InputModeSetActions,
+  onInputTextChange: (String) -> Unit,
+  onSendText: () -> Unit,
+  onSendVoice: () -> Unit,
+  onCancelVoiceRecoding: () -> Unit,
+  onSelectAlbums: (uris: List<Uri>) -> Unit,
+  onSelectAudios: (uris: List<Uri>) -> Unit,
+  onSelectFiles: (uris: List<Uri>) -> Unit,
+  onCloseAttachmentExpanded: () -> Unit,
+  modifier: Modifier = Modifier,
+  onBaseHeightPxChanged: (Int) -> Unit = {},
 ) {
 
   // IME will first get the `back` button and then close the IME.
@@ -179,7 +179,7 @@ fun MessageComposerContent(
   val isImeVisible = WindowInsets.isImeVisible
 
   LaunchedEffect(isImeVisible) {
-    if (!isImeVisible && inputMode == MessageInputModeUiState.Text) {
+    if (!isImeVisible && inputMode == MessageInputModeUi.Text) {
       Timber.w("HERE we set text mode to none")
       inputModeSetActions.onTextModeImeHide()
     }
@@ -191,7 +191,7 @@ fun MessageComposerContent(
   val focusRequester = remember { FocusRequester() }
   LaunchedEffect(inputMode) {
     Timber.i("recompose on inputMode = $inputMode")
-    if (inputMode != MessageInputModeUiState.Text) {
+    if (inputMode != MessageInputModeUi.Text) {
       // NOTE the order!
       // MUST do Hide before clear focus! Show/Hide needs a focus element!
       keyboardController?.hide()
