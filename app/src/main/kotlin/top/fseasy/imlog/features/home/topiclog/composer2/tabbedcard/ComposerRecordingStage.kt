@@ -1,10 +1,12 @@
-package top.fseasy.imlog.features.home.topiclog.composer2
+package top.fseasy.imlog.features.home.topiclog.composer2.tabbedcard
 
+import android.content.res.Configuration
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,31 +18,131 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.fseasy.imlog.R
+import top.fseasy.imlog.features.home.topiclog.composer2.ComposerVoiceRecordingAction
+import top.fseasy.imlog.features.home.topiclog.composer2.HoldToTalkGestureTarget
+import top.fseasy.imlog.features.home.topiclog.composer2.TapRecordingState
+import top.fseasy.imlog.ui.theme.ImlogTheme
+
+@Composable
+fun BoxScope.ComposerRecordingStage(
+  onAction: (ComposerVoiceRecordingAction) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  //  Row(
+  //      modifier = modifier.fillMaxWidth().padding(vertical = 8.dp),
+  //      // 2 个选项时：居中并保持合适间距 (60.dp)，避免 SpaceEvenly 导致分布过散
+  //      horizontalArrangement = Arrangement.spacedBy(60.dp, Alignment.CenterHorizontally),
+  //      verticalAlignment = Alignment.CenterVertically,
+  //  ) {
+  //    ComposerActionTile(
+  //        icon = ImageVector.vectorResource(R.drawable.icon_mic),
+  //        labelResId = R.string.composer_recording_stage_label_audio,
+  //        onClick = {},
+  //    )
+  //    ComposerActionTile(
+  //        icon = ImageVector.vectorResource(R.drawable.icon_camera_48px),
+  //        labelResId = R.string.composer_recording_stage_label_camera,
+  //        onClick = {},
+  //    )
+  //  }
+  Row(
+      modifier = modifier.matchParentSize(),
+      horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+      verticalAlignment = Alignment.CenterVertically,
+  ) {
+    SolidActionCard(
+        icon = ImageVector.vectorResource(R.drawable.icon_mic),
+        label = "Recorder",
+        onClick = {},
+    )
+    SolidActionCard(
+        icon = ImageVector.vectorResource(R.drawable.icon_camera_48px),
+        label = "Camera",
+        onClick = {},
+    )
+  }
+}
+
+@Composable
+fun SolidActionCard(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+  Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.Center,
+      modifier =
+          Modifier.clip(RoundedCornerShape(16.dp)) // 16dp 圆角，比全胶囊优雅很多
+              // 采用和左下角选中态一致的高亮表面色（白天是纯白，暗黑模式是亮灰）
+              .clickable(onClick = onClick)
+              .padding(horizontal = 16.dp),
+  ) {
+    Icon(
+        imageVector = icon,
+        contentDescription = label,
+        modifier = Modifier.size(48.dp), // 稍大一点的图标
+        tint = MaterialTheme.colorScheme.onSurface,
+    )
+    Spacer(modifier = Modifier.width(8.dp))
+    Text(
+        text = label,
+        // 稍粗一点的字重，提升精致度和辨识度
+        style =
+            MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.Medium
+            ),
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+  }
+}
+
+@Preview(name = "ComposerRecordingStage - Light", showBackground = true)
+@Preview(
+    name = "ComposerRecordingStage - Dark",
+    showBackground = true,
+    uiMode = Configuration.UI_MODE_NIGHT_YES,
+)
+@Composable
+private fun ComposerRecordingStagePreview() {
+  ImlogTheme {
+    Surface {
+      Box(modifier = Modifier.size(368.dp, 60.dp)) {
+        ComposerRecordingStage(
+            onAction = {},
+        )
+      }
+    }
+  }
+}
 
 @Composable
 fun MicStage(
-  subMode: VoiceSubMode,
   recordingState: TapRecordingState,
   onStartRecord: () -> Unit,
   onPause: () -> Unit,
@@ -146,38 +248,44 @@ fun MicStage(
         }
       }
     }
-    // 2. 长按模式舞台 (P3)
-    subMode == VoiceSubMode.HoldToSpeak -> {
-      Box(modifier = Modifier.fillMaxWidth().height(68.dp), contentAlignment = Alignment.Center) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier =
-                Modifier.pointerInput(Unit) {
-                      detectDragGesturesAfterLongPress(
-                          onDragStart = { onHoldStart() },
-                          onDragEnd = { onHoldEnd(true) },
-                          onDragCancel = { onHoldEnd(false) },
-                          onDrag = { change, dragAmount ->
-                            change.consume()
-                            when {
-                              dragAmount.x < -40 -> onGestureChange(HoldToTalkGestureTarget.Cancel)
-                              dragAmount.x > 40 -> onGestureChange(HoldToTalkGestureTarget.Lock)
-                              else -> onGestureChange(HoldToTalkGestureTarget.Normal)
-                            }
-                          },
-                      )
-                    }
-                    .padding(12.dp),
-        ) {
-          Icon(Icons.Default.Edit, contentDescription = null, tint = Color.Black)
-          Spacer(modifier = Modifier.width(8.dp))
-          Text("Hold To Speak", fontSize = 18.sp, color = Color.Black)
-        }
-      }
-    }
+    //    // 2. 长按模式舞台 (P3)
+    //    subMode == VoiceSubMode.HoldToSpeak -> {
+    //      Box(modifier = Modifier.fillMaxWidth().height(68.dp), contentAlignment =
+    // Alignment.Center) {
+    //        Row(
+    //            verticalAlignment = Alignment.CenterVertically,
+    //            modifier =
+    //                Modifier.pointerInput(Unit) {
+    //                      detectDragGesturesAfterLongPress(
+    //                          onDragStart = { onHoldStart() },
+    //                          onDragEnd = { onHoldEnd(true) },
+    //                          onDragCancel = { onHoldEnd(false) },
+    //                          onDrag = { change, dragAmount ->
+    //                            change.consume()
+    //                            when {
+    //                              dragAmount.x < -40 ->
+    // onGestureChange(HoldToRecordGestureTarget.Cancel)
+    //                              dragAmount.x > 40 ->
+    // onGestureChange(HoldToRecordGestureTarget.Lock)
+    //                              else -> onGestureChange(HoldToRecordGestureTarget.Normal)
+    //                            }
+    //                          },
+    //                      )
+    //                    }
+    //                    .padding(12.dp),
+    //        ) {
+    //          Icon(Icons.Default.Edit, contentDescription = null, tint = Color.Black)
+    //          Spacer(modifier = Modifier.width(8.dp))
+    //          Text("Hold To Speak", fontSize = 18.sp, color = Color.Black)
+    //        }
+    //      }
+    //    }
     // 3. 点按录音空闲态 (P4)
     else -> {
-      Box(modifier = Modifier.fillMaxWidth().height(68.dp), contentAlignment = Alignment.Center) {
+      Box(
+          modifier = Modifier.fillMaxWidth().height(68.dp),
+          contentAlignment = Alignment.Center,
+      ) {
         Button(
             onClick = onStartRecord,
             colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
@@ -207,9 +315,9 @@ fun WaveformView(modifier: Modifier = Modifier) {
       val startY = (size.height - barHeight) / 2
       drawRoundRect(
           color = Color.Black,
-          topLeft = androidx.compose.ui.geometry.Offset(startX, startY),
-          size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
-          cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f),
+          topLeft = Offset(startX, startY),
+          size = Size(barWidth, barHeight),
+          cornerRadius = CornerRadius(4f, 4f),
       )
     }
   }

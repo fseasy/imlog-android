@@ -57,3 +57,10 @@ val Typography.errorSmall: TextStyle
           color = Color.Red,
           fontWeight = FontWeight.Medium,
       )
+
+val Typography.composerStyle: TextStyle
+  get() =
+    bodyMedium.copy(
+        color = Color.Black,
+        fontSize = 16.sp,
+    )

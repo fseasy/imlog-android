@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.topiclog.composer2
+package top.fseasy.imlog.features.home.topiclog.composer2.tabbedcard
 
 import android.content.res.Configuration
 import androidx.compose.animation.Crossfade
@@ -27,12 +27,20 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import top.fseasy.imlog.R
+import top.fseasy.imlog.features.home.topiclog.composer2.ComposerBottomContextAction
+import top.fseasy.imlog.features.home.topiclog.composer2.ComposerInputModeContextActionUiState
+import top.fseasy.imlog.features.home.topiclog.composer2.ComposerStage
 import top.fseasy.imlog.ui.theme.ImlogTheme
 
 @Composable
 fun Composer2BottomBar(
-  uiState: Composer2BottomBarUiState,
-  onAction: (ComposerAction) -> Unit,
+  stage: ComposerStage,
+  stageRedDots: Set<ComposerStage>,
+  sendEnabled: Boolean,
+  contextActionState: ComposerInputModeContextActionUiState,
+  onSelectStage: (ComposerStage) -> Unit,
+  onContextAction: (ComposerBottomContextAction) -> Unit,
+  onSend: () -> Unit,
 ) {
 
   Row(
@@ -41,9 +49,9 @@ fun Composer2BottomBar(
   ) {
     // [1. 左区]：一体化胶囊互斥模式工具条 (Segmented Mode Pill)
     InputModeToolBar(
-        currentMode = uiState.currentMode,
-        redDotsModes = emptySet(),
-        onSelectMode = { newMode -> onAction(ComposerAction.SelectInputMode(newMode)) },
+        stage,
+        redDotStages = stageRedDots,
+        onSelectStage = onSelectStage,
     )
 
     // [2. 中区]：动态上下文插槽
@@ -52,18 +60,22 @@ fun Composer2BottomBar(
         contentAlignment = Alignment.Center,
     ) {
       Crossfade(
-          targetState = uiState.currentMode,
+          targetState = stage,
           animationSpec = tween(durationMillis = 180),
           label = "ContextualSlot",
-      ) { mode ->
-        ComposerInputModeContextActionBar(mode, uiState.contextActionState, onAction = onAction)
+      ) { currentStage ->
+        ComposerInputModeContextActionBar(
+            currentStage,
+            contextActionState,
+            onAction = onContextAction,
+        )
       }
     }
 
     // [3. 右区]：发送按钮
     SendIcon(
-        enabled = uiState.sendEnabled,
-        onClick = { onAction(ComposerAction.SendMessage) },
+        enabled = sendEnabled,
+        onClick = onSend,
     )
   }
 }
@@ -133,32 +145,16 @@ private fun Composer2BottomBarPreview() {
     Surface {
       Column {
         Composer2BottomBar(
-            uiState =
-                Composer2BottomBarUiState(
-                    currentMode = MessageInputMode.Default,
-                    sendEnabled = true,
-                    contextActionState =
-                        ComposerInputModeContextActionUiState(compressAlbumEnabled = true),
-                ),
-        ) {}
-        Composer2BottomBar(
-            uiState =
-                Composer2BottomBarUiState(
-                    currentMode = MessageInputMode.Recorder,
-                    sendEnabled = false,
-                    contextActionState =
-                        ComposerInputModeContextActionUiState(compressAlbumEnabled = true),
-                ),
-        ) {}
-        Composer2BottomBar(
-            uiState =
-                Composer2BottomBarUiState(
-                    currentMode = MessageInputMode.Attachment,
-                    sendEnabled = false,
-                    contextActionState =
-                        ComposerInputModeContextActionUiState(compressAlbumEnabled = true),
-                ),
-        ) {}
+            stage = ComposerStage.Default,
+            stageRedDots =  emptySet(),
+            sendEnabled=  true,
+            contextActionState = ComposerInputModeContextActionUiState(
+                compressAlbumEnabled = true
+            ),
+            onSelectStage = {},
+            onContextAction = {},
+            onSend = {}
+        )
       }
     }
   }

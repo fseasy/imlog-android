@@ -9,8 +9,8 @@ import top.fseasy.imlog.features.home.topiclog.timeline.QuotedMessageUiModel
 @Parcelize
 enum class MessageInputModeUi : Parcelable {
   Text,
-  HoldToTalk,
-  VoiceRecording,
+  HoldToRecord,
+  VoiceNote,
   Attachment,
   Camera,
 }
@@ -18,8 +18,8 @@ enum class MessageInputModeUi : Parcelable {
 fun MessageInputMode.toUiState(): MessageInputModeUi =
     when (this) {
       MessageInputMode.Text -> MessageInputModeUi.Text
-      MessageInputMode.HoldToTalk -> MessageInputModeUi.HoldToTalk
-      MessageInputMode.VoiceRecording -> MessageInputModeUi.VoiceRecording
+      MessageInputMode.HoldToRecord -> MessageInputModeUi.HoldToRecord
+      MessageInputMode.VoiceNote -> MessageInputModeUi.VoiceNote
       MessageInputMode.Attachment -> MessageInputModeUi.Attachment
       MessageInputMode.Camera -> MessageInputModeUi.Camera
     }
@@ -27,8 +27,8 @@ fun MessageInputMode.toUiState(): MessageInputModeUi =
 fun MessageInputModeUi.toDomain(): MessageInputMode =
     when (this) {
       MessageInputModeUi.Text -> MessageInputMode.Text
-      MessageInputModeUi.HoldToTalk -> MessageInputMode.HoldToTalk
-      MessageInputModeUi.VoiceRecording -> MessageInputMode.VoiceRecording
+      MessageInputModeUi.HoldToRecord -> MessageInputMode.HoldToRecord
+      MessageInputModeUi.VoiceNote -> MessageInputMode.VoiceNote
       MessageInputModeUi.Attachment -> MessageInputMode.Attachment
       MessageInputModeUi.Camera -> MessageInputMode.Camera
     }

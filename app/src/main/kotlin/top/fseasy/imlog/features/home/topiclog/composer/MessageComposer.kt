@@ -54,7 +54,7 @@ fun MessageComposer(
   val voiceRecordingUiStateHolder =
       viewModel.voiceRecorderStateHolder.voiceRecordingUiState.collectAsStateWithLifecycle()
   val onVoiceButtonSingleClick = {
-    viewModel.updateInputMode(MessageInputModeUi.HoldToTalk)
+    viewModel.updateInputMode(MessageInputModeUi.HoldToRecord)
     // start recording NOW
     viewModel.startVoiceRecording()
   }

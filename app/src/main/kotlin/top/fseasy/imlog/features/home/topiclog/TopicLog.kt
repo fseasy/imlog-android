@@ -1,21 +1,20 @@
 package top.fseasy.imlog.features.home.topiclog
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.consumeWindowInsets
+import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,7 +23,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -37,9 +35,8 @@ import androidx.media3.common.util.UnstableApi
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.features.home.topiclog.composer.COMPOSER_MIN_ACTION_HEIGHT_IN_DP
-import top.fseasy.imlog.features.home.topiclog.composer.MessageComposer
-import top.fseasy.imlog.features.home.topiclog.composer.MessageComposerViewModel
-import top.fseasy.imlog.features.home.topiclog.composer2.MessageComposer2
+import top.fseasy.imlog.features.home.topiclog.composer2.Composer2ViewModel
+import top.fseasy.imlog.features.home.topiclog.composer2.classic.ClassicComposer
 import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainer
 import top.fseasy.imlog.features.home.topiclog.fullscreencontainer.FullScreenContainerUiModel
 import top.fseasy.imlog.features.home.topiclog.timeline.MessageTimeline
@@ -53,7 +50,7 @@ fun TopicLogRoute(
     onSettingsClick: (TopicId) -> Unit,
     viewModel: TopicLogViewModel = hiltViewModel(),
     // Manage composer viewmodel here as we need to call its clearInputMode
-    composerViewModel: MessageComposerViewModel = hiltViewModel(),
+    composerViewModel: Composer2ViewModel = hiltViewModel(),
 ) {
   val topicName =
       (viewModel.contextStateFlow.collectAsStateWithLifecycle().value as? ContextState.Success)
@@ -148,7 +145,7 @@ fun TopicLogRoute(
               )
             },
             composerSection = { onBaseHeightPxChanged ->
-              MessageComposer2(
+              ClassicComposer(
                   onNavigateBack = onNavigateBack,
                   onShowSnackbar = viewModel::showSnackbar,
                   viewModel = composerViewModel,
@@ -167,6 +164,7 @@ fun TopicLogRoute(
   }
 }
 
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopicLogContent(
@@ -179,6 +177,14 @@ private fun TopicLogContent(
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
 ) {
+
+  // 记录输入栏本身的真实高度（不包含键盘）. 初始时用预设高度，防止跳变
+  val density = LocalDensity.current
+  val initialComposerBaseHeightPx =
+      with(density) { COMPOSER_MIN_ACTION_HEIGHT_IN_DP.dp.toPx().toInt() }
+  var composerBaseHeightPx by remember { mutableIntStateOf(initialComposerBaseHeightPx) }
+
+  // For timeline
   Scaffold(
       topBar = {
         TopAppBar(
@@ -195,41 +201,25 @@ private fun TopicLogContent(
                 Icon(Icons.Default.Settings, stringResource(R.string.btn_setting))
               }
             },
+            colors =
+                TopAppBarDefaults.topAppBarColors(
+                    // 1. 设置正常状态和滚动状态下的容器颜色为微透（0.7f ~ 0.85f 比较合适）
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                ),
         )
       },
       snackbarHost = { SnackbarHost(snackbarHostState) },
       modifier = modifier.fillMaxSize(),
-  ) { paddingValues ->
-//    val topPadding = paddingValues.calculateTopPadding()
-
-    // 记录输入栏本身的真实高度（不包含键盘）. 初始时用预设高度，防止跳变
-    val density = LocalDensity.current
-    val initialComposerBaseHeightPx =
-        with(density) { COMPOSER_MIN_ACTION_HEIGHT_IN_DP.dp.toPx().toInt() }
-    var composerBaseHeightPx by remember { mutableIntStateOf(initialComposerBaseHeightPx) }
-
-    Box(
-        modifier =
-            Modifier.fillMaxSize()
-//                .padding(top = topPadding)
-//                .consumeWindowInsets(PaddingValues(top = topPadding))
-                .padding(paddingValues)
-                .consumeWindowInsets(paddingValues)
-    ) {
-      // 1. 列表铺满整个空间，完全不再做 layout 压缩裁切！
-      timelineSection(
-          Modifier.fillMaxSize(),
-          composerBaseHeightPx,
-      )
-
-      // 2. 输入框靠底对齐，由自身的 imePadding 自行上升
-      Box(
-          modifier = Modifier.align(Alignment.BottomCenter),
-      ) {
-        composerSection { baseHeight ->
-          composerBaseHeightPx = baseHeight
-        }
-      }
-    }
+  ) {
+    // 1. 列表铺满整个空间，完全不再做 layout 压缩裁切！
+    timelineSection(
+        Modifier.fillMaxSize(),
+        composerBaseHeightPx,
+    )
+  }
+  // 2. Composer part, now it's totally a full-screen overlay (to support internal e2e overlay)
+  composerSection { baseHeight ->
+    composerBaseHeightPx = baseHeight
   }
 }

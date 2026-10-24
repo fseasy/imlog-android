@@ -3,6 +3,7 @@ package top.fseasy.imlog.features.home.topiclog.composer2
 import android.os.Parcelable
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.geometry.Offset
 import kotlinx.parcelize.Parcelize
 import top.fseasy.imlog.R
 import top.fseasy.imlog.features.home.topiclog.composer.MessageInputModeUi
@@ -19,8 +20,8 @@ fun MessageInputModeUi?.decideComposerStage() =
     when (this) {
       null -> ComposerStage.Default
       MessageInputModeUi.Text -> ComposerStage.Default
-      MessageInputModeUi.HoldToTalk -> ComposerStage.Default
-      MessageInputModeUi.VoiceRecording -> ComposerStage.Recording
+      MessageInputModeUi.HoldToRecord -> ComposerStage.Default
+      MessageInputModeUi.VoiceNote -> ComposerStage.Recording
       MessageInputModeUi.Camera -> ComposerStage.Recording
       MessageInputModeUi.Attachment -> ComposerStage.Attachment
     }
@@ -32,13 +33,6 @@ sealed interface TapRecordingState {
   data class Recording(val durationSec: Int) : TapRecordingState
 
   data class Paused(val durationSec: Int, val isPlayingPreview: Boolean = false) : TapRecordingState
-}
-
-/** 长按手势判决 (P9 弧形浮层) */
-enum class HoldToTalkGestureTarget {
-  Normal,
-  Cancel,
-  Lock,
 }
 
 /** 附件类型 */
@@ -55,9 +49,15 @@ data class ComposerInputModeContextActionUiState(
 
 @Immutable
 data class Composer2BottomBarUiState(
-    val currentStage: ComposerStage,
+    val stage: ComposerStage,
     val sendEnabled: Boolean,
     val contextActionState: ComposerInputModeContextActionUiState,
+)
+
+@Immutable
+data class Composer2UiState(
+    val inputMode: MessageInputModeUi,
+    val bottomBarState: Composer2BottomBarUiState,
 )
 
 sealed interface ComposerAction {
@@ -66,42 +66,39 @@ sealed interface ComposerAction {
   data class SelectComposerStage(val stage: ComposerStage) : ComposerAction
 }
 
-sealed interface ComposerTextModeAction : ComposerAction {
-  data class UpdateInputText(val text: String) : ComposerTextModeAction
+sealed interface ComposerDefaultStageAction : ComposerAction {
 
-  data object SendText : ComposerTextModeAction
+  data class ChangeFocus(val focused: Boolean) : ComposerDefaultStageAction
+
+  data object SendText : ComposerDefaultStageAction
+
+  data class StartHoldToTalk(val rootOffset: Offset) : ComposerDefaultStageAction
+
+  data class ReleaseHoldToTalk(val rootOffset: Offset) : ComposerDefaultStageAction
+
+  data class MoveHoldToTalkTouch(val rootOffset: Offset) : ComposerDefaultStageAction
 }
 
-sealed interface ComposerHoldToTalkModeAction : ComposerAction {
+sealed interface ComposerVoiceRecordingAction : ComposerAction {
+  data object StartVoiceRecording : ComposerVoiceRecordingAction
 
-  data object StartHoldToTalk : ComposerHoldToTalkModeAction
+  data object PauseVoiceRecording : ComposerVoiceRecordingAction
 
-  data object SendHoldToTalk : ComposerHoldToTalkModeAction
+  data object ResumeVoiceRecording : ComposerVoiceRecordingAction
 
-  data class ChangeHoldToTalkGesture(val gestureTarget: HoldToTalkGestureTarget) :
-      ComposerHoldToTalkModeAction
+  data object DiscardVoiceRecording : ComposerVoiceRecordingAction
+
+  data object ToggleVoiceRecordingPreviewPlay : ComposerVoiceRecordingAction
+
+  data object SendVoiceRecording : ComposerVoiceRecordingAction
 }
 
-sealed interface ComposerVoiceRecordingModeAction : ComposerAction {
-  data object StartVoiceRecording : ComposerVoiceRecordingModeAction
+sealed interface ComposerAttachmentStageAction : ComposerAction {
+  data class SelectAlbums(val uris: List<android.net.Uri>) : ComposerAttachmentStageAction
 
-  data object PauseVoiceRecording : ComposerVoiceRecordingModeAction
+  data class SelectAudios(val uris: List<android.net.Uri>) : ComposerAttachmentStageAction
 
-  data object ResumeVoiceRecording : ComposerVoiceRecordingModeAction
-
-  data object DiscardVoiceRecording : ComposerVoiceRecordingModeAction
-
-  data object ToggleVoiceRecordingPreviewPlay : ComposerVoiceRecordingModeAction
-
-  data object SendVoiceRecording : ComposerVoiceRecordingModeAction
-}
-
-sealed interface ComposerAttachmentModeAction : ComposerAction {
-  data class SelectAlbums(val uris: List<android.net.Uri>) : ComposerAttachmentModeAction
-
-  data class SelectAudios(val uris: List<android.net.Uri>) : ComposerAttachmentModeAction
-
-  data class SelectFiles(val uris: List<android.net.Uri>) : ComposerAttachmentModeAction
+  data class SelectFiles(val uris: List<android.net.Uri>) : ComposerAttachmentStageAction
 }
 
 sealed interface ComposerBottomContextAction : ComposerAction {

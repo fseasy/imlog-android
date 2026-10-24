@@ -8,10 +8,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -54,6 +50,10 @@ import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.fileMimeTypeToMessageType
 import top.fseasy.imlog.domain.util.runSuspendCatching
 import top.fseasy.imlog.navigation.MainScreen
+import javax.inject.Inject
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 
 // SQLite writing is single thread, so it is useless that set it higher
 private const val ATTACHMENT_RESOLVE_METADATA_CONCURRENCY = 6
@@ -170,7 +170,6 @@ constructor(
       val inputMode = inputModeUiState.value
 
       when (inputMode) {
-        null -> _uiEffect.send(ComposerUiEffect.PopBackStack)
 
         // just clear inputMode, the UI will then update
         MessageInputModeUi.Attachment,
@@ -179,7 +178,7 @@ constructor(
 
         // TODO: should trigger pause and keep the state so that the state can be saved to draft db.
         // HERE we just stop the recorder and sending message, and pop back.
-        MessageInputModeUi.HoldToTalk -> {
+        MessageInputModeUi.HoldToRecord -> {
           val recorderState = voiceRecorderStateHolder.voiceRecordingUiState.value
           if (recorderState.recorderState == VoiceRecorderState.Recording) {
             // TODO: support recording pause logic! issue #6
@@ -196,6 +195,7 @@ constructor(
           _uiEffect.send(ComposerUiEffect.PopBackStack)
           // Here we don't need to change inputMode.
         }
+        else -> _uiEffect.send(ComposerUiEffect.PopBackStack)
       }
     }
   }
@@ -206,7 +206,7 @@ constructor(
       val inputMode = inputModeUiState.value
 
       // TODO: support recording pause logic! issue #6
-      if (inputMode == MessageInputModeUi.HoldToTalk) {
+      if (inputMode == MessageInputModeUi.HoldToRecord) {
         val recorderState = voiceRecorderStateHolder.voiceRecordingUiState.value
         if (recorderState.recorderState == VoiceRecorderState.Recording) {
           stopVoiceRecordingAndSendVoiceMessage()
@@ -371,8 +371,8 @@ constructor(
 
 private object MessageDraftUtil {
   fun buildDraft(
-    inputText: String,
-    inputMode: MessageInputModeUi?,
+      inputText: String,
+      inputMode: MessageInputModeUi?,
   ) =
       MessageDraft(
           inputMode = inputMode?.toDomain(),
@@ -388,7 +388,7 @@ private object MessageDraftUtil {
       topicRepository: TopicRepository,
   ) = runSuspendCatching {
     val isSetSuccess =
-      topicRepository.setMessageDraft(
+        topicRepository.setMessageDraft(
             userId = userId,
             topicId = topicId,
             draft = draft,

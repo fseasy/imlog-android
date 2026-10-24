@@ -1,22 +1,22 @@
-package top.fseasy.imlog.features.home.topiclog.composer
+package top.fseasy.imlog.features.home.topiclog.composer2
 
 import android.content.Context
 import android.net.Uri
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,8 +27,10 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -53,7 +55,17 @@ import top.fseasy.imlog.domain.usecase.sendattachment.SendUriUseCaseFactory
 import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.fileMimeTypeToMessageType
 import top.fseasy.imlog.domain.util.runSuspendCatching
+import top.fseasy.imlog.features.home.topiclog.composer.ComposerUiEffect
+import top.fseasy.imlog.features.home.topiclog.composer.MessageInputModeUi
+import top.fseasy.imlog.features.home.topiclog.composer.VoiceRecorderStateHolder
+import top.fseasy.imlog.features.home.topiclog.composer.toDomain
+import top.fseasy.imlog.features.home.topiclog.composer.toUiState
+import top.fseasy.imlog.features.home.topiclog.composer2.classic.ClassicComposerUiStateHolder
 import top.fseasy.imlog.navigation.MainScreen
+import javax.inject.Inject
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 
 // SQLite writing is single thread, so it is useless that set it higher
 private const val ATTACHMENT_RESOLVE_METADATA_CONCURRENCY = 6
@@ -61,7 +73,7 @@ private const val ATTACHMENT_COPY_CONCURRENCY = 3
 
 @OptIn(FlowPreview::class)
 @HiltViewModel
-class MessageComposerViewModel
+class Composer2ViewModel
 @Inject
 constructor(
     storagePathUseCase: StoragePathUseCase,
@@ -86,12 +98,21 @@ constructor(
           )
           .also(::addCloseable)
 
-  // Split text & mode from the MessageDraft as text is a high-frequency flow
-  private val _inputTextUiState = MutableStateFlow("")
-  val inputTextUiState: StateFlow<String> = _inputTextUiState.asStateFlow()
+  val textFieldState = TextFieldState(initialText = "")
+  private val isTextNotEmpty: StateFlow<Boolean> = snapshotFlow {
+    textFieldState.text
+  }
+      .map { it.isNotBlank() }
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
   private val _inputModeUiState = MutableStateFlow<MessageInputModeUi?>(null)
   val inputModeUiState: StateFlow<MessageInputModeUi?> = _inputModeUiState.asStateFlow()
+
+  /** Ui state for classic composer */
+  val classicComposerUiState = ClassicComposerUiStateHolder(viewModelScope)
+
+  private val _composerStage = MutableStateFlow(ComposerStage.Default)
+  val composerStage = _composerStage.asStateFlow()
 
   private var _lastSavedDraft: MessageDraft? = null
 
@@ -106,18 +127,28 @@ constructor(
           topicRepository.getMessageDraft(userId = userId, topicId = topicId) ?: MessageDraft()
       // UPDATE lastSavedDraft before updating input sates, to avoid unnecessary db writing
       _lastSavedDraft = draft
-      Timber.i("MessageComposer, db value = $draft")
-      updateInputText(draft.text)
-      updateInputMode(draft.inputMode?.toUiState())
+      // Avoid overwrite the text that user already quickly typing
+      if (textFieldState.text.isEmpty()) {
+        textFieldState.setTextAndPlaceCursorAtEnd(draft.text)
+      }
+      val inputMode = draft.inputMode?.toUiState()
+      updateInputMode(inputMode)
+      updateComposerStage(inputMode.decideComposerStage())
     }
 
     // bind Draft saving on input state
     combine(
-            inputTextUiState.debounce(500.milliseconds).distinctUntilChanged(),
+            snapshotFlow { textFieldState.text }.debounce(500.milliseconds).distinctUntilChanged(),
             inputModeUiState,
             authState.filterIsInstance<AuthState.Authenticated>(),
-        ) { text, mode, auth ->
-          Pair(MessageDraftUtil.buildDraft(inputText = text, inputMode = mode), auth.userId)
+        ) { textCharSequence, mode, auth ->
+          Pair(
+              MessageDraftUtil.buildDraft(
+                  inputText = textCharSequence.toString(),
+                  inputMode = mode,
+              ),
+              auth.userId,
+          )
         }
         .distinctUntilChanged()
         .onEach { (draft, userId) ->
@@ -138,7 +169,7 @@ constructor(
     fun asyncSaveDirtyDraft() {
       val draft =
           MessageDraftUtil.buildDraft(
-              inputText = inputTextUiState.value,
+              inputText = textFieldState.text.toString(),
               inputMode = inputModeUiState.value,
           )
       if (draft == _lastSavedDraft) return
@@ -156,13 +187,13 @@ constructor(
     super.onCleared()
   }
 
-  fun updateInputText(text: String) = _inputTextUiState.update { text }
-
   fun clearInputMode() = updateInputMode(null)
 
   fun updateInputMode(newInputMode: MessageInputModeUi?) = _inputModeUiState.update {
     newInputMode
   }
+
+  fun updateComposerStage(newStage: ComposerStage) = _composerStage.update { newStage }
 
   /** After press Back button, change draftMetaUiState and send _uiEffect to trigger page action. */
   fun handleBackPress() {
@@ -170,7 +201,6 @@ constructor(
       val inputMode = inputModeUiState.value
 
       when (inputMode) {
-        null -> _uiEffect.send(ComposerUiEffect.PopBackStack)
 
         // just clear inputMode, the UI will then update
         MessageInputModeUi.Attachment,
@@ -179,7 +209,7 @@ constructor(
 
         // TODO: should trigger pause and keep the state so that the state can be saved to draft db.
         // HERE we just stop the recorder and sending message, and pop back.
-        MessageInputModeUi.HoldToTalk -> {
+        MessageInputModeUi.HoldToRecord -> {
           val recorderState = voiceRecorderStateHolder.voiceRecordingUiState.value
           if (recorderState.recorderState == VoiceRecorderState.Recording) {
             // TODO: support recording pause logic! issue #6
@@ -196,6 +226,7 @@ constructor(
           _uiEffect.send(ComposerUiEffect.PopBackStack)
           // Here we don't need to change inputMode.
         }
+        else -> _uiEffect.send(ComposerUiEffect.PopBackStack)
       }
     }
   }
@@ -206,7 +237,7 @@ constructor(
       val inputMode = inputModeUiState.value
 
       // TODO: support recording pause logic! issue #6
-      if (inputMode == MessageInputModeUi.HoldToTalk) {
+      if (inputMode == MessageInputModeUi.HoldToRecord) {
         val recorderState = voiceRecorderStateHolder.voiceRecordingUiState.value
         if (recorderState.recorderState == VoiceRecorderState.Recording) {
           stopVoiceRecordingAndSendVoiceMessage()
@@ -339,19 +370,20 @@ constructor(
     }
   }
 
-  fun sendTextMessage(text: String) {
+  fun sendTextMessage() {
+    val currentText = textFieldState.text.toString()
     launchWithTopicUserId(useLocalScope = false) { topicId, userId ->
       // 1. save to db
       sendTextMessageUseCase(
           topicId = topicId,
           senderId = userId,
           quotedMessageId = null,
-          text = text,
+          text = currentText,
           createdAt = Clock.System.now(),
       )
 
       // 2. clean the inputText
-      updateInputText("")
+      textFieldState.setTextAndPlaceCursorAtEnd("")
     }
   }
 
@@ -371,8 +403,8 @@ constructor(
 
 private object MessageDraftUtil {
   fun buildDraft(
-    inputText: String,
-    inputMode: MessageInputModeUi?,
+      inputText: String,
+      inputMode: MessageInputModeUi?,
   ) =
       MessageDraft(
           inputMode = inputMode?.toDomain(),
@@ -388,7 +420,7 @@ private object MessageDraftUtil {
       topicRepository: TopicRepository,
   ) = runSuspendCatching {
     val isSetSuccess =
-      topicRepository.setMessageDraft(
+        topicRepository.setMessageDraft(
             userId = userId,
             topicId = topicId,
             draft = draft,

@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.topiclog.composer2
+package top.fseasy.imlog.features.home.topiclog.composer2.tabbedcard
 
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.FilterChip
@@ -7,15 +7,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import top.fseasy.imlog.R
+import top.fseasy.imlog.features.home.topiclog.composer2.ComposerBottomContextAction
+import top.fseasy.imlog.features.home.topiclog.composer2.ComposerInputModeContextActionUiState
+import top.fseasy.imlog.features.home.topiclog.composer2.ComposerStage
 
 @Composable
 fun ComposerInputModeContextActionBar(
-  mode: MessageInputMode,
+  stage: ComposerStage,
   uiState: ComposerInputModeContextActionUiState,
   onAction: (ComposerBottomContextAction) -> Unit,
 ) {
-  when (mode) {
-    MessageInputMode.Attachment ->
+  when (stage) {
+    ComposerStage.Attachment ->
         AttachmentContextAction(uiState.compressAlbumEnabled) {
           onAction(ComposerBottomContextAction.ToggleCompressAlbum)
         }
@@ -45,6 +48,6 @@ private fun AttachmentContextAction(
         )
       },
       shape = CircleShape, // 设定为圆角胶囊
-//      border = null,
+      //      border = null,
   )
 }

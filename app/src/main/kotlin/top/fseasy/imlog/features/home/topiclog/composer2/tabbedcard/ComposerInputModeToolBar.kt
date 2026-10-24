@@ -1,4 +1,4 @@
-package top.fseasy.imlog.features.home.topiclog.composer2
+package top.fseasy.imlog.features.home.topiclog.composer2.tabbedcard
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
@@ -27,14 +27,16 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import top.fseasy.imlog.features.home.topiclog.composer2.ComposerStage
+import top.fseasy.imlog.features.home.topiclog.composer2.stageSelectorBarItems
 import top.fseasy.imlog.ui.model.toImageVector
 import top.fseasy.imlog.ui.theme.ImlogTheme
 
 @Composable
 fun InputModeToolBar(
-  currentMode: MessageInputMode,
-  redDotsModes: Set<MessageInputMode>,
-  onSelectMode: (MessageInputMode) -> Unit,
+  stage: ComposerStage,
+  redDotStages: Set<ComposerStage>,
+  onSelectStage: (ComposerStage) -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val haptic = LocalHapticFeedback.current
@@ -49,15 +51,15 @@ fun InputModeToolBar(
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
       stageSelectorBarItems.forEach {
-        val isSelected = currentMode == it.stage
+        val isSelected = stage == it.stage
         SegmentedToolbarItem(
             icon = it.iconVector.toImageVector(),
             isSelected = isSelected,
-            showRedDots = it.stage in redDotsModes && !isSelected,
+            showRedDots = it.stage in redDotStages && !isSelected,
             contentDescription = stringResource(it.contentDescriptionResId),
         ) {
           haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-          onSelectMode(it.stage)
+          onSelectStage(it.stage)
         }
       }
     }
@@ -66,11 +68,11 @@ fun InputModeToolBar(
 
 @Composable
 private fun SegmentedToolbarItem(
-  icon: ImageVector,
-  isSelected: Boolean,
-  showRedDots: Boolean = false,
-  contentDescription: String?,
-  onClick: () -> Unit,
+    icon: ImageVector,
+    isSelected: Boolean,
+    showRedDots: Boolean = false,
+    contentDescription: String?,
+    onClick: () -> Unit,
 ) {
   val containerColor = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent
   val contentColor =
@@ -79,14 +81,14 @@ private fun SegmentedToolbarItem(
 
   Box(
       modifier =
-        Modifier.size(width = 32.dp, height = 30.dp)
-            .clip(CircleShape)
-            .background(containerColor)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
+          Modifier.size(width = 32.dp, height = 30.dp)
+              .clip(CircleShape)
+              .background(containerColor)
+              .clickable(
+                  interactionSource = remember { MutableInteractionSource() },
+                  indication = null,
+                  onClick = onClick,
+              ),
       contentAlignment = Alignment.Center,
   ) {
     // 将 Icon 和红点放在同一个局部容器中
@@ -101,10 +103,10 @@ private fun SegmentedToolbarItem(
       if (showRedDots) {
         Box(
             modifier =
-              Modifier.align(Alignment.TopEnd)
-                  .offset(x = 2.dp, y = (-2).dp) // 向外稍微偏移，视觉上贴合在图标右上角
-                  .size(6.dp) // 红点大小
-                  .background(MaterialTheme.colorScheme.error, CircleShape),
+                Modifier.align(Alignment.TopEnd)
+                    .offset(x = 2.dp, y = (-2).dp) // 向外稍微偏移，视觉上贴合在图标右上角
+                    .size(6.dp) // 红点大小
+                    .background(MaterialTheme.colorScheme.error, CircleShape),
         )
       }
     }
@@ -126,19 +128,19 @@ private fun InputModeToolBarPreview() {
           verticalArrangement = Arrangement.spacedBy(12.dp),
       ) {
         InputModeToolBar(
-            currentMode = MessageInputMode.Default,
-            redDotsModes = setOf(MessageInputMode.Default, MessageInputMode.Attachment),
-            onSelectMode = {},
+            ComposerStage.Default,
+            redDotStages = setOf(ComposerStage.Default, ComposerStage.Attachment),
+            onSelectStage = {},
         )
         InputModeToolBar(
-            currentMode = MessageInputMode.Recorder,
-            redDotsModes = setOf(MessageInputMode.Default, MessageInputMode.Attachment),
-            onSelectMode = {},
+            ComposerStage.Recording,
+            redDotStages = setOf(ComposerStage.Default, ComposerStage.Attachment),
+            onSelectStage = {},
         )
         InputModeToolBar(
-            currentMode = MessageInputMode.Attachment,
-            redDotsModes = setOf(MessageInputMode.Recorder),
-            onSelectMode = {},
+            ComposerStage.Attachment,
+            redDotStages = setOf(ComposerStage.Recording),
+            onSelectStage = {},
         )
       }
     }

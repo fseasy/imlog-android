@@ -127,7 +127,18 @@
     <string name="term_select_all">Select All</string>
     <string name="term_media_play_speed">Speed</string>
     <string name="composer_input_mode_default_desc">Input with Text or Voice</string>
-    <string name="composer_input_mode_recorder_desc">Recorder</string>
-    <string name="composer_input_mode_attachment_desc">Attachment</string>
+    <string name="composer_input_mode_recorder_desc">Record audio, Take a photo or video</string>
+    <string name="composer_input_mode_attachment_desc">Log with album, audio or other files </string>
     <string name="composer_context_action_compress_album">Compress Album</string>
+    <string name="composer_default_stage_input_placeholder">Tap to type or Hold to record</string>
+    <string name="composer_hold_to_record_cancel">Cancel</string>
+    <string name="composer_hold_to_record_lock">Lock</string>
+    <string name="composer_hold_to_record_status_recording">Recording...</string>
+    <string name="composer_hold_to_record_status_release_cancel">Release To Cancel</string>
+    <string name="composer_hold_to_record_status_release_lock">Release to Lock as Long Recording</string>
+    <string name="composer_recording_stage_label_audio">Audio</string>
+    <string name="composer_recording_stage_label_camera">Camera</string>
+    <string name="composer_attachment_stage_label_album">Album</string>
+    <string name="composer_attachment_stage_label_audio">Audio</string>
+    <string name="composer_attachment_stage_label_file">File</string>
 </resources>

@@ -51,7 +51,7 @@ fun UserInputRow(
   //       If using mode as the `targetState`, the trigger element will change, even though they go
   // to the
   //       same branch!
-  val isVoiceMode = inputMode == MessageInputModeUi.HoldToTalk
+  val isVoiceMode = inputMode == MessageInputModeUi.HoldToRecord
 
   AnimatedContent(
       targetState = isVoiceMode,
