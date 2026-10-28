@@ -11,8 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -157,8 +156,8 @@ fun TimelineContent(
       modifier =
           modifier
               .fillMaxSize()
-              .systemBarsPadding()
-              .navigationBarsPadding()
+              // NOTE: only padding status bar! don't pad for navigation bar
+              .statusBarsPadding()
               .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = {
@@ -190,21 +189,7 @@ fun TimelineContent(
         Spacer(
             modifier =
                 Modifier.fillMaxWidth().layout { measurable, constraints ->
-                  val imeBottom = imeInsets.getBottom(this)
-                  // NOTE:
-                  // 1. the Parent BOX already contain the bottom navigation bar padding, same as
-                  // the composer
-                  // 2. when IME show, we only needs to add extra height of IME
-                  // 3. BUT ime.getBottom() will contain the bottom-navigation bar padding again! as
-                  // it located on
-                  //    the top of the navigation bar.
-                  //    In detail, IME raise from bottom edge(under the navigation bar),
-                  //    and finally located on the top of navigation bar.
-                  // => So just exclude the nav bar height, with min(0, v) to remove the impact of
-                  // stage that IME bottom under the nav
-                  val currentComposerExtraPadding =
-                      (imeBottom - navigationBarBottom).coerceAtLeast(0)
-                  val totalSpacerHeight = composerBaseHeightPx + currentComposerExtraPadding
+                  val totalSpacerHeight = composerBaseHeightPx
                   val placeable =
                       measurable.measure(
                           constraints.copy(

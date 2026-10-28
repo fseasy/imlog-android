@@ -20,20 +20,31 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+import timber.log.Timber
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.ScreenOrientation
 import top.fseasy.imlog.features.home.topiclog.composer2.tabbedcard.SolidActionCard
 import top.fseasy.imlog.ui.util.toScreenConfiguration
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -50,28 +61,39 @@ internal fun ClassicComposerDock(
   val density = LocalDensity.current
   val keyboardController = LocalSoftwareKeyboardController.current
   val orientation = LocalConfiguration.current.toScreenConfiguration()
-
+  val focusManager = LocalFocusManager.current
+  var isTextFieldFocused by remember { mutableStateOf(false) }
+  val imeJitterGuard = rememberImeJitterGuard()
   val currentCachedHeightPx =
       with(density) { state.cachedImeHeightInDp.get(orientation).dp.roundToPx() }
-  val imeAnimationTargetHeightPx = WindowInsets.imeAnimationTarget.getBottom(density)
+  val imeAnimationTarget = WindowInsets.imeAnimationTarget
+  val imeInsets = WindowInsets.ime
+  val navigationBars = WindowInsets.navigationBars
 
-  LaunchedEffect(imeAnimationTargetHeightPx, orientation, density) {
-    if (imeAnimationTargetHeightPx > 0) {
-      val imeAnimationTargetHeightDp = with(density) { imeAnimationTargetHeightPx.toDp() }
-      onUpdateCachedImeHeightInDp(orientation, imeAnimationTargetHeightDp.value)
+  LaunchedEffect(orientation, density) {
+    snapshotFlow {
+      val target = imeAnimationTarget.getBottom(density)
+      if (target > 0) target else null
     }
+        .filterNotNull()
+        .distinctUntilChanged()
+        .collect { heightPx ->
+          // Avoid race-condition dirty data
+          if (!imeJitterGuard.canUpdateCache()) return@collect
+          val heightDp = with(density) { heightPx.toDp() }
+          onUpdateCachedImeHeightInDp(orientation, heightDp.value)
+          Timber.i("Update cached ime height = $heightDp")
+        }
   }
 
   // 初始高度设为 0
   val panelHeightAnimation = remember { Animatable(0f) }
-  val isImeOpen = imeAnimationTargetHeightPx > 0
-  val imeInsets = WindowInsets.ime
-  val navigationBars = WindowInsets.navigationBars
 
   LaunchedEffect(state.activePanel) {
     when (state.activePanel) {
       ActivePanel.ATTACHMENT -> {
-        if (isImeOpen) {
+        val shouldSkipAnimate = imeInsets.getBottom(density) > 0f
+        if (shouldSkipAnimate) {
           // IME 已打开时，再打开键盘切面板 -> 面板瞬间就位，不做动画！让 IME 自己滑下去，从而露出已就位的面板
           panelHeightAnimation.snapTo(currentCachedHeightPx.toFloat())
         } else {
@@ -81,14 +103,54 @@ internal fun ClassicComposerDock(
               animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
           )
         }
+        // IME should always hide!
+        keyboardController?.hide()
+        // [isTextFieldFocused] state will be update inside the callback, so don't update it here
+        focusManager.clearFocus()
       }
       ActivePanel.NONE -> {
-        // 收起面板 -> 平滑下降归零
-        // 注意：这里动画结束前，panelHeightAnim.value 依然 > 0！
-        panelHeightAnimation.animateTo(
-            targetValue = 0f,
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        )
+        // Condition: Already closed, do nothing [recomposition due to other state]
+        if (panelHeightAnimation.value <= 1e-6f) return@LaunchedEffect
+        // condition 1: IME replace the Active panel
+        // condition 2: None replace the active panel (directly close)
+        // When IME replace the panel, IME will do animation after the system has synced the status,
+        // there is a latency
+        // around 200ms. So the text field focused status is the best timely way
+        val shouldKeepHeight = isTextFieldFocused
+        if (shouldKeepHeight) {
+          // IME 存在，收起面板 -> 先不动，等待键盘升起，再直接消失
+          // 黄金窗口 200~250ms：覆盖 144ms 的系统 IPC 延迟
+          val targetHeight =
+              withTimeoutOrNull(250.milliseconds) {
+                snapshotFlow { imeAnimationTarget.getBottom(density) }.first { it > 0 }
+              }
+
+          if (targetHeight != null && targetHeight > 0) {
+            // 场景 A：正常软键盘弹起 -> 等键盘顶满后 snapTo(0f) 瞬间交接
+            snapshotFlow {
+              val current = imeInsets.getBottom(density)
+              val target = imeAnimationTarget.getBottom(density)
+              current to target
+            }
+                .first { (current, target) ->
+                  target == 0 || current >= target
+                }
+            panelHeightAnimation.snapTo(0f)
+          } else {
+            // 场景 B：超时（物理键盘/无软键盘） -> 面板平滑收起退场，把空间还给页面
+            panelHeightAnimation.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+            )
+          }
+        } else {
+          // IME 不存在，收起面板 -> 常规情况，平滑下降归零
+          // 注意：这里动画结束前，panelHeightAnim.value 依然 > 0！
+          panelHeightAnimation.animateTo(
+              targetValue = 0f,
+              animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+          )
+        }
       }
     }
   }
@@ -102,7 +164,12 @@ internal fun ClassicComposerDock(
       DockFloatingContent(
           mode = state.mode,
           onAttachmentClick = onToggleAttachment,
-          onTextFieldFocusChanged = onTextFieldFocusChanged,
+          onTextFieldFocusChanged = { focused ->
+            // Update internal state first
+            isTextFieldFocused = focused
+            imeJitterGuard.onFocusChanged(focused)
+            onTextFieldFocusChanged(focused)
+          },
           textFieldState = textFieldState,
           onSendText = onSendText,
           onHoldToRecordAction = onHoldToRecordAction,
@@ -115,9 +182,11 @@ internal fun ClassicComposerDock(
                 // 实时 Inset 消费（处于 Layout 阶段，每帧变化不触发 Recomposition）
                 val navigationBarPx = navigationBars.getBottom(this)
                 val currentImePx = imeInsets.getBottom(this)
+                val safeCurrentImePx =
+                    imeJitterGuard.sanitizeImeHeight(currentImePx, currentCachedHeightPx)
                 val currentPanelPx = panelHeightAnimation.value.toInt()
                 // 高度仲裁：谁大取谁，键盘下落与面板升降完美融合
-                val finalContainerHeight = maxOf(navigationBarPx, currentImePx, currentPanelPx)
+                val finalContainerHeight = maxOf(navigationBarPx, safeCurrentImePx, currentPanelPx)
 
                 val placeable =
                     measurable.measure(
@@ -131,7 +200,7 @@ internal fun ClassicComposerDock(
                 }
               }
       ) {
-        // 解决“关闭时瞬间消失”的 Bug：
+        // 防止“关闭时瞬间消失”：
         // 判断条件不再是单一的 isAttachmentOpen，而是动画还在进行（value > 0）时就必须保留！
         val isPanelVisible =
             state.activePanel == ActivePanel.ATTACHMENT || panelHeightAnimation.value > 0f
