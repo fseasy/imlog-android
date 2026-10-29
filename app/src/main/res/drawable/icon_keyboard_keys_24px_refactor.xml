@@ -4,6 +4,7 @@
     android:tint="?attr/colorControlNormal"
     android:viewportWidth="960"
     android:viewportHeight="960">
+    <!--    1. remove 2 dots on each row 2. scale it to 1.4x -->
     <group
         android:pivotX="480"
         android:pivotY="480"

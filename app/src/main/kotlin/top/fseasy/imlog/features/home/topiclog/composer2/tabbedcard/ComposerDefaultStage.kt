@@ -27,7 +27,6 @@ import top.fseasy.imlog.R
 import top.fseasy.imlog.features.home.topiclog.composer.LocalComposerFocusRequester
 import top.fseasy.imlog.features.home.topiclog.composer2.ComposerDefaultStageAction
 import top.fseasy.imlog.features.home.topiclog.composer2.tapOrHoldToRecordGesture
-import top.fseasy.imlog.ui.theme.composerStyle
 
 @Composable
 fun ComposerDefaultStage(
@@ -47,7 +46,7 @@ fun ComposerDefaultStage(
   ) {
     BasicTextField(
         state = textFieldState,
-        textStyle = MaterialTheme.typography.composerStyle,
+//        textStyle = MaterialTheme.typography.composerStyle,
         cursorBrush = SolidColor(Color.Black),
         modifier =
             Modifier.fillMaxWidth().focusRequester(focusRequester).onFocusChanged {
@@ -63,7 +62,7 @@ fun ComposerDefaultStage(
               Text(
                   text = stringResource(hintResId),
                   color = Color.Gray,
-                  style = MaterialTheme.typography.composerStyle,
+//                  style = MaterialTheme.typography.composerStyle,
               )
             }
             innerTextField()

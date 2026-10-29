@@ -60,13 +60,14 @@ import top.fseasy.imlog.R
 import top.fseasy.imlog.features.home.topiclog.composer.LocalComposerFocusRequester
 import top.fseasy.imlog.features.home.topiclog.composer2.tapOrHoldToRecordGesture
 import top.fseasy.imlog.ui.theme.ImlogTheme
-import top.fseasy.imlog.ui.theme.composerStyle
 
 private val ComposerBarMinHeight = 62.dp
-private const val EXPAND_LINE_THRESHOLD = 4 // 出现「展开编辑」按钮时的行数阈值
+private const val EXPAND_LINE_THRESHOLD = 5 // 出现「展开编辑」按钮时的行数阈值
 private val ActionButtonSize = 30.dp // 按钮外径
 private val ActionIconSize = 24.dp // 图标尺寸（保证充足内部留白）
 private val ActionBorderWidth = 1.5.dp // 增强黑色外框粗细感
+private val ComposerTextBaseStyle
+  @Composable get() = MaterialTheme.typography.bodyLarge
 
 @Composable
 internal fun ComposerBar(
@@ -110,7 +111,7 @@ internal fun ComposerBar(
             focusRequester = focusRequester,
             onTextFieldFocusChanged = onTextFieldFocusChanged,
             onHoldToRecordAction = onHoldToRecordAction,
-            onLineCountChanged = { count -> lineCount = count }
+            onLineCountChanged = { count -> lineCount = count },
         )
       }
     }
@@ -168,8 +169,11 @@ private fun PushToRecordArea(
   ) {
     Text(
         text = "Push to Record",
-        style = MaterialTheme.typography.composerStyle.copy(fontWeight = FontWeight.Bold),
-        color = Color.Black,
+        style =
+            ComposerTextBaseStyle.copy(
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
     )
   }
 }
@@ -199,8 +203,8 @@ private fun TextInputArea(
   ) {
     BasicTextField(
         state = textFieldState,
-        textStyle = MaterialTheme.typography.composerStyle,
-        cursorBrush = SolidColor(Color.Black),
+        textStyle = ComposerTextBaseStyle.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         modifier =
             Modifier.fillMaxWidth().focusRequester(focusRequester).onFocusChanged {
               isFocused = it.isFocused
@@ -219,8 +223,7 @@ private fun TextInputArea(
                   else R.string.composer_text_input_placeholder
               Text(
                   text = stringResource(hintResId),
-                  color = Color.Gray,
-                  style = MaterialTheme.typography.composerStyle,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
             }
             innerTextField()
@@ -275,15 +278,13 @@ private fun ComposerActionArea(
   val density = LocalDensity.current
   var currentHeightPx by remember { mutableIntStateOf(0) }
 
-  // 基准最小高度换算为像素（+2px 容差，防止浮点计算精度抖动）
   val composerBarInitialHeightPx =
       remember(density) {
         with(density) { ComposerBarMinHeight.roundToPx() }
       }
 
-  // 1. 核心判断：容器到底有没有真正“被撑高”！
-  // 只有当高度真正突破了 minHeight，才算膨胀，才需要沉底
   val isContainerExpanded by remember {
+    // +2px 容差，防止浮点计算精度抖动
     derivedStateOf { currentHeightPx > (composerBarInitialHeightPx + 2) }
   }
 
@@ -318,7 +319,7 @@ private fun ComposerActionArea(
               Icon(
                   imageVector = Icons.Rounded.Face,
                   contentDescription = "Expand to Fullscreen",
-                  tint = Color.Gray,
+                  tint = MaterialTheme.colorScheme.onSurfaceVariant,
                   modifier = Modifier.size(ActionIconSize),
               )
             }
@@ -344,15 +345,15 @@ private fun ComposerActionArea(
           // 切换语音 / 键盘
           CircularIconButton(
               onClick = onToggleVoiceMode,
-              borderColor = Color.Black,
+              borderColor = MaterialTheme.colorScheme.outline,
           ) {
             val iconRes =
-                if (isVoiceMode) R.drawable.icon_keyboard_keys_24px
+                if (isVoiceMode) R.drawable.icon_keyboard_keys_24px_refactor
                 else R.drawable.icon_hold_to_record_24px_scaled
             Icon(
                 painter = painterResource(iconRes),
                 contentDescription = "Toggle Input Mode",
-                tint = Color.Black,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(ActionIconSize),
             )
           }
@@ -360,12 +361,12 @@ private fun ComposerActionArea(
           // 附件展开/收起按钮
           CircularIconButton(
               onClick = onAttachmentClick,
-              borderColor = Color.Black,
+              borderColor = MaterialTheme.colorScheme.outline,
           ) {
             Icon(
                 imageVector = Icons.Rounded.Add,
                 contentDescription = "Toggle Attachment",
-                tint = Color.Black,
+                tint = MaterialTheme.colorScheme.onSurface,
                 // 2. 核心性能优化：在 graphicsLayer 中旋转，走 Draw 阶段，不触发组件 Recompose
                 modifier =
                     Modifier.size(ActionIconSize).graphicsLayer {
@@ -430,7 +431,7 @@ fun CircularIconPreview() {
             onClick = {},
             borderColor = Color.Black,
         ) {
-          val iconRes = R.drawable.icon_keyboard_keys_24px
+          val iconRes = R.drawable.icon_keyboard_keys_24px_refactor
 
           Icon(
               painter = painterResource(iconRes),
