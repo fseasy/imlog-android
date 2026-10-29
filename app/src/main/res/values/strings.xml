@@ -52,7 +52,7 @@
     <string name="composer_mic_icon_desc">Microphone</string>
     <string name="composer_voice_button_text">Voice</string>
     <string name="composer_text_input_placeholder" translatable="false">Log…</string>
-    <string name="composer_send_btn_desc">Send Message</string>
+    <string name="composer_send_btn_desc">Log entry</string>
     <string name="composer_attachment_icon_desc">Send Attachments</string>
     <string name="composer_send_voice_btn_desc">Send Voice</string>
     <string name="common_ui_text_loading_dots" translatable="false">...</string>
@@ -141,4 +141,10 @@
     <string name="composer_attachment_stage_label_album">Album</string>
     <string name="composer_attachment_stage_label_audio">Audio</string>
     <string name="composer_attachment_stage_label_file">File</string>
+    <string name="composer_bar_btn_toggle_to_hold_to_record_desc">switch to hold to record mode</string>
+    <string name="composer_bar_btn_toggle_to_default_desc">Switch to default mode</string>
+    <string name="composer_bar_btn_hide_attachment_panel">Hide attachment panel</string>
+    <string name="composer_bar_btn_show_attachment_panel">Show attachment panel</string>
+    <string name="composer_bar_btn_expand_desc">Expand input field</string>
+    <string name="composer_bar_btn_hold_to_record_label">Hold To Record</string>
 </resources>

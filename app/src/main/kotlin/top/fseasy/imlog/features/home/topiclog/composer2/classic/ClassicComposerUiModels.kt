@@ -25,9 +25,9 @@ enum class ClassicComposerMode {
 
 @Immutable
 data class ComposerDockState(
-  val mode: ClassicComposerMode = ClassicComposerMode.Default,
-  val activePanel: ActivePanel = ActivePanel.NONE,
-  val cachedImeHeightInDp: ImeHeightInDp = ImeHeightInDpDefaults,
+    val mode: ClassicComposerMode = ClassicComposerMode.Default,
+    val activePanel: ActivePanel = ActivePanel.NONE,
+    val cachedImeHeightInDp: ImeHeightInDp = ImeHeightInDpDefaults,
 )
 
 @Immutable
@@ -68,9 +68,11 @@ internal sealed interface ComposerHoldToRecordAction : ClassicComposerAction {
 
 internal sealed interface ComposerBarAction : ClassicComposerAction {
 
-  data class ChangeFocus(val focused: Boolean) : ComposerBarAction
+  data object LogEntry : ComposerBarAction
 
-  data object SendText : ComposerBarAction
+  data object ToggleHoldToRecordMode : ComposerBarAction
+
+  data object ToggleAttachment : ComposerBarAction
 }
 
 sealed interface ComposerVoiceRecordingAction : ClassicComposerAction {

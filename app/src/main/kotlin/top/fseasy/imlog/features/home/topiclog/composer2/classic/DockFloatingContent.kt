@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativePaint
 import androidx.compose.ui.unit.Dp
@@ -69,10 +68,10 @@ fun Modifier.dropShadow(
 @Composable
 internal fun DockFloatingContent(
     mode: ClassicComposerMode,
+    activePanel: ActivePanel,
     textFieldState: TextFieldState,
-    onAttachmentClick: () -> Unit,
-    onSendText: () -> Unit,
     onTextFieldFocusChanged: (focused: Boolean) -> Unit,
+    onComposerBarAction: (ComposerBarAction) -> Unit,
     onHoldToRecordAction: (ComposerHoldToRecordAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -118,10 +117,11 @@ internal fun DockFloatingContent(
         else -> {
           ComposerBar(
               textFieldState = textFieldState,
-              onAttachmentClick = onAttachmentClick,
+              isHoldToRecordMode = mode == ClassicComposerMode.HoldToRecord,
+              isAttachmentPanelActive = activePanel.isAttachmentActive(),
               onTextFieldFocusChanged = onTextFieldFocusChanged,
-              onSendText = onSendText,
               onHoldToRecordAction = onHoldToRecordAction,
+              onComposerBarAction = onComposerBarAction
           )
         }
       }

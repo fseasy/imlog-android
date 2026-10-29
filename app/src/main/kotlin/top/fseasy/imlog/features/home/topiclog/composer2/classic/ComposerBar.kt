@@ -1,7 +1,9 @@
 package top.fseasy.imlog.features.home.topiclog.composer2.classic
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -71,23 +73,19 @@ private val ComposerTextBaseStyle
 
 @Composable
 internal fun ComposerBar(
+    isHoldToRecordMode: Boolean,
+    isAttachmentPanelActive: Boolean,
     textFieldState: TextFieldState,
-    onAttachmentClick: () -> Unit,
-    onSendText: () -> Unit,
     onTextFieldFocusChanged: (focused: Boolean) -> Unit,
+    onComposerBarAction: (ComposerBarAction) -> Unit,
     onHoldToRecordAction: (ComposerHoldToRecordAction) -> Unit,
     modifier: Modifier = Modifier,
-    isAttachmentOpen: Boolean = false,
 ) {
-  var isVoiceMode by remember { mutableStateOf(false) }
   var lineCount by remember { mutableIntStateOf(1) }
   // 1. 核心性能优化：打字时仅当「有内容 / 无内容」状态翻转时才触发重组，避免每个按键重组整个 Bar
   val hasSendableContent by remember {
     derivedStateOf { textFieldState.text.isNotEmpty() }
   }
-
-  val focusRequester = LocalComposerFocusRequester.current ?: remember { FocusRequester() }
-  val keyboardController = LocalSoftwareKeyboardController.current
 
   Row(
       modifier =
@@ -103,12 +101,12 @@ internal fun ComposerBar(
         modifier = Modifier.weight(1f).padding(start = 12.dp, end = 4.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-      if (isVoiceMode) {
-        PushToRecordArea(onHoldToRecordAction = onHoldToRecordAction)
+      if (isHoldToRecordMode) {
+        HoldToRecordArea(onHoldToRecordAction = onHoldToRecordAction)
       } else {
         TextInputArea(
             textFieldState = textFieldState,
-            focusRequester = focusRequester,
+            isTextEmpty = !hasSendableContent,
             onTextFieldFocusChanged = onTextFieldFocusChanged,
             onHoldToRecordAction = onHoldToRecordAction,
             onLineCountChanged = { count -> lineCount = count },
@@ -120,19 +118,9 @@ internal fun ComposerBar(
     ComposerActionArea(
         hasSendableContent = hasSendableContent,
         textFieldLineCount = lineCount,
-        isVoiceMode = isVoiceMode,
-        isAttachmentOpen = isAttachmentOpen,
-        onSendText = onSendText,
-        onAttachmentClick = onAttachmentClick,
-        onToggleVoiceMode = {
-          isVoiceMode = !isVoiceMode
-          if (isVoiceMode) {
-            keyboardController?.hide()
-          } else {
-            focusRequester.requestFocus()
-            keyboardController?.show()
-          }
-        },
+        isHoldToRecordMode = isHoldToRecordMode,
+        isAttachmentActive = isAttachmentPanelActive,
+        onComposerBarAction = onComposerBarAction,
         modifier = Modifier.padding(end = 12.dp),
     )
   }
@@ -144,7 +132,7 @@ internal fun ComposerBar(
 
 /** 语音对讲状态下的 Push To Record 按钮 */
 @Composable
-private fun PushToRecordArea(
+private fun HoldToRecordArea(
     onHoldToRecordAction: (ComposerHoldToRecordAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -168,7 +156,7 @@ private fun PushToRecordArea(
       contentAlignment = Alignment.Center,
   ) {
     Text(
-        text = "Push to Record",
+        text = stringResource(R.string.composer_bar_btn_hold_to_record_label),
         style =
             ComposerTextBaseStyle.copy(
                 fontWeight = FontWeight.Bold,
@@ -182,20 +170,17 @@ private fun PushToRecordArea(
 @Composable
 private fun TextInputArea(
     textFieldState: TextFieldState,
-    focusRequester: FocusRequester,
+    isTextEmpty: Boolean,
     onTextFieldFocusChanged: (Boolean) -> Unit,
     onHoldToRecordAction: (ComposerHoldToRecordAction) -> Unit,
     onLineCountChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-  var isFocused by remember { mutableStateOf(false) }
   val keyboardController = LocalSoftwareKeyboardController.current
+  val focusRequester = LocalComposerFocusRequester.current ?: remember { FocusRequester() }
 
-  // 避免高频文本变化触发外部范围的不必要重组
-  val isTextEmpty by remember { derivedStateOf { textFieldState.text.isEmpty() } }
-  val showGestureOverlay by remember {
-    derivedStateOf { !isFocused && textFieldState.text.isEmpty() }
-  }
+  var isFocused by remember { mutableStateOf(false) }
+  val showGestureOverlay = !isFocused && isTextEmpty
 
   Box(
       modifier = modifier.fillMaxWidth(),
@@ -261,23 +246,26 @@ private fun TextInputArea(
 private fun ComposerActionArea(
     hasSendableContent: Boolean,
     textFieldLineCount: Int,
-    isVoiceMode: Boolean,
-    isAttachmentOpen: Boolean,
-    onSendText: () -> Unit,
-    onAttachmentClick: () -> Unit,
-    onToggleVoiceMode: () -> Unit,
+    isHoldToRecordMode: Boolean,
+    isAttachmentActive: Boolean,
+    onComposerBarAction: (ComposerBarAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-  // 附件旋转动画
+  val keyboardController = LocalSoftwareKeyboardController.current
   val attachmentRotateAngle by
       animateFloatAsState(
-          targetValue = if (isAttachmentOpen) 45f else 0f,
+          targetValue = if (isAttachmentActive) 45f else 0f,
+          animationSpec =
+              tween(
+                  durationMillis = 380, // Make it slow
+                  easing = LinearOutSlowInEasing,
+              ),
           label = "attachmentRotateAngle",
       )
 
-  val density = LocalDensity.current
   var currentHeightPx by remember { mutableIntStateOf(0) }
 
+  val density = LocalDensity.current
   val composerBarInitialHeightPx =
       remember(density) {
         with(density) { ComposerBarMinHeight.roundToPx() }
@@ -318,7 +306,7 @@ private fun ComposerActionArea(
             CircularIconButton(onClick = {}, borderColor = null) {
               Icon(
                   imageVector = Icons.Rounded.Face,
-                  contentDescription = "Expand to Fullscreen",
+                  contentDescription = stringResource(R.string.composer_bar_btn_expand_desc),
                   tint = MaterialTheme.colorScheme.onSurfaceVariant,
                   modifier = Modifier.size(ActionIconSize),
               )
@@ -326,12 +314,12 @@ private fun ComposerActionArea(
           }
 
           CircularIconButton(
-              onClick = onSendText,
+              onClick = { onComposerBarAction(ComposerBarAction.LogEntry) },
               backgroundColor = MaterialTheme.colorScheme.primary,
           ) {
             Icon(
                 painter = painterResource(R.drawable.icon_arrow_upward_alt_24px),
-                contentDescription = "Send",
+                contentDescription = stringResource(R.string.composer_send_btn_desc),
                 tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(ActionIconSize),
             )
@@ -344,15 +332,25 @@ private fun ComposerActionArea(
         ) {
           // 切换语音 / 键盘
           CircularIconButton(
-              onClick = onToggleVoiceMode,
+              onClick = {
+                val willBeHoldToRecord = !isHoldToRecordMode
+                if (willBeHoldToRecord) {
+                  // do side effect directly
+                  keyboardController?.hide()
+                }
+                onComposerBarAction(ComposerBarAction.ToggleHoldToRecordMode)
+              },
               borderColor = MaterialTheme.colorScheme.outline,
           ) {
             val iconRes =
-                if (isVoiceMode) R.drawable.icon_keyboard_keys_24px_refactor
+                if (isHoldToRecordMode) R.drawable.icon_keyboard_keys_24px_refactor
                 else R.drawable.icon_hold_to_record_24px_scaled
+            val descriptionRes =
+                if (isHoldToRecordMode) R.string.composer_bar_btn_toggle_to_default_desc
+                else R.string.composer_bar_btn_toggle_to_hold_to_record_desc
             Icon(
                 painter = painterResource(iconRes),
-                contentDescription = "Toggle Input Mode",
+                contentDescription = stringResource(descriptionRes),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(ActionIconSize),
             )
@@ -360,12 +358,15 @@ private fun ComposerActionArea(
 
           // 附件展开/收起按钮
           CircularIconButton(
-              onClick = onAttachmentClick,
+              onClick = { onComposerBarAction(ComposerBarAction.ToggleAttachment) },
               borderColor = MaterialTheme.colorScheme.outline,
           ) {
+            val descriptionRes =
+                if (isAttachmentActive) R.string.composer_bar_btn_hide_attachment_panel
+                else R.string.composer_bar_btn_show_attachment_panel
             Icon(
                 imageVector = Icons.Rounded.Add,
-                contentDescription = "Toggle Attachment",
+                contentDescription = stringResource(descriptionRes),
                 tint = MaterialTheme.colorScheme.onSurface,
                 // 2. 核心性能优化：在 graphicsLayer 中旋转，走 Draw 阶段，不触发组件 Recompose
                 modifier =

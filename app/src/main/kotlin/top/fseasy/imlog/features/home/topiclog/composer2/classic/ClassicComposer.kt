@@ -12,11 +12,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -58,6 +56,15 @@ fun ClassicComposer(
 
   val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
 
+  val onComposerBarAction: (ComposerBarAction) -> Unit = { action ->
+    when (action) {
+      ComposerBarAction.LogEntry -> viewModel.sendTextMessage()
+      ComposerBarAction.ToggleAttachment -> viewModel.classicComposerUiState.toggleAttachmentPanel()
+      ComposerBarAction.ToggleHoldToRecordMode ->
+          viewModel.classicComposerUiState.toggleHoldToRecordMode()
+    }
+  }
+
   ComposerContent(
       dockState = dockState,
       textFieldState = textFieldState,
@@ -66,11 +73,10 @@ fun ClassicComposer(
       onStartVoiceRecording = viewModel::startVoiceRecording,
       onSendVoiceRecording = viewModel::stopVoiceRecordingAndSendVoiceMessage,
       onCancelVoiceRecoding = viewModel::cancelVoiceRecording,
-      onSendText = viewModel::sendTextMessage,
       onShowSnackbar = onShowSnackbar,
       onBaseHeightPxChanged = onBaseHeightPxChanged,
       onUpdateCachedImeHeightInDp = viewModel.classicComposerUiState::updateCachedImeHeight,
-      onToggleAttachment = viewModel.classicComposerUiState::toggleAttachmentPanel,
+      onComposerBarAction = onComposerBarAction,
       onTextFieldFocusChanged = viewModel.classicComposerUiState::onTextFieldFocusChanged,
   )
 }
@@ -86,15 +92,12 @@ private fun ComposerContent(
     onSendVoiceRecording: () -> Unit,
     onCancelVoiceRecoding: () -> Unit,
     onUpdateCachedImeHeightInDp: (ScreenOrientation, heightValueInDp: Float) -> Unit,
-    onToggleAttachment: () -> Unit,
     onTextFieldFocusChanged: (focused: Boolean) -> Unit,
-    onSendText: () -> Unit,
     onShowSnackbar: (Int) -> Unit,
+    onComposerBarAction: (ComposerBarAction) -> Unit,
     modifier: Modifier = Modifier,
     onBaseHeightPxChanged: (Int) -> Unit = {},
 ) {
-  val focusManager = LocalFocusManager.current
-  val focusRequester = remember { FocusRequester() }
   val haptic = LocalHapticFeedback.current
   val density = LocalDensity.current
 
@@ -166,15 +169,14 @@ private fun ComposerContent(
     ClassicComposerDock(
         state = dockState,
         textFieldState = textFieldState,
-        onHoldToRecordAction = onHoldToRecordAction,
-        onUpdateCachedImeHeightInDp = onUpdateCachedImeHeightInDp,
-        onToggleAttachment = onToggleAttachment,
         onTextFieldFocusChanged = onTextFieldFocusChanged,
+        onUpdateCachedImeHeightInDp = onUpdateCachedImeHeightInDp,
+        onComposerBarAction = onComposerBarAction,
+        onHoldToRecordAction = onHoldToRecordAction,
         modifier =
             Modifier.align(Alignment.BottomCenter).onSizeChanged {
               onBaseHeightPxChanged(it.height)
             },
-        onSendText = onSendText,
     )
 
     activeGeometry?.run {

@@ -51,10 +51,9 @@ import kotlin.time.Duration.Companion.milliseconds
 internal fun ClassicComposerDock(
     state: ComposerDockState,
     textFieldState: TextFieldState,
-    onUpdateCachedImeHeightInDp: (ScreenOrientation, heightValueInDp: Float) -> Unit,
-    onToggleAttachment: () -> Unit,
-    onSendText: () -> Unit,
     onTextFieldFocusChanged: (focused: Boolean) -> Unit,
+    onUpdateCachedImeHeightInDp: (ScreenOrientation, heightValueInDp: Float) -> Unit,
+    onComposerBarAction: (ComposerBarAction) -> Unit,
     onHoldToRecordAction: (ComposerHoldToRecordAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -163,16 +162,16 @@ internal fun ClassicComposerDock(
       // 顶部输入条
       DockFloatingContent(
           mode = state.mode,
-          onAttachmentClick = onToggleAttachment,
+          activePanel = state.activePanel,
+          textFieldState = textFieldState,
           onTextFieldFocusChanged = { focused ->
             // Update internal state first
             isTextFieldFocused = focused
             imeJitterGuard.onFocusChanged(focused)
             onTextFieldFocusChanged(focused)
           },
-          textFieldState = textFieldState,
-          onSendText = onSendText,
           onHoldToRecordAction = onHoldToRecordAction,
+          onComposerBarAction = onComposerBarAction,
       )
 
       // 底部自适应高度占位容器

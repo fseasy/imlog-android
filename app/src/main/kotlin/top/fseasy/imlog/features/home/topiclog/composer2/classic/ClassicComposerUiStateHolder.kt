@@ -30,6 +30,17 @@ class ClassicComposerUiStateHolder(
     }
   }
 
+  /** Toggle between Default/HoldToRecord mode */
+  fun toggleHoldToRecordMode() {
+    _dockUiState.update { s ->
+      s.copy(
+          mode =
+              if (s.mode == ClassicComposerMode.HoldToRecord) ClassicComposerMode.Default
+              else ClassicComposerMode.HoldToRecord
+      )
+    }
+  }
+
   fun onTextFieldFocusChanged(focused: Boolean) {
     if (focused) {
       _dockUiState.update { s -> s.copy(activePanel = ActivePanel.NONE) }
