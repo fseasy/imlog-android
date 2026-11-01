@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import top.fseasy.imlog.R
 import top.fseasy.imlog.features.home.topiclog.composer.LocalComposerFocusRequester
+import top.fseasy.imlog.features.home.topiclog.composer2.holdToRecordGesture
 import top.fseasy.imlog.features.home.topiclog.composer2.tapOrHoldToRecordGesture
 import top.fseasy.imlog.ui.theme.ImlogTheme
 
@@ -104,7 +105,7 @@ internal fun ComposerBar(
       if (isHoldToRecordMode) {
         HoldToRecordArea(onHoldToRecordAction = onHoldToRecordAction)
       } else {
-        TextInputArea(
+        TextInputMixHoldToRecordArea(
             textFieldState = textFieldState,
             isTextEmpty = !hasSendableContent,
             onTextFieldFocusChanged = onTextFieldFocusChanged,
@@ -130,7 +131,7 @@ internal fun ComposerBar(
 // 抽离的独立子组件
 // -------------------------------------------------------------------------------------
 
-/** 语音对讲状态下的 Push To Record 按钮 */
+/** 语音对讲状态下的 Hold To Record 按钮 */
 @Composable
 private fun HoldToRecordArea(
     onHoldToRecordAction: (ComposerHoldToRecordAction) -> Unit,
@@ -141,8 +142,7 @@ private fun HoldToRecordArea(
           modifier
               .fillMaxWidth()
               .heightIn(min = 40.dp)
-              .tapOrHoldToRecordGesture(
-                  onTap = {},
+              .holdToRecordGesture(
                   onHoldStart = {
                     onHoldToRecordAction(ComposerHoldToRecordAction.StartHoldToTalk(it))
                   },
@@ -168,7 +168,7 @@ private fun HoldToRecordArea(
 
 /** 文本输入区组件，将聚焦和打字手势隔离在此处 */
 @Composable
-private fun TextInputArea(
+private fun TextInputMixHoldToRecordArea(
     textFieldState: TextFieldState,
     isTextEmpty: Boolean,
     onTextFieldFocusChanged: (Boolean) -> Unit,

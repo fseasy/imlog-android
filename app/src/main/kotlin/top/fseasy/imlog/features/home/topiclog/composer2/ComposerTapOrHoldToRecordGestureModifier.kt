@@ -33,7 +33,7 @@ private data class TapOrHoldToTalkElement(
   }
 
   override fun InspectorInfo.inspectableProperties() {
-    name = "composerHoldToTalkGesture"
+    name = "composerTapOrHoldToTalkGesture"
   }
 }
 
