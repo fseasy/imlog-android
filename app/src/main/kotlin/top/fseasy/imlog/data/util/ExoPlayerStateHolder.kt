@@ -13,6 +13,10 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,8 +29,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 
 data class MediaInput(
     val id: String,
@@ -77,25 +79,39 @@ class ExoPlayerStateHolder(
 
   private val appContext = context.applicationContext
 
-  //  Media3 focus & Becoming Noisy
-  private val audioAttributes =
-      AudioAttributes.Builder()
-          .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
-          .setUsage(C.USAGE_MEDIA)
-          .build()
+  private val renderersFactory =
+      DefaultRenderersFactory(context).apply {
+        setEnableDecoderFallback(true)
+      }
 
-  private val renderersFactory = DefaultRenderersFactory(context).apply {
-    setEnableDecoderFallback(true)
-  }
-
-  val exoPlayer =
-      ExoPlayer.Builder(appContext, renderersFactory)
-          .setAudioAttributes(audioAttributes, /* handleAudioFocus= */ true)
-          .setHandleAudioBecomingNoisy(true)
-          .build()
+  val exoPlayer = createExoPlayer()
 
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
   private var progressJob: Job? = null
+
+  fun createExoPlayer(): ExoPlayer {
+    // 创建 ExtractorsFactory，并开启常数码率 Seek 预测
+    // - 用于对所有支持 CBR 的格式（MP3、ADTS/AAC、AMR）做 Seek，否则 Seek 无效
+    val extractorsFactory =
+        DefaultExtractorsFactory().apply {
+          setConstantBitrateSeekingEnabled(true)
+        }
+    val mediaSourceFactory = DefaultMediaSourceFactory(appContext, extractorsFactory)
+
+    //  Media3 focus & Becoming Noisy
+    val audioAttributes =
+        AudioAttributes.Builder()
+            .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)
+            .setUsage(C.USAGE_MEDIA)
+            .build()
+    // 3. 构建 ExoPlayer
+
+    return ExoPlayer.Builder(appContext, renderersFactory)
+        .setAudioAttributes(audioAttributes, /* handleAudioFocus= */ true)
+        .setHandleAudioBecomingNoisy(true)
+        .setMediaSourceFactory(mediaSourceFactory)
+        .build()
+  }
 
   init {
     /** All the PlaybackState updating will be limited to the listener! */

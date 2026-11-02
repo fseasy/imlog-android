@@ -66,8 +66,8 @@ import top.fseasy.imlog.ui.theme.ImlogTheme
 
 private val ComposerBarMinHeight = 62.dp
 private const val EXPAND_LINE_THRESHOLD = 5 // 出现「展开编辑」按钮时的行数阈值
-private val ActionButtonSize = 30.dp // 按钮外径
-private val ActionIconSize = 24.dp // 图标尺寸（保证充足内部留白）
+internal val ActionButtonSize = 30.dp // 按钮外径
+internal val ActionIconSize = 24.dp // 图标尺寸（保证充足内部留白）
 private val ActionBorderWidth = 1.5.dp // 增强黑色外框粗细感
 private val ComposerTextBaseStyle
   @Composable get() = MaterialTheme.typography.bodyLarge
@@ -382,7 +382,7 @@ private fun ComposerActionArea(
 }
 
 @Composable
-private fun CircularIconButton(
+fun CircularIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = ActionButtonSize, // 视觉尺寸

@@ -308,7 +308,7 @@ private fun PlayControllerDock(
       Icon(
           imageVector =
               if (isPlaying) {
-                ImageVector.vectorResource(R.drawable.icon_pause_rounded_fill)
+                ImageVector.vectorResource(R.drawable.icon_pause_rounded_fill_48)
               } else {
                 Icons.Rounded.PlayArrow
               },

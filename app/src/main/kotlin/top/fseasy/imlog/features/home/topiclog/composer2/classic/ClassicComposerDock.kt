@@ -229,7 +229,7 @@ fun AttachmentPanel(modifier: Modifier) {
       verticalAlignment = Alignment.CenterVertically,
   ) {
     SolidActionCard(
-        icon = ImageVector.vectorResource(R.drawable.icon_mic),
+        icon = ImageVector.vectorResource(R.drawable.icon_mic_rounded_24),
         label = "Recorder",
         onClick = {},
     )

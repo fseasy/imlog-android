@@ -92,7 +92,7 @@ fun AudioMessageBubble(
       Icon(
           imageVector =
               if (isPlaying) {
-                ImageVector.vectorResource(R.drawable.icon_pause)
+                ImageVector.vectorResource(R.drawable.icon_pause_rounded_nonfill_48)
               } else {
                 Icons.Default.PlayArrow
               },

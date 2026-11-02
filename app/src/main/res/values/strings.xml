@@ -147,4 +147,6 @@
     <string name="composer_bar_btn_show_attachment_panel">Show attachment panel</string>
     <string name="composer_bar_btn_expand_desc">Expand input field</string>
     <string name="composer_bar_btn_hold_to_record_label">Hold To Record</string>
+    <string name="composer_voice_note_btn_resume">Resume</string>
+    <string name="composer_voice_note_btn_pause">Pause</string>
 </resources>

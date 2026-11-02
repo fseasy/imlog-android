@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,7 +16,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
@@ -98,7 +96,7 @@ fun VoiceMessageBubble(
       Icon(
           imageVector =
               if (isPlaying) {
-                ImageVector.vectorResource(R.drawable.icon_pause)
+                ImageVector.vectorResource(R.drawable.icon_pause_rounded_nonfill_48)
               } else {
                 Icons.Default.PlayArrow
               },
@@ -184,7 +182,7 @@ private fun LeftMostArea(
             contentAlignment = Alignment.Center
         ) {
           Icon(
-              painter = painterResource(R.drawable.icon_mic),
+              painter = painterResource(R.drawable.icon_mic_rounded_24),
               contentDescription = stringResource(R.string.term_voice_message),
               tint = MaterialTheme.colorScheme.primary,
               modifier = Modifier.fillMaxSize()

@@ -45,6 +45,8 @@ import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.recorder.AudioRecorder
+import top.fseasy.imlog.domain.recorder.RecordingSnapshot
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.SendTextMessageUseCase
@@ -76,18 +78,42 @@ private const val ATTACHMENT_COPY_CONCURRENCY = 3
 class Composer2ViewModel
 @Inject
 constructor(
-    storagePathUseCase: StoragePathUseCase,
-    private val sendTextMessageUseCase: SendTextMessageUseCase,
-    sendVoiceMessageUseCase: SendVoiceMessageUseCase,
-    userRepository: UserRepository,
-    savedStateHandle: SavedStateHandle,
-    private val topicRepository: TopicRepository,
-    private val sendUriUseCaseFactory: SendUriUseCaseFactory,
-    @param:ApplicationContext private val context: Context,
-    @ApplicationIoScope private val applicationIoScope: CoroutineScope,
+  storagePathUseCase: StoragePathUseCase,
+  private val sendTextMessageUseCase: SendTextMessageUseCase,
+  sendVoiceMessageUseCase: SendVoiceMessageUseCase,
+  userRepository: UserRepository,
+  savedStateHandle: SavedStateHandle,
+  private val topicRepository: TopicRepository,
+  private val sendUriUseCaseFactory: SendUriUseCaseFactory,
+  private val recorder: AudioRecorder,
+  @param:ApplicationContext private val context: Context,
+  @ApplicationIoScope private val applicationIoScope: CoroutineScope,
 ) : ViewModel() {
   private val topicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
   private val authState = userRepository.authState
+
+  // ① 低频业务状态（只在状态改变时重组，几分钟才变一次）
+  // 底部按钮、草稿栏只需监听这个
+  val status: StateFlow<RecordingSnapshot.Status> = recorder.snapshot
+      .map { it.status }
+      .distinctUntilChanged()
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RecordingSnapshot.Status.Idle)
+
+  // ② 秒级展示时间（将 10Hz 降频到 1Hz，每秒只重组 1 次，而不是 10 次！）
+  val formattedTimer: StateFlow<String> = recorder.snapshot
+      .map { formatDuration(it.duration.inWholeSeconds) }
+      .distinctUntilChanged() // 核心：秒数没变就不发射！
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "00:00")
+
+  // ③ 原始高频脉冲（专门给 Canvas 绘图使用）
+  val currentPulse: StateFlow<Float> = recorder.snapshot
+      .map { it.currentPulse }
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
+
+  // ④ 历史波形数组（采用 ImmutableList 保证 Compose 能够安全 Skip）
+  val waveform: StateFlow<ImmutableList<Float>> = recorder.snapshot
+      .map { it.waveform.toPersistentList() }
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), persistentListOf())
 
   val voiceRecorderStateHolder =
       VoiceRecorderStateHolder(
@@ -269,6 +295,27 @@ constructor(
           userId = userId,
       )
     }
+  }
+
+  suspend fun onRecordingFinished(result: AudioRecordResult) {
+    val durationSeconds = result.duration.inWholeSeconds
+
+    // 1. 动态决定存 30 还是 100 根
+    val targetBars = WaveformCodec5Bit.calculateTargetBars(durationSeconds)
+
+    // 2. 5-bit 极限压缩（仅产生 20 ~ 64 字节）
+    val compressedBytes = WaveformCodec5Bit.encode(result.waveform, targetBars)
+
+    // 3. 存入数据库
+    messageDao.insert(
+        MessageEntity(
+            messageId = uuid(),
+            audioPath = result.filePath,
+            audioDurationMs = result.duration.inWholeMilliseconds,
+            waveform = compressedBytes, // 直接持久化 ByteArray
+            timestamp = System.currentTimeMillis()
+        )
+    )
   }
 
   /**

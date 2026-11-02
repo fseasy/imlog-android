@@ -76,7 +76,7 @@ fun BoxScope.ComposerRecordingStage(
       verticalAlignment = Alignment.CenterVertically,
   ) {
     SolidActionCard(
-        icon = ImageVector.vectorResource(R.drawable.icon_mic),
+        icon = ImageVector.vectorResource(R.drawable.icon_mic_rounded_24),
         label = "Recorder",
         onClick = {},
     )
@@ -214,7 +214,7 @@ fun MicStage(
             ) {
               Icon(
                   imageVector =
-                      if (isPlaying) ImageVector.vectorResource(R.drawable.icon_pause_rounded_fill)
+                      if (isPlaying) ImageVector.vectorResource(R.drawable.icon_pause_rounded_fill_48)
                       else Icons.Rounded.PlayArrow,
                   contentDescription = "Preview",
                   tint = Color.Black,
@@ -237,7 +237,7 @@ fun MicStage(
                   imageVector =
                       if (isPaused)
                           ImageVector.vectorResource(R.drawable.icon_radio_button_checked_48px)
-                      else ImageVector.vectorResource(R.drawable.icon_pause_rounded_fill),
+                      else ImageVector.vectorResource(R.drawable.icon_pause_rounded_fill_48),
                   contentDescription = null,
                   tint = Color.Black,
               )

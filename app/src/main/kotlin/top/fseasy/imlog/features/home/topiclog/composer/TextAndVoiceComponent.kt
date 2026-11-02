@@ -212,7 +212,7 @@ fun UserInputVoiceCapsuleButton(
         horizontalArrangement = Arrangement.Center,
     ) {
       Icon(
-          imageVector = ImageVector.vectorResource(R.drawable.icon_mic),
+          imageVector = ImageVector.vectorResource(R.drawable.icon_mic_rounded_24),
           contentDescription = stringResource(R.string.composer_mic_icon_desc),
           tint = MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.size(ComposerIconSize),
@@ -263,7 +263,7 @@ fun UserInputVoiceCircleButton(
         modifier = Modifier.fillMaxSize(),
     ) {
       Icon(
-          imageVector = ImageVector.vectorResource(R.drawable.icon_mic),
+          imageVector = ImageVector.vectorResource(R.drawable.icon_mic_rounded_24),
           contentDescription = stringResource(R.string.composer_mic_icon_desc),
           tint = MaterialTheme.colorScheme.onSurfaceVariant,
           modifier = Modifier.size(ComposerIconSize),
