@@ -11,7 +11,9 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import androidx.annotation.StringRes
 import androidx.core.app.NotificationCompat
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +23,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import top.fseasy.imlog.ImLogApplication
+import top.fseasy.imlog.R
+import top.fseasy.imlog.data.constants.APP_STATIC_NAME
 import top.fseasy.imlog.domain.recorder.RecordingSnapshot
 import top.fseasy.imlog.domain.recorder.VoiceRecordingCoordinator
 
@@ -30,35 +34,40 @@ class VoiceRecordingService : Service() {
     const val CHANNEL_ID = "voice_recording_service_channel"
     const val NOTIFICATION_ID = 9527
 
-    // 完整的 Action 意图定义
-    const val ACTION_GUARD = "ACTION_GUARD" // 启动并常驻保活
+    // Action 定义
+    const val ACTION_GUARD = "ACTION_GUARD" // 启动并保活
     const val ACTION_DISMISS = "ACTION_DISMISS" // 退出并清除保活
     const val ACTION_PAUSE = "ACTION_PAUSE" // 通知栏点击：暂停
     const val ACTION_RESUME = "ACTION_RESUME" // 通知栏点击：继续
     const val ACTION_STOP = "ACTION_STOP" // 通知栏点击：完成
+
+    // 业务场景文案配置 Extras
+    const val EXTRA_TITLE_RES_ID = "EXTRA_TITLE_RES_ID" // 传入 @StringRes 资源 ID (推荐，支持自动切换多语言)
+    const val EXTRA_CUSTOM_TITLE = "EXTRA_CUSTOM_TITLE" // 传入纯文本动态标题 (如“会议：第四季度汇报”)
   }
 
   private var wakeLock: PowerManager.WakeLock? = null
   private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-
-  // 全局唯一的协调器
   private lateinit var coordinator: VoiceRecordingCoordinator
+
+  // 缓存当前场景的标题配置
+  @StringRes private var currentTitleResId: Int = 0
+  private var currentCustomTitle: String? = null
 
   override fun onCreate() {
     super.onCreate()
-    // 1. 优先创建通知渠道（Android 8.0+ 必须第一步执行）
     createNotificationChannel()
-
-    // 2. 获取全局 Coordinator 单例
     coordinator = (application as ImLogApplication).recordingCoordinator
-
-    // 3. 启动降频监听流
     observeCoordinatorState()
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     when (intent?.action) {
       ACTION_GUARD -> {
+        // 解析传递过来的场景标题
+        currentTitleResId = intent.getIntExtra(EXTRA_TITLE_RES_ID, 0)
+        currentCustomTitle = intent.getStringExtra(EXTRA_CUSTOM_TITLE)
+
         acquireWakeLock()
         startForegroundInternal()
       }
@@ -70,7 +79,6 @@ class VoiceRecordingService : Service() {
       }
       ACTION_STOP -> {
         serviceScope.launch {
-          // 通知栏点击“完成”：停止录制并退出服务
           coordinator.stopLockedAndSend()
           stopForegroundAndFinish()
         }
@@ -82,12 +90,10 @@ class VoiceRecordingService : Service() {
     return START_NOT_STICKY
   }
 
-  /** 核心优化：整秒级降频监听 将 100ms 高频脉冲降频为 1s 一次，只在“状态改变”或“秒数增加”时更新通知栏 */
   private fun observeCoordinatorState() {
     serviceScope.launch {
       coordinator.recordingSnapshot
           .map { snapshot ->
-            // 将原始数据提取为轻量三元组：状态、整秒数、是否暂停
             Triple(
                 snapshot.status,
                 snapshot.duration.inWholeSeconds,
@@ -95,20 +101,24 @@ class VoiceRecordingService : Service() {
             )
           }
           .distinctUntilChanged { old, new ->
-            // 核心去重：只有状态变化，或者整秒数字变化时才允许往下游发射
             old.first == new.first && old.second == new.second
           }
-          .collect { (status, seconds, isPaused) ->
+          .collect { (status, seconds, _) ->
             when (status) {
               RecordingSnapshot.Status.Recording -> {
-                updateNotification("正在录音: ${formatDuration(seconds)}", isPaused = false)
+                val formattedTime = formatDuration(seconds)
+                val statusText =
+                    getString(R.string.notification_recording_status_recording, formattedTime)
+                updateNotification(statusText, isPaused = false)
               }
               RecordingSnapshot.Status.Paused -> {
-                updateNotification("已暂停: ${formatDuration(seconds)}", isPaused = true)
+                val formattedTime = formatDuration(seconds)
+                val statusText =
+                    getString(R.string.notification_recording_status_paused, formattedTime)
+                updateNotification(statusText, isPaused = true)
               }
               RecordingSnapshot.Status.Stopped,
               RecordingSnapshot.Status.Idle -> {
-                // 如果外部或内部已停止，前台服务自行退场
                 stopForegroundAndFinish()
               }
             }
@@ -117,20 +127,16 @@ class VoiceRecordingService : Service() {
   }
 
   private fun startForegroundInternal() {
-    val notification = buildNotification("正在准备录制...", isPaused = false)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      startForeground(
-          NOTIFICATION_ID,
-          notification,
-          ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
-      )
-    } else {
-      startForeground(NOTIFICATION_ID, notification)
-    }
+    val initialText = getString(R.string.notification_recording_status_preparing)
+    val notification = buildNotification(initialText, isPaused = false)
+    startForeground(
+        NOTIFICATION_ID,
+        notification,
+        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+    )
   }
 
   private fun buildNotification(contentText: String, isPaused: Boolean): Notification {
-    // 1. 点击通知卡片主体：回退唤起 App 主界面
     val contentPendingIntent =
         packageManager.getLaunchIntentForPackage(packageName)?.let {
           PendingIntent.getActivity(
@@ -141,7 +147,6 @@ class VoiceRecordingService : Service() {
           )
         }
 
-    // 2. 暂停/继续 PendingIntent
     val toggleActionIntent =
         Intent(this, VoiceRecordingService::class.java).apply {
           action = if (isPaused) ACTION_RESUME else ACTION_PAUSE
@@ -154,7 +159,6 @@ class VoiceRecordingService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-    // 3. 完成/停止 PendingIntent
     val stopActionIntent =
         Intent(this, VoiceRecordingService::class.java).apply {
           action = ACTION_STOP
@@ -167,19 +171,36 @@ class VoiceRecordingService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+    // 动态解析标题：自定义字符串 > 资源 ID 多语言 > 默认多语言标题
+    val resolvedTitle =
+        when {
+          !currentCustomTitle.isNullOrBlank() -> currentCustomTitle!!
+          currentTitleResId != 0 -> getString(currentTitleResId)
+          else -> getString(R.string.notification_recording_title_default)
+        }
+
+    // 动态多语言 Action 按钮文案
+    val toggleActionTitle =
+        if (isPaused) {
+          getString(R.string.notification_action_resume)
+        } else {
+          getString(R.string.notification_action_pause)
+        }
+    val finishActionTitle = getString(R.string.notification_action_finish)
+
     return NotificationCompat.Builder(this, CHANNEL_ID)
-        .setContentTitle("语音笔记正在录制")
+        .setContentTitle(resolvedTitle)
         .setContentText(contentText)
         .setSmallIcon(android.R.drawable.ic_btn_speak_now)
         .setOngoing(true)
-        .setOnlyAlertOnce(true) // 避免每次更新都震动或发出提示音
-        .setContentIntent(contentPendingIntent) // 点击打开 App
+        .setOnlyAlertOnce(true)
+        .setContentIntent(contentPendingIntent)
         .addAction(
             if (isPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
-            if (isPaused) "继续" else "暂停",
+            toggleActionTitle,
             togglePendingIntent,
         )
-        .addAction(android.R.drawable.checkbox_on_background, "完成", stopPendingIntent)
+        .addAction(android.R.drawable.checkbox_on_background, finishActionTitle, stopPendingIntent)
         .build()
   }
 
@@ -188,14 +209,34 @@ class VoiceRecordingService : Service() {
     manager.notify(NOTIFICATION_ID, buildNotification(contentText, isPaused))
   }
 
+  private fun createNotificationChannel() {
+    val channel =
+        NotificationChannel(
+                CHANNEL_ID,
+                getString(R.string.notification_channel_recording_name), // 多语言渠道名
+                NotificationManager.IMPORTANCE_LOW,
+            )
+            .apply {
+              description = getString(R.string.notification_channel_recording_desc) // 多语言渠道描述
+              setShowBadge(false)
+            }
+    val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+    manager.createNotificationChannel(channel)
+  }
+
   private fun acquireWakeLock() {
     if (wakeLock == null) {
       val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
       wakeLock =
-          powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "NoteApp:AudioLock").apply {
-            setReferenceCounted(false)
-            acquire(120 * 60 * 1000L /* 2小时最长超时，防死锁 */)
-          }
+          powerManager
+              .newWakeLock(
+                  PowerManager.PARTIAL_WAKE_LOCK,
+                  "$APP_STATIC_NAME:VoiceRecordingLock",
+              )
+              .apply {
+                setReferenceCounted(false)
+                acquire(2 * 60 * 60 * 1000L) // max 2 hours
+              }
     }
   }
 
@@ -214,35 +255,14 @@ class VoiceRecordingService : Service() {
 
   private fun stopForegroundAndFinish() {
     releaseWakeLock()
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-      stopForeground(STOP_FOREGROUND_REMOVE)
-    } else {
-      @Suppress("DEPRECATION") stopForeground(true)
-    }
+    stopForeground(STOP_FOREGROUND_REMOVE)
     stopSelf()
-  }
-
-  private fun createNotificationChannel() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      val channel =
-          NotificationChannel(
-                  CHANNEL_ID,
-                  "语音录制通知",
-                  NotificationManager.IMPORTANCE_LOW, // 低优先级：静默不弹横幅打扰用户
-              )
-              .apply {
-                description = "展示当前语音录制进度"
-                setShowBadge(false)
-              }
-      val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-      manager.createNotificationChannel(channel)
-    }
   }
 
   private fun formatDuration(seconds: Long): String {
     val m = seconds / 60
     val s = seconds % 60
-    return "%02d:%02d".format(m, s)
+    return String.format(Locale.getDefault(), "%02d:%02d", m, s)
   }
 
   override fun onDestroy() {

@@ -64,4 +64,21 @@
     <string name="topic_settings_btn_unpin">取消置顶</string>
     <string name="topic_settings_btn_pin">置顶</string>
     <string name="term_media_play_speed">倍速</string>
+    <string name="notification_channel_recording_name">语音录制通知</string>
+    <string name="notification_channel_recording_desc">展示当前语音录制进度</string>
+
+    <!-- 默认标题与不同业务场景标题 -->
+    <string name="notification_recording_title_default">正在录制音频</string>
+    <string name="notification_recording_title_note">正在录制语音笔记</string>
+    <string name="notification_recording_title_chat">正在录制语音消息</string>
+
+    <!-- 录音状态文案 -->
+    <string name="notification_recording_status_preparing">正在准备录制…</string>
+    <string name="notification_recording_status_recording">正在录音：%s</string>
+    <string name="notification_recording_status_paused">已暂停：%s</string>
+
+    <!-- 通知栏 Action 按钮 -->
+    <string name="notification_action_pause">暂停</string>
+    <string name="notification_action_resume">继续</string>
+    <string name="notification_action_finish">完成</string>
 </resources>

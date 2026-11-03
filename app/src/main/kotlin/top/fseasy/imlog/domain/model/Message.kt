@@ -1,6 +1,8 @@
 package top.fseasy.imlog.domain.model
 
+import kotlin.io.encoding.Base64
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -8,6 +10,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import timber.log.Timber
+import top.fseasy.imlog.domain.recorder.WaveformCodec5Bit
 
 enum class MessageType(val value: String) {
   Text("text"),
@@ -191,10 +194,36 @@ enum class MessageInputMode(val value: String) {
   Camera("camera"),
 }
 
+@Serializable
+data class VoiceDraft(
+    val filePath: String, // base 底稿音频文件路径
+    val durationMs: Long, // base 底稿毫秒时长
+    val waveformBase64: String, // base 底稿 5-bit 压缩后的波形转成 Base64 存储
+    val pendingChunkPath: String? = null // 正在录制、待合并的新分片路径
+) {
+  // 辅助扩展属性，方便业务层直接使用
+  val duration: Duration
+    get() = durationMs.milliseconds
+
+  val waveform: FloatArray
+    get() = WaveformCodec5Bit.decode(Base64.decode(waveformBase64))
+
+  companion object {
+    fun create(filePath: String, duration: Duration, waveformBytes: ByteArray): VoiceDraft {
+      return VoiceDraft(
+          filePath = filePath,
+          durationMs = duration.inWholeMilliseconds,
+          waveformBase64 = Base64.encode(waveformBytes),
+      )
+    }
+  }
+}
+
 /** For composer draft */
 @Serializable
 data class MessageDraft(
     val inputMode: MessageInputMode? = null,
     val quotedMessageId: MessageId? = null,
     val text: String = "",
+    val voiceNote: VoiceDraft? = null,
 )

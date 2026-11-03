@@ -22,6 +22,10 @@
  */
 package top.fseasy.imlog.domain.usecase
 
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.random.Random
+import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.UtcOffset
 import kotlinx.datetime.format
@@ -37,10 +41,6 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.ResourceProvider
 import top.fseasy.imlog.domain.repository.StringConstantId
 import top.fseasy.imlog.domain.util.splitNameAndExtension
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlin.random.Random
-import kotlin.time.Instant
 
 /**
  * Why Singleton: Will be used frequently and widely; has member val
@@ -70,6 +70,8 @@ import kotlin.time.Instant
  *         └── $topic_id/
  *             └── $date-hierarchy (yyyy-mm/day-range-utc, example: `2026-07/day01-10-utc`)
  *                 └── $filename
+ *     ├── draft/
+ *          └── $filename
  * ```
  *
  * ## Shared-Storage
@@ -81,7 +83,7 @@ import kotlin.time.Instant
  *     │   └── $topic_id/
  *     │       └── $date-hierarchy/
  *     │           └── $filename
- *     └── avatar/ (dual write)
+ *     └── avatar/                (dual write)
  *         ├── topic/
  *         │   └── $avatar_filename
  *         └── user/
@@ -192,20 +194,22 @@ constructor(
   }
 
   /**
-   * Build message file path for message cache file.
+   * Build draft file (like message draft of a topic).
    *
    * rule: `$user_root_name / message_cache / $filename (no more hierarchy)`
    *
-   * Location: internal cache
+   * Location: internal persistent
    */
-  fun buildMessageCacheFileStoragePath(
+  fun buildDraftPath(
       userId: UserId,
       filename: String,
   ) =
-      buildInternalCacheStoragePath(
-          userId,
-          resourceName = ResourceName.MessageCache,
-          filename = filename,
+      StoragePathModel.InternalOnly(
+          buildList {
+            addAll(buildResourceRootRelativePath(userId, ResourceName.Draft))
+            add(filename)
+          },
+          InternalLocation.Persistent,
       )
 
   fun buildTemporaryCacheFileStoragePath(
@@ -358,8 +362,8 @@ private enum class ResourceName(val value: String) {
   AVATAR("avatar"),
   MessageFileRaw("message"),
   MessageThumbnail("thumbnail"),
-  MessageCache("message_cache"),
   TemporaryCache("temp_cache"),
+  Draft(value = "draft"),
 }
 
 private enum class AvatarTargetName(val value: String) {

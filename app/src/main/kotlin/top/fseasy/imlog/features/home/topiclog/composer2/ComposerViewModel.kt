@@ -1,5 +1,6 @@
 package top.fseasy.imlog.features.home.topiclog.composer2
 
+import android.app.Application
 import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.text.input.TextFieldState
@@ -11,6 +12,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -35,6 +40,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import top.fseasy.imlog.ImLogApplication
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.data.util.MimeTypeUtils
 import top.fseasy.imlog.data.util.VoiceRecorderState
@@ -45,7 +51,7 @@ import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.recorder.AudioRecorder
+import top.fseasy.imlog.domain.model.VoiceDraft
 import top.fseasy.imlog.domain.recorder.RecordingSnapshot
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
@@ -64,10 +70,6 @@ import top.fseasy.imlog.features.home.topiclog.composer.toDomain
 import top.fseasy.imlog.features.home.topiclog.composer.toUiState
 import top.fseasy.imlog.features.home.topiclog.composer2.classic.ClassicComposerUiStateHolder
 import top.fseasy.imlog.navigation.MainScreen
-import javax.inject.Inject
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Instant
 
 // SQLite writing is single thread, so it is useless that set it higher
 private const val ATTACHMENT_RESOLVE_METADATA_CONCURRENCY = 6
@@ -78,42 +80,51 @@ private const val ATTACHMENT_COPY_CONCURRENCY = 3
 class Composer2ViewModel
 @Inject
 constructor(
-  storagePathUseCase: StoragePathUseCase,
-  private val sendTextMessageUseCase: SendTextMessageUseCase,
-  sendVoiceMessageUseCase: SendVoiceMessageUseCase,
-  userRepository: UserRepository,
-  savedStateHandle: SavedStateHandle,
-  private val topicRepository: TopicRepository,
-  private val sendUriUseCaseFactory: SendUriUseCaseFactory,
-  private val recorder: AudioRecorder,
-  @param:ApplicationContext private val context: Context,
-  @ApplicationIoScope private val applicationIoScope: CoroutineScope,
+    storagePathUseCase: StoragePathUseCase,
+    private val sendTextMessageUseCase: SendTextMessageUseCase,
+    sendVoiceMessageUseCase: SendVoiceMessageUseCase,
+    userRepository: UserRepository,
+    savedStateHandle: SavedStateHandle,
+    private val topicRepository: TopicRepository,
+    private val sendUriUseCaseFactory: SendUriUseCaseFactory,
+    @param:ApplicationContext private val context: Context,
+    @ApplicationIoScope private val applicationIoScope: CoroutineScope,
+    application: Application,
 ) : ViewModel() {
   private val topicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
   private val authState = userRepository.authState
 
+  private val voiceRecordingCoordinator = (application as ImLogApplication).recordingCoordinator
   // ① 低频业务状态（只在状态改变时重组，几分钟才变一次）
   // 底部按钮、草稿栏只需监听这个
-  val status: StateFlow<RecordingSnapshot.Status> = recorder.snapshot
-      .map { it.status }
-      .distinctUntilChanged()
-      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RecordingSnapshot.Status.Idle)
+  val status: StateFlow<RecordingSnapshot.Status> =
+      recorder.snapshot
+          .map { it.status }
+          .distinctUntilChanged()
+          .stateIn(
+              viewModelScope,
+              SharingStarted.WhileSubscribed(5000),
+              RecordingSnapshot.Status.Idle,
+          )
 
   // ② 秒级展示时间（将 10Hz 降频到 1Hz，每秒只重组 1 次，而不是 10 次！）
-  val formattedTimer: StateFlow<String> = recorder.snapshot
-      .map { formatDuration(it.duration.inWholeSeconds) }
-      .distinctUntilChanged() // 核心：秒数没变就不发射！
-      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "00:00")
+  val formattedTimer: StateFlow<String> =
+      recorder.snapshot
+          .map { formatDuration(it.duration.inWholeSeconds) }
+          .distinctUntilChanged() // 核心：秒数没变就不发射！
+          .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "00:00")
 
   // ③ 原始高频脉冲（专门给 Canvas 绘图使用）
-  val currentPulse: StateFlow<Float> = recorder.snapshot
-      .map { it.currentPulse }
-      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
+  val currentPulse: StateFlow<Float> =
+      recorder.snapshot
+          .map { it.currentPulse }
+          .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
 
   // ④ 历史波形数组（采用 ImmutableList 保证 Compose 能够安全 Skip）
-  val waveform: StateFlow<ImmutableList<Float>> = recorder.snapshot
-      .map { it.waveform.toPersistentList() }
-      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), persistentListOf())
+  val waveform: StateFlow<ImmutableList<Float>> =
+      recorder.snapshot
+          .map { it.waveform.toPersistentList() }
+          .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), persistentListOf())
 
   val voiceRecorderStateHolder =
       VoiceRecorderStateHolder(
@@ -123,6 +134,15 @@ constructor(
               context = context,
           )
           .also(::addCloseable)
+  val voiceComposerStateHolder =
+      VoiceComposerStateHolder(
+          scope = viewModelScope,
+          coordinator = (application as ImLogApplication).recordingCoordinator,
+          storagePathUseCase = storagePathUseCase,
+          topicId = topicId,
+          authState = authState,
+          context = context,
+      )
 
   val textFieldState = TextFieldState(initialText = "")
   private val isTextNotEmpty: StateFlow<Boolean> = snapshotFlow {
@@ -160,18 +180,23 @@ constructor(
       val inputMode = draft.inputMode?.toUiState()
       updateInputMode(inputMode)
       updateComposerStage(inputMode.decideComposerStage())
+      draft.voiceNote?.let { voiceDraft ->
+        voiceComposerStateHolder.restoreDraft(voiceDraft)
+      }
     }
 
     // bind Draft saving on input state
     combine(
             snapshotFlow { textFieldState.text }.debounce(500.milliseconds).distinctUntilChanged(),
             inputModeUiState,
+            voiceComposerStateHolder.draftState,
             authState.filterIsInstance<AuthState.Authenticated>(),
-        ) { textCharSequence, mode, auth ->
+        ) { textCharSequence, mode, voiceDraft, auth ->
           Pair(
               MessageDraftUtil.buildDraft(
                   inputText = textCharSequence.toString(),
                   inputMode = mode,
+                  voiceDraft = voiceDraft,
               ),
               auth.userId,
           )
@@ -197,6 +222,7 @@ constructor(
           MessageDraftUtil.buildDraft(
               inputText = textFieldState.text.toString(),
               inputMode = inputModeUiState.value,
+              voiceDraft = voiceComposerStateHolder.draftState.value,
           )
       if (draft == _lastSavedDraft) return
       val userId = (authState.value as? AuthState.Authenticated)?.userId ?: return
@@ -313,7 +339,7 @@ constructor(
             audioPath = result.filePath,
             audioDurationMs = result.duration.inWholeMilliseconds,
             waveform = compressedBytes, // 直接持久化 ByteArray
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
         )
     )
   }
@@ -450,13 +476,15 @@ constructor(
 
 private object MessageDraftUtil {
   fun buildDraft(
-      inputText: String,
       inputMode: MessageInputModeUi?,
+      inputText: String,
+      voiceDraft: VoiceDraft?,
   ) =
       MessageDraft(
           inputMode = inputMode?.toDomain(),
           quotedMessageId = null, // TODO: add quoteMessage impl
           text = inputText,
+          voiceNote = voiceDraft,
       )
 
   /** Run in IO in blocking way. */

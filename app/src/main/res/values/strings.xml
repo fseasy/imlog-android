@@ -149,4 +149,22 @@
     <string name="composer_bar_btn_hold_to_record_label">Hold To Record</string>
     <string name="composer_voice_note_btn_resume">Resume</string>
     <string name="composer_voice_note_btn_pause">Pause</string>
+    <!-- Notification Channel -->
+    <string name="notification_channel_recording_name">Audio Recording</string>
+    <string name="notification_channel_recording_desc">Displays the progress of the current audio recording</string>
+
+    <!-- Titles for different scenarios -->
+    <string name="notification_recording_title_default">Recording Audio</string>
+    <string name="notification_recording_title_note">Recording Voice Note</string>
+    <string name="notification_recording_title_chat">Recording Voice Message</string>
+
+    <!-- Status -->
+    <string name="notification_recording_status_preparing">Preparing recording…</string>
+    <string name="notification_recording_status_recording">Recording: %s</string>
+    <string name="notification_recording_status_paused">Paused: %s</string>
+
+    <!-- Actions -->
+    <string name="notification_action_pause">Pause</string>
+    <string name="notification_action_resume">Resume</string>
+    <string name="notification_action_finish">Finish</string>
 </resources>
