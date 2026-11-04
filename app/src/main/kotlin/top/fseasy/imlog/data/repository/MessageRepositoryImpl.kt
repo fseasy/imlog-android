@@ -20,7 +20,6 @@ import kotlinx.coroutines.withContext
 import top.fseasy.imlog.R
 import top.fseasy.imlog.data.util.MimeTypeUtils
 import top.fseasy.imlog.data.util.retryOnAnyException
-import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
 import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.CacheAttachmentSource
 import top.fseasy.imlog.domain.model.FileMetadataUnion
@@ -33,11 +32,11 @@ import top.fseasy.imlog.domain.model.QuotedMessage
 import top.fseasy.imlog.domain.model.QuotedMessageContent
 import top.fseasy.imlog.domain.model.QuotedMessageSender
 import top.fseasy.imlog.domain.model.Statistics
+import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TimelineMessage
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriAttachmentSource
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.repository.MessageAttachmentSource
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.sqldelight.GetPagedMessages as PagedMessagesEntity
 import top.fseasy.imlog.sqldelight.Message_attachment_processing_task_states as FileProcessingTaskStateEntity
@@ -103,14 +102,17 @@ constructor(
 
   override fun syncInsertInitialAttachmentProcessingTaskState(
       messageId: MessageId,
-      fileSource: MessageAttachmentSource,
+      srcPath: StoragePathModel,
       taskStartTime: Instant,
   ) {
     val initialStateEntity =
-        createInitialAttachmentProcessingTaskStateEntity(
-            messageId = messageId,
-            fileSource = fileSource,
-            taskStartTime = taskStartTime,
+        FileProcessingTaskStateEntity(
+            message_id = messageId,
+            src_path = srcPath,
+            internal_cached_filename = null,
+            task_tart_time = taskStartTime.toEpochMilliseconds(),
+            error_stage = null,
+            error_user_retryable = null,
         )
 
     database.messageAttachmentProcessingQueries.insertAttachmentProcessingState(initialStateEntity)
@@ -212,26 +214,6 @@ constructor(
               .value > 0L
         }
       }
-
-  private fun createInitialAttachmentProcessingTaskStateEntity(
-      messageId: MessageId,
-      fileSource: MessageAttachmentSource,
-      taskStartTime: Instant,
-  ): FileProcessingTaskStateEntity {
-    val (srcUriDbStr, internalCacheFilename) =
-        when (fileSource) {
-          is MessageAttachmentSource.FromUriStr -> fileSource.uriStr to null
-          is MessageAttachmentSource.FromMessageCache -> null to fileSource.filename
-        }
-    return FileProcessingTaskStateEntity(
-        message_id = messageId,
-        src_uri = srcUriDbStr,
-        internal_cached_filename = internalCacheFilename,
-        task_tart_time = taskStartTime.toEpochMilliseconds(),
-        error_stage = null,
-        error_user_retryable = null,
-    )
-  }
 
   private fun createInitialAttachmentMessageEntity(
       topicId: TopicId,

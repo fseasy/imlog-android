@@ -1,15 +1,15 @@
 package top.fseasy.imlog.domain.usecase.sendattachment
 
+import javax.inject.Inject
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyFileUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyFileAndUpdateDbUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageResult
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingStageResult
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailStageResult
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailUseCase
-import javax.inject.Inject
 
 /**
  * A common flow for Attachment Processing Steps that will be run in background (i.e., not in
@@ -24,7 +24,8 @@ class BackgroundProcessingUseCase
 @Inject
 constructor(
     private val storagePathUseCase: StoragePathUseCase,
-    private val copyFileUseCase: CopyFileUseCase,
+    private val attachmentPathUseCase: AttachmentPathUseCase,
+    private val copyFileAndUpdateDbUseCase: CopyFileAndUpdateDbUseCase,
     private val finishProcessingUseCase: FinishProcessingUseCase,
     private val generateThumbnailUseCase: GenerateThumbnailUseCase,
 ) {
@@ -37,9 +38,9 @@ constructor(
       failureTypeMapper: ProcessingFailureTypeMapper,
   ) {
     val internalCacheFilePath =
-        storagePathUseCase.buildMessageCacheFileStoragePath(
+        attachmentPathUseCase.generateInternalCachePath(
             userId = payload.userId,
-            filename = payload.cacheFilename,
+            cacheFilename = payload.internalCacheFilename,
         )
     val messageId = payload.messageId
     // 1. generate thumbnail
@@ -70,7 +71,7 @@ constructor(
     // 2. copy internal cache to shared storage
     when (
         val result =
-            copyFileUseCase.copyInternalCacheToSharedStorageAndUpdateState(
+            copyFileAndUpdateDbUseCase.onInternalToSharedStorage(
                 messageId = messageId,
                 userId = payload.userId,
                 topicId = payload.topicId,

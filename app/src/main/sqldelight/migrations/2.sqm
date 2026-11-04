@@ -1,0 +1,47 @@
+import top.fseasy.imlog.domain.model.MessageId;
+import top.fseasy.imlog.domain.model.StoragePathModel;
+
+-- Migrations:
+-- 1. table `message_attachment_processing_task_states` (by table rebuild way):
+--    - drop column src_uri
+--    - add column src_path
+--
+
+---------
+-- table `message_attachment_processing_task_states` migration
+---------
+-- 1. create new temp table
+CREATE TABLE message_attachment_processing_task_states_new (
+   message_id TEXT AS MessageId NOT NULL PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+   src_path TEXT AS StoragePathModel,
+   internal_cached_filename TEXT,
+   task_tart_time INTEGER NOT NULL,
+   error_stage TEXT DEFAULT NULL,
+   error_user_retryable INTEGER AS kotlin.Boolean DEFAULT NULL
+);
+
+-- 2. migrate data from old to new
+-- 注：若旧数据中的 src_uri 格式可直接作为 src_path 复用，直接读取；
+--    若历史中的任务无需迁移或格式不通用，可将 `src_uri AS src_path` 改为 `NULL AS src_path`
+INSERT INTO message_attachment_processing_task_states_new (
+    message_id,
+    src_path,
+    internal_cached_filename,
+    task_tart_time,
+    error_stage,
+    error_user_retryable
+)
+SELECT
+    message_id,
+    src_uri AS src_path,
+    internal_cached_filename,
+    task_tart_time,
+    error_stage,
+    error_user_retryable
+FROM message_attachment_processing_task_states;
+
+-- 3. drop old
+DROP TABLE message_attachment_processing_task_states;
+
+-- 4. rename
+ALTER TABLE message_attachment_processing_task_states_new RENAME TO message_attachment_processing_task_states;

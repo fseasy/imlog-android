@@ -6,7 +6,7 @@ import top.fseasy.imlog.data.util.FindOrCreateFileUriResult
 import top.fseasy.imlog.data.util.UriPathUtil
 import top.fseasy.imlog.data.util.resolve
 import top.fseasy.imlog.domain.model.AbsolutePathModel
-import top.fseasy.imlog.domain.model.InternalLocation
+import top.fseasy.imlog.domain.model.InternalStorageRootSource
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UserId
@@ -14,19 +14,19 @@ import java.io.File
 import java.io.FileNotFoundException
 import java.nio.file.Path
 
-fun InternalLocation.toFile(context: Context): File {
+fun InternalStorageRootSource.toFile(context: Context): File {
   return when (this) {
-    InternalLocation.Persistent -> context.filesDir
-    InternalLocation.Cache -> context.cacheDir
+    InternalStorageRootSource.Persistent -> context.filesDir
+    InternalStorageRootSource.Cache -> context.cacheDir
   }
 }
 
 /** pure cpu operations. */
-fun StoragePathModel.InternalOnly.toNioPath(context: Context): Path =
-    internalLocation.toFile(context).resolve(fullRelativePath).toPath()
+fun StoragePathModel.Internal.toNioPath(context: Context): Path =
+    root.toFile(context).resolve(fullRelativePath).toPath()
 
 /** To absolute path model without creating dirs/files. pure cpu operations. */
-fun StoragePathModel.InternalOnly.toAbsolutePathWithoutCreating(context: Context) =
+fun StoragePathModel.Internal.toAbsolutePathWithoutCreating(context: Context) =
     AbsolutePathModel.AppPathModel(toNioPath(context).toAppPath())
 
 /**
@@ -50,7 +50,7 @@ suspend fun SharedStorageRootSource.toUri(userRootUriProvider: suspend (UserId) 
  *
  * @throws Exception
  */
-suspend fun StoragePathModel.SharedStorageOnly.ensureFileUri(
+suspend fun StoragePathModel.Shared.ensureFileUri(
     userRootUriProvider: suspend (UserId) -> Uri?,
     context: Context,
     mimeType: String,
@@ -77,7 +77,7 @@ suspend fun StoragePathModel.SharedStorageOnly.ensureFileUri(
  *
  * @throws Exception
  */
-suspend fun StoragePathModel.SharedStorageOnly.ensureDirectorUri(
+suspend fun StoragePathModel.Shared.ensureDirectorUri(
     userRootUriProvider: suspend (UserId) -> Uri?,
     context: Context,
 ): Uri {
@@ -103,7 +103,7 @@ suspend fun StoragePathModel.SharedStorageOnly.ensureDirectorUri(
  * @throws Exception
  * @throws FileNotFoundException
  */
-suspend fun StoragePathModel.SharedStorageOnly.findUriOrThrow(
+suspend fun StoragePathModel.Shared.findUriOrThrow(
     userRootUriProvider: suspend (UserId) -> Uri?,
     context: Context,
 ): Uri {
@@ -129,7 +129,7 @@ suspend fun StoragePathModel.SharedStorageOnly.findUriOrThrow(
  *
  * @throws Exception came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
  */
-suspend fun StoragePathModel.SharedStorageOnly.toAbsolutePathWithoutCreating(
+suspend fun StoragePathModel.Shared.toAbsolutePathWithoutCreating(
     userRootUriProvider: suspend (UserId) -> Uri?,
     context: Context,
 ) = AbsolutePathModel.UriStrModel(findUriOrThrow(userRootUriProvider, context = context).toUriStr())
@@ -152,13 +152,13 @@ suspend fun StoragePathModel.toAbsolutePathsWithoutCreating(
 ): List<AbsolutePathModel> {
 
   return when (this) {
-    is StoragePathModel.SharedStorageOnly ->
+    is StoragePathModel.Shared ->
         listOf(toAbsolutePathWithoutCreating(userRootUriProvider, context))
-    is StoragePathModel.InternalOnly -> listOf(toAbsolutePathWithoutCreating(context))
-    is StoragePathModel.DualWrite ->
+    is StoragePathModel.Internal -> listOf(toAbsolutePathWithoutCreating(context))
+    is StoragePathModel.Dual ->
         listOf(
-            this.toSharedStorageOnly().toAbsolutePathWithoutCreating(userRootUriProvider, context),
-            this.toInternalOnly().toAbsolutePathWithoutCreating(context),
+            this.toShared().toAbsolutePathWithoutCreating(userRootUriProvider, context),
+            this.toInternal().toAbsolutePathWithoutCreating(context),
         )
   }
 }

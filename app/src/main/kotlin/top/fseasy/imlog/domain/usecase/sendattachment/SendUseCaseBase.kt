@@ -14,7 +14,7 @@ import top.fseasy.imlog.domain.model.toMetadataUnion
 import top.fseasy.imlog.domain.repository.BackgroundTaskRunner
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyFileUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyFileAndUpdateDbUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageResult
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.InitializeAttachmentMessageUseCase
@@ -53,12 +53,12 @@ abstract class SendUseCaseBase(
 data class SendUriUseCaseBaseDependencies
 @Inject
 constructor(
-    val backgroundProcessingUseCase: BackgroundProcessingUseCase,
-    val storageRepository: StorageRepository,
-    val backgroundTaskRunner: BackgroundTaskRunner,
-    val initializeAttachmentMessageUseCase: InitializeAttachmentMessageUseCase,
-    val copyFileUseCase: CopyFileUseCase,
-    val finishProcessingUseCase: FinishProcessingUseCase,
+  val backgroundProcessingUseCase: BackgroundProcessingUseCase,
+  val storageRepository: StorageRepository,
+  val backgroundTaskRunner: BackgroundTaskRunner,
+  val initializeAttachmentMessageUseCase: InitializeAttachmentMessageUseCase,
+  val copyFileAndUpdateDbUseCase: CopyFileAndUpdateDbUseCase,
+  val finishProcessingUseCase: FinishProcessingUseCase,
 )
 
 data class ResolveMetadataResult(
@@ -157,7 +157,7 @@ abstract class SendUriUseCaseBase(
     val copyInternalSuccessResult =
         when (
             val result =
-                dependencies.copyFileUseCase.copySrcToInternalCacheAndUpdateState(
+                dependencies.copyFileAndUpdateDbUseCase.onSrcToInternalCache(
                     messageId = messageId,
                     userId = resolveMetadataResult.userId,
                     srcUriStr = resolveMetadataResult.srcUriStr,
@@ -184,7 +184,7 @@ abstract class SendUriUseCaseBase(
             topicId = resolveMetadataResult.topicId,
             messageTimestamp = resolveMetadataResult.messageTimestamp,
             fileMetadata = resolveMetadataResult.fileMetadata,
-            cacheFilename = copyInternalSuccessResult.resultFilename,
+            internalCacheFilename = copyInternalSuccessResult.resultFilename,
             messageType = resolveMetadataResult.messageType,
             srcUriStr = resolveMetadataResult.srcUriStr,
         )
@@ -219,13 +219,13 @@ abstract class SendUriUseCaseBase(
 data class SendCacheFileUseCaseBaseDependencies
 @Inject
 constructor(
-    val backgroundProcessingUseCase: BackgroundProcessingUseCase,
-    val storagePathUseCase: StoragePathUseCase,
-    val storageRepository: StorageRepository,
-    val backgroundTaskRunner: BackgroundTaskRunner,
-    val initializeAttachmentMessageUseCase: InitializeAttachmentMessageUseCase,
-    val copyFileUseCase: CopyFileUseCase,
-    val finishProcessingUseCase: FinishProcessingUseCase,
+  val backgroundProcessingUseCase: BackgroundProcessingUseCase,
+  val storagePathUseCase: StoragePathUseCase,
+  val storageRepository: StorageRepository,
+  val backgroundTaskRunner: BackgroundTaskRunner,
+  val initializeAttachmentMessageUseCase: InitializeAttachmentMessageUseCase,
+  val copyFileAndUpdateDbUseCase: CopyFileAndUpdateDbUseCase,
+  val finishProcessingUseCase: FinishProcessingUseCase,
 )
 
 abstract class SendCacheFileUseCaseBase(
@@ -287,12 +287,13 @@ abstract class SendCacheFileUseCaseBase(
             messageTimestamp = messageTimestamp,
             messageType = messageType,
             srcUriStr = null,
-            cacheFilename = cacheFilename,
+            internalCacheFilename = cacheFilename,
             fileMetadata = fileMetadata,
         )
     )
     return true
   }
+
 }
 
 /**  */

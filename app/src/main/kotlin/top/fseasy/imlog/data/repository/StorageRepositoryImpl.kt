@@ -107,11 +107,11 @@ constructor(
       )
 
   override fun resolveInternalStoragePathToAbsolutePathWithoutCreating(
-      internalStoragePath: StoragePathModel.InternalOnly
+      internalStoragePath: StoragePathModel.Internal
   ): AbsolutePathModel.AppPathModel = internalStoragePath.toAbsolutePathWithoutCreating(context)
 
   override suspend fun resolveSharedStoragePathToAbsolutePathWithoutCreating(
-      sharedStoragePath: StoragePathModel.SharedStorageOnly
+      sharedStoragePath: StoragePathModel.Shared
   ): AbsolutePathModel.UriStrModel =
       sharedStoragePath.toAbsolutePathWithoutCreating(::getSharedStorageRootUriWithCache, context)
 
@@ -120,29 +120,30 @@ constructor(
         MetadataResolveUtils.getDisplayNameOrDefault(context, it, defaultName)
       } ?: defaultName
 
-  override suspend fun getAudioMetadataOrNull(filePath: StoragePathModel): AudioMetadata? =
-      runCatching {
-        resolveStoragePathToAbsolutePathsWithoutCreating(filePath)
+  override suspend fun getAudioMetadataOrNull(path: StoragePathModel): AudioMetadata? =
+      resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(path)?.let {
+        MetadataResolveUtils.resolveAudio(it, context = context)
       }
-      .getOrNull()
-      ?.let { getAudioMetadataOrNull(it.last()) }
 
-  override suspend fun getAudioMetadataOrNull(fileAbsolutePath: AbsolutePathModel): AudioMetadata? =
-      MetadataResolveUtils.resolveAudio(fileAbsolutePath, context = context)
+  override suspend fun getImageMetadataOrNull(path: StoragePathModel): ImageMetadata? =
+      resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(path)?.let {
+        MetadataResolveUtils.resolveImage(it, context = context)
+      }
 
-  override suspend fun getImageMetadataOrNull(fileAbsolutePath: AbsolutePathModel): ImageMetadata? =
-      MetadataResolveUtils.resolveImage(fileAbsolutePath, context = context)
+  override suspend fun getVideoMetadataOrNull(path: StoragePathModel): VideoMetadata? =
+      resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(path)?.let {
+        MetadataResolveUtils.resolveVideo(it, context = context)
+      }
 
-  override suspend fun getVideoMetadataOrNull(fileAbsolutePath: AbsolutePathModel): VideoMetadata? =
-      MetadataResolveUtils.resolveVideo(fileAbsolutePath, context = context)
+  override suspend fun getGenericFileMetadataOrNull(path: StoragePathModel): GenericFileMetadata? =
+      resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(path)?.let {
+        MetadataResolveUtils.resolveGenericFile(it, context = context)
+      }
 
-  override suspend fun getGenericFileMetadataOrNull(
-      fileAbsolutePath: AbsolutePathModel
-  ): GenericFileMetadata? =
-      MetadataResolveUtils.resolveGenericFile(fileAbsolutePath, context = context)
-
-  override suspend fun getMimetypeOrNull(fileAbsolutePath: AbsolutePathModel): String? =
-      MimeTypeUtils.getMimeTypeOrNull(fileAbsolutePath, context = context)
+  override suspend fun getMimetypeOrNull(path: StoragePathModel): String? =
+      resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(path)?.let {
+        MimeTypeUtils.getMimeTypeOrNull(it, context = context)
+      }
 
   /**
    * Run in IO threads for io parts.
@@ -152,27 +153,27 @@ constructor(
    */
   override suspend fun mkdirs(filePath: StoragePathModel): UriStr? {
 
-    suspend fun mkdirsForInternal(p: StoragePathModel.InternalOnly) =
+    suspend fun mkdirsForInternal(p: StoragePathModel.Internal) =
         withContext(dispatcher) {
           p.toNioPath(context).createDirectories()
         }
 
     val uri =
         when (filePath) {
-          is StoragePathModel.DualWrite -> {
-            mkdirsForInternal(filePath.toInternalOnly())
+          is StoragePathModel.Dual -> {
+            mkdirsForInternal(filePath.toInternal())
             filePath
-                .toSharedStorageOnly()
+                .toShared()
                 .ensureDirectorUri(::getSharedStorageRootUriWithCache, context = context)
           }
 
-          is StoragePathModel.SharedStorageOnly ->
+          is StoragePathModel.Shared ->
               filePath.ensureDirectorUri(
                   ::getSharedStorageRootUriWithCache,
                   context = context,
               )
 
-          is StoragePathModel.InternalOnly -> {
+          is StoragePathModel.Internal -> {
             mkdirsForInternal(filePath)
             null
           }
@@ -193,24 +194,24 @@ constructor(
       mimeType: String?,
   ): UriStr? =
       when (filePath) {
-        is StoragePathModel.DualWrite -> {
+        is StoragePathModel.Dual -> {
           val effectiveMimeType =
               requireNotNull(mimeType) { "Must Set mimeType for DualWrite path" }
-          writeFileForInternalOnly(filePath.toInternalOnly(), content)
+          writeFileForInternalOnly(filePath.toInternal(), content)
           writeFileForSharedStorageOnly(
-              filePath.toSharedStorageOnly(),
+              filePath.toShared(),
               content,
               effectiveMimeType,
           )
         }
 
-        is StoragePathModel.SharedStorageOnly -> {
+        is StoragePathModel.Shared -> {
           val effectiveMimeType =
               requireNotNull(mimeType) { "Must Set mimeType for SharedStorageOnly path" }
           writeFileForSharedStorageOnly(filePath, content, effectiveMimeType)
         }
 
-        is StoragePathModel.InternalOnly -> {
+        is StoragePathModel.Internal -> {
           writeFileForInternalOnly(filePath, content)
           null
         }
@@ -222,7 +223,7 @@ constructor(
    * @throws Exception
    */
   private suspend fun writeFileForInternalOnly(
-      filePath: StoragePathModel.InternalOnly,
+      filePath: StoragePathModel.Internal,
       content: ByteArray,
   ) {
     val path = filePath.toNioPath(context)
@@ -237,7 +238,7 @@ constructor(
    * @throws Exception
    */
   private suspend fun writeFileForSharedStorageOnly(
-      filePath: StoragePathModel.SharedStorageOnly,
+      filePath: StoragePathModel.Shared,
       content: ByteArray,
       mimeType: String,
   ): UriStr {
@@ -304,22 +305,22 @@ constructor(
           )
         }
     return when (targetPath) {
-      is StoragePathModel.SharedStorageOnly ->
+      is StoragePathModel.Shared ->
           copyUriFile2SharedStorage(
               unifiedSrcUri,
               targetPath,
               getEffectiveMimeType(),
           )
 
-      is StoragePathModel.InternalOnly -> copyUriFile2InternalFile(unifiedSrcUri, targetPath)
+      is StoragePathModel.Internal -> copyUriFile2InternalFile(unifiedSrcUri, targetPath)
 
-      is StoragePathModel.DualWrite -> {
+      is StoragePathModel.Dual -> {
         copyUriFile2SharedStorage(
             unifiedSrcUri,
-            targetPath.toSharedStorageOnly(),
+            targetPath.toShared(),
             getEffectiveMimeType(),
         )
-        copyUriFile2InternalFile(unifiedSrcUri, targetPath.toInternalOnly())
+        copyUriFile2InternalFile(unifiedSrcUri, targetPath.toInternal())
       }
     }
   }
@@ -327,7 +328,7 @@ constructor(
   /** Run in IO thread in io parts. No exception will be thrown */
   private suspend fun copyUriFile2SharedStorage(
       srcUri: Uri,
-      pathModel: StoragePathModel.SharedStorageOnly,
+      pathModel: StoragePathModel.Shared,
       srcMimeType: String,
   ): FileCopyResult {
     val tgtUri =
@@ -347,7 +348,7 @@ constructor(
   /** Run in IO thread in io parts. No exception will be thrown */
   private suspend fun copyUriFile2InternalFile(
       srcUri: Uri,
-      pathModel: StoragePathModel.InternalOnly,
+      pathModel: StoragePathModel.Internal,
   ): FileCopyResult {
     val tgtFile = pathModel.toNioPath(context).toFile()
     return copyUriToFile(context, srcUri, tgtFile)
@@ -407,4 +408,13 @@ constructor(
     }
     return FileDeleteResult.Success
   }
+
+  /** A helper function for internal transforming */
+  private suspend fun resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(
+      storagePath: StoragePathModel
+  ): AbsolutePathModel? = runCatching {
+    resolveStoragePathToAbsolutePathsWithoutCreating(storagePath)
+  }
+      .getOrNull()
+      ?.last()
 }

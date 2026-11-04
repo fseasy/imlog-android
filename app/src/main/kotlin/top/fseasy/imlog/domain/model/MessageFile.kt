@@ -102,8 +102,8 @@ data class FinishSendingFileWorkerPayload(
   val messageTimestamp: Instant,
   val messageType: MessageType,
     // -- File Info
-  val srcUriStr: UriStr?,
-  val cacheFilename: String,
+  val srcPath: StoragePathModel,
+  val internalCacheFilename: String,
   val fileMetadata: FileMetadataUnion,
 )
 

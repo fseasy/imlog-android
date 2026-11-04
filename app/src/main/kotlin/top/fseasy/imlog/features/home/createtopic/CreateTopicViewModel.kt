@@ -109,7 +109,7 @@ constructor(
                 return@launchWithUid
               }
               _tempFileCleaner.delete(tempPath)
-              AvatarUiModel.NioPath(targetPath.toInternalOnly().toNioPath(context))
+              AvatarUiModel.NioPath(targetPath.toInternal().toNioPath(context))
             }
           }
       runSuspendCatching {

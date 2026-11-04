@@ -61,7 +61,7 @@ constructor(
       val rootDirName = storagePathUseCase.defaultSharedStorageRootDirName
       val createdUri =
           storageRepository.mkdirs(
-              StoragePathModel.SharedStorageOnly(
+              StoragePathModel.Shared(
                   listOf(rootDirName),
                   root = SharedStorageRootSource.Direct(userSelectedUriStr),
               )
@@ -91,7 +91,7 @@ constructor(
             .trimIndent()
     val markerPath = storagePathUseCase.buildSharedStorageRootMarkerFilePath(userId)
     storageRepository.writeFile(
-        StoragePathModel.SharedStorageOnly(
+        StoragePathModel.Shared(
             markerPath.fullRelativePath,
             root = SharedStorageRootSource.LookupByUser(userId),
         ),

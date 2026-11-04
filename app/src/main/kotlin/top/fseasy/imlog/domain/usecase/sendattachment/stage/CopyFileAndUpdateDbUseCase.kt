@@ -1,65 +1,56 @@
 package top.fseasy.imlog.domain.usecase.sendattachment.stage
 
+import javax.inject.Inject
+import kotlin.time.Instant
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
-import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.FileCopyResult
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
-import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
-import javax.inject.Inject
-import kotlin.time.Instant
+import top.fseasy.imlog.domain.usecase.sendattachment.AttachmentPathUseCase
 
-class CopyFileUseCase
+class CopyFileAndUpdateDbUseCase
 @Inject
 constructor(
     private val storagePathUseCase: StoragePathUseCase,
     private val storageRepository: StorageRepository,
     private val messageRepository: MessageRepository,
+    private val attachmentPathUseCase: AttachmentPathUseCase,
 ) {
-  suspend fun copySrcToInternalCacheAndUpdateState(
-    messageId: MessageId,
-    userId: UserId,
-    srcUriStr: UriStr,
-    messageTimestamp: Instant,
-    originalDisplayName: String,
+
+  /**
+   * 1. copy src to internal cache if necessary (skip for already in internal cache src)
+   * 2. update AttachmentProcessingInternalCacheFilename
+   */
+  suspend fun onSrcToInternalCache(
+      srcPath: StoragePathModel,
+      messageId: MessageId,
+      userId: UserId,
+      messageTimestamp: Instant,
+      originalDisplayName: String,
+      srcMimeType: String?,
   ): CopyStageResult {
 
-    val cacheFilename =
-        storagePathUseCase.buildTimestampedFilename(
-            timestamp = messageTimestamp,
-            originalFilename = originalDisplayName,
-        )
-    val cachePath =
-        storagePathUseCase.buildMessageCacheFileStoragePath(
-            userId,
-            filename = cacheFilename,
-        )
-    val result =
-        storageRepository.copyFile(
-            AbsolutePathModel.UriStrModel(srcUriStr),
-            targetPath = cachePath,
-        )
-
     val copyResult =
-        when (result) {
-          is FileCopyResult.Error ->
-              return CopyStageResult.Failure(
-                  type = CopyStageFailureType.CopyFile,
-                  retryable = isSrcToInternalCopyErrorRetriable(result),
-              )
+        copySrcToInternalIfNecessary(
+            srcPath = srcPath,
+            userId = userId,
+            messageTimestamp = messageTimestamp,
+            originalDisplayName = originalDisplayName,
+            srcMimeType = srcMimeType,
+        )
+    val resultFilename =
+        (copyResult as? CopyStageResult.Success)?.resultFilename ?: return copyResult
 
-          is FileCopyResult.Success -> result
-        }
     val isSetSuccess =
         try {
           messageRepository.setAttachmentProcessingInternalCacheFilename(
-              filename = cacheFilename,
+              filename = resultFilename,
               messageId = messageId,
           )
         } catch (e: CancellationException) {
@@ -77,21 +68,17 @@ constructor(
           retryable = false, // illegal state, should be impossible in general
       )
     }
-    return CopyStageResult.Success(
-        resultFilename = cacheFilename,
-        bytesCopied = copyResult.bytesCopied,
-        resultAbsolutePath = copyResult.resultAbsolutePath,
-    )
+    return copyResult
   }
 
-  suspend fun copyInternalCacheToSharedStorageAndUpdateState(
-    messageId: MessageId,
-    userId: UserId,
-    topicId: TopicId,
-    messageTimestamp: Instant,
-    originalDisplayName: String,
-    internalCacheFilePath: StoragePathModel,
-    mimeType: String,
+  suspend fun onInternalToSharedStorage(
+      messageId: MessageId,
+      userId: UserId,
+      topicId: TopicId,
+      messageTimestamp: Instant,
+      originalDisplayName: String,
+      internalCacheFilePath: StoragePathModel,
+      mimeType: String,
   ): CopyStageResult {
     val rawFilename =
         storagePathUseCase.buildUserFriendlyTimestampedFilename(
@@ -112,16 +99,11 @@ constructor(
             targetPath = targetStoragePath,
             srcMimeType = mimeType,
         )
-    val copyResult =
-        when (result) {
-          is FileCopyResult.Error ->
-              return CopyStageResult.Failure(
-                  type = CopyStageFailureType.CopyFile,
-                  retryable = isInternalToSharedStorageCopyErrorRetriable(result),
-              )
-
-          is FileCopyResult.Success -> result
-        }
+    if (result is FileCopyResult.Error)
+        return CopyStageResult.Failure(
+            type = CopyStageFailureType.CopyFile,
+            retryable = isInternalToSharedStorageCopyErrorRetriable(result),
+        )
     val isSetSuccess =
         try {
           messageRepository.setAttachmentMessageRawFilename(
@@ -145,9 +127,43 @@ constructor(
     }
     return CopyStageResult.Success(
         resultFilename = rawFilename,
-        bytesCopied = copyResult.bytesCopied,
-        resultAbsolutePath = copyResult.resultAbsolutePath,
+        skipCopy = false,
     )
+  }
+
+  private suspend fun copySrcToInternalIfNecessary(
+      srcPath: StoragePathModel,
+      userId: UserId,
+      messageTimestamp: Instant,
+      originalDisplayName: String,
+      srcMimeType: String?,
+  ): CopyStageResult {
+    // Special Condition: if srcPath is already in internal cache location, like the Voice Source
+    // File.
+    // We'll just skip the copying.
+    if (attachmentPathUseCase.isPathAlreadyInInternalCache(srcPath, userId)) {
+      return CopyStageResult.Success(
+          resultFilename = srcPath.fullRelativePath.last(),
+          skipCopy = true,
+      )
+    }
+    // Do normal copy
+    val cacheFilename =
+        attachmentPathUseCase.generateInternalFilename(messageTimestamp, originalDisplayName)
+    val cachePath = attachmentPathUseCase.generateInternalCachePath(userId, cacheFilename)
+
+    val result =
+        storageRepository.copyFile(srcPath, targetPath = cachePath, srcMimeType = srcMimeType)
+
+    return when (result) {
+      is FileCopyResult.Error ->
+          CopyStageResult.Failure(
+              type = CopyStageFailureType.CopyFile,
+              retryable = isSrcToInternalCopyErrorRetriable(result),
+          )
+
+      is FileCopyResult.Success -> CopyStageResult.Success(cacheFilename, skipCopy = false)
+    }
   }
 }
 
@@ -161,8 +177,7 @@ enum class CopyStageFailureType {
 sealed interface CopyStageResult {
   data class Success(
       val resultFilename: String,
-      val bytesCopied: Long,
-      val resultAbsolutePath: AbsolutePathModel,
+      val skipCopy: Boolean,
   ) : CopyStageResult
 
   data class Failure(val type: CopyStageFailureType, val retryable: Boolean) : CopyStageResult

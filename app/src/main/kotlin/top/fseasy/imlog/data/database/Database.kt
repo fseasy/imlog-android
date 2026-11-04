@@ -71,7 +71,7 @@ fun createSqlDelightDb(context: Context): SqlDelightDb {
       message_attachment_processing_task_statesAdapter =
           AttachmentProcessingTaskStatesAdapter(
               message_idAdapter = messageIdAdapter,
-              src_uriAdapter = uriStrAdapter,
+              src_pathAdapter = storagePathAdapter,
           ),
       user_preferenceAdapter =
           UserPreferenceAdapter(

@@ -7,25 +7,12 @@ import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.Statistics
+import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TimelineMessage
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import kotlin.time.Instant
-
-/**
- * Use this type to specify the attachment file source when insert initial file message. WHY don't
- * reuse the AbsolutePathModel?? -> To ensure the file follow the storage path rule.
- */
-sealed interface MessageAttachmentSource {
-  data class FromUriStr(val uriStr: UriStr) : MessageAttachmentSource
-
-  /**
-   * The cache file follows the Storage Path rule, so just pass the filename. Mainly used for
-   * recording. Use this to restrict the api.
-   */
-  data class FromMessageCache(val filename: String) : MessageAttachmentSource
-}
 
 interface MessageRepository {
   /** NOTE: now we are dependent on paging-common, so it's ok for KMP */
@@ -64,7 +51,7 @@ interface MessageRepository {
 
   fun syncInsertInitialAttachmentProcessingTaskState(
       messageId: MessageId,
-      fileSource: MessageAttachmentSource,
+      srcPath: StoragePathModel,
       taskStartTime: Instant,
   )
 

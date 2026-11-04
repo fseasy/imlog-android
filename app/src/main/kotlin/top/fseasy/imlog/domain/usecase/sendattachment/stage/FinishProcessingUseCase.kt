@@ -24,8 +24,8 @@ constructor(
    * Run in IO in each io parts.
    */
   suspend fun onSuccess(
-      messageId: MessageId,
-      internalCachePathModel: StoragePathModel.InternalOnly,
+    messageId: MessageId,
+    internalCachePathModel: StoragePathModel.Internal,
   ): FinishProcessingStageResult {
     when (storageRepository.deleteFile(internalCachePathModel)) {
       is FileDeleteResult.FileNotExist,

@@ -1,5 +1,6 @@
 import top.fseasy.imlog.domain.model.MessageId;
 import top.fseasy.imlog.domain.model.MessageType;
+import top.fseasy.imlog.domain.model.StoragePathModel;
 import top.fseasy.imlog.domain.model.TopicId;
 import top.fseasy.imlog.domain.model.UriStr;
 import top.fseasy.imlog.domain.model.UserId;
@@ -63,7 +64,7 @@ CREATE TABLE message_attachment_processing_task_states (
    --    used to show before thumnail and internal-raw data are prepared.
    --    one of src_uri and internal_cached_filename must be exists when initializing!
    --    Business logic needs to ensure it!
-   src_uri TEXT AS UriStr,
+   src_path TEXT AS StoragePathModel,
    internal_cached_filename TEXT,
    -- || stage processing task details || used for ui rendering, failed task retry
    task_tart_time INTEGER NOT NULL,

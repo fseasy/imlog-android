@@ -1,4 +1,4 @@
-package top.fseasy.imlog.data.datastore
+package top.fseasy.imlog.data.database
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext

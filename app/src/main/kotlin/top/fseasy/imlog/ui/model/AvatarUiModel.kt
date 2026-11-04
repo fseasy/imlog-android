@@ -84,7 +84,7 @@ fun buildUserAvatarNioPath(
 ) =
     storagePathUseCase
         .buildUserAvatarStoragePath(signInUserId, filename)
-        .toInternalOnly()
+        .toInternal()
         .toNioPath(context)
 
 /** A helper function for nioPathBuilder, for TopicAvatar */
@@ -96,7 +96,7 @@ fun buildTopicAvatarNioPath(
 ) =
     storagePathUseCase
         .buildTopicAvatarStoragePath(signInUserId, filename)
-        .toInternalOnly()
+        .toInternal()
         .toNioPath(context)
 
 fun <T : PresetAvatar> AvatarUiModel<T>.toDomain(): AvatarModel<T> {

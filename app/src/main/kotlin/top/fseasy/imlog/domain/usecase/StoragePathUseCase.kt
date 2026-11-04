@@ -33,7 +33,7 @@ import kotlinx.datetime.format.DateTimeComponents
 import kotlinx.datetime.format.char
 import kotlinx.datetime.number
 import kotlinx.datetime.toLocalDateTime
-import top.fseasy.imlog.domain.model.InternalLocation
+import top.fseasy.imlog.domain.model.InternalStorageRootSource
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
@@ -115,8 +115,8 @@ constructor(
    *
    * = `$SHARED-STORAGE-ROOT / $user / $markername`
    */
-  fun buildSharedStorageRootMarkerFilePath(userId: UserId): StoragePathModel.SharedStorageOnly =
-      StoragePathModel.SharedStorageOnly(
+  fun buildSharedStorageRootMarkerFilePath(userId: UserId): StoragePathModel.Shared =
+      StoragePathModel.Shared(
           listOf(getUserRootDirName(userId), sharedStorageRootMarkerFilename),
           root = SharedStorageRootSource.LookupByUser(userId),
       )
@@ -132,16 +132,16 @@ constructor(
   fun buildUserAvatarStoragePath(
       signInUserId: UserId,
       filename: String,
-  ): StoragePathModel.DualWrite {
-    return StoragePathModel.DualWrite(
+  ): StoragePathModel.Dual {
+    return StoragePathModel.Dual(
         fullRelativePath =
             buildAvatarRelativePath(
                 signInUserId,
                 AvatarTargetName.USER,
                 filename,
             ),
-        internalLocation = InternalLocation.Persistent,
-        root = SharedStorageRootSource.LookupByUser(signInUserId),
+        internalRoot = InternalStorageRootSource.Persistent,
+        sharedRoot = SharedStorageRootSource.LookupByUser(signInUserId),
     )
   }
 
@@ -149,16 +149,16 @@ constructor(
   fun buildTopicAvatarStoragePath(
       signInUserId: UserId,
       filename: String,
-  ): StoragePathModel.DualWrite {
-    return StoragePathModel.DualWrite(
+  ): StoragePathModel.Dual {
+    return StoragePathModel.Dual(
         fullRelativePath =
             buildAvatarRelativePath(
                 signInUserId,
                 AvatarTargetName.TOPIC,
                 filename,
             ),
-        internalLocation = InternalLocation.Persistent,
-        root = SharedStorageRootSource.LookupByUser(signInUserId),
+        internalRoot = InternalStorageRootSource.Persistent,
+        sharedRoot = SharedStorageRootSource.LookupByUser(signInUserId),
     )
   }
 
@@ -176,7 +176,12 @@ constructor(
    * Add a timestamp + random-int on the given original filename. Used for cache name that don't
    * need the semantic meaning but still keep a time info.
    *
-   * Rule: `$time_prefix + $truncated_original_name + .suffix`
+   * Rule:
+   *  ```
+   *  time_prefix = ${timestamp.toEpochMilliseconds()}-${Random.nextInt(1000)}
+   *  name =  $time_prefix + $truncated_original_name + $suffix
+   *  ```
+   *
    */
   fun buildTimestampedFilename(timestamp: kotlin.time.Instant, originalFilename: String): String {
     val prefix = "${timestamp.toEpochMilliseconds()}-${Random.nextInt(1000)}"
@@ -196,7 +201,7 @@ constructor(
   /**
    * Build draft file (like message draft of a topic).
    *
-   * rule: `$user_root_name / message_cache / $filename (no more hierarchy)`
+   * rule: `$user_root_name / draft / $filename (no more hierarchy as  its num is limited')`
    *
    * Location: internal persistent
    */
@@ -204,12 +209,12 @@ constructor(
       userId: UserId,
       filename: String,
   ) =
-      StoragePathModel.InternalOnly(
+      StoragePathModel.Internal(
           buildList {
             addAll(buildResourceRootRelativePath(userId, ResourceName.Draft))
             add(filename)
           },
-          InternalLocation.Persistent,
+          InternalStorageRootSource.Persistent,
       )
 
   fun buildTemporaryCacheFileStoragePath(
@@ -228,8 +233,8 @@ constructor(
       topicId: TopicId,
       timestamp: kotlin.time.Instant,
       filename: String,
-  ): StoragePathModel.SharedStorageOnly =
-      StoragePathModel.SharedStorageOnly(
+  ): StoragePathModel.Shared =
+      StoragePathModel.Shared(
           buildMessageFileFullRelativePath(
               userId = userId,
               resourceName = ResourceName.MessageFileRaw,
@@ -246,8 +251,8 @@ constructor(
       topicId: TopicId,
       timestamp: Instant,
       filename: String,
-  ): StoragePathModel.InternalOnly =
-      StoragePathModel.InternalOnly(
+  ): StoragePathModel.Internal =
+      StoragePathModel.Internal(
           buildMessageFileFullRelativePath(
               userId = userId,
               resourceName = ResourceName.MessageThumbnail,
@@ -255,7 +260,7 @@ constructor(
               timestamp = timestamp,
               filename = filename,
           ),
-          internalLocation = InternalLocation.Persistent,
+          root = InternalStorageRootSource.Persistent,
       )
 
   /** = `$STORAGE-CACHE-ROOT / $user / $resourceName / $filename` */
@@ -263,13 +268,13 @@ constructor(
       userId: UserId,
       resourceName: ResourceName,
       filename: String,
-  ): StoragePathModel.InternalOnly =
-      StoragePathModel.InternalOnly(
+  ): StoragePathModel.Internal =
+      StoragePathModel.Internal(
           buildList {
             addAll(buildResourceRootRelativePath(userId, resourceName = resourceName))
             add(filename)
           },
-          internalLocation = InternalLocation.Cache,
+          root = InternalStorageRootSource.Cache,
       )
 
   /** rule: `$user_root_name / $source-name / $topic_id / $date-hierarchy / $filename` */

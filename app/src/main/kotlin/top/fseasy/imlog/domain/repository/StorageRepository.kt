@@ -80,7 +80,7 @@ interface StorageRepository {
    * @throws Exception all exceptions came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
    */
   fun resolveInternalStoragePathToAbsolutePathWithoutCreating(
-      internalStoragePath: StoragePathModel.InternalOnly
+      internalStoragePath: StoragePathModel.Internal
   ): AbsolutePathModel.AppPathModel
 
   /**
@@ -93,7 +93,7 @@ interface StorageRepository {
    * @throws Exception all exceptions came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
    */
   suspend fun resolveSharedStoragePathToAbsolutePathWithoutCreating(
-      sharedStoragePath: StoragePathModel.SharedStorageOnly
+      sharedStoragePath: StoragePathModel.Shared
   ): AbsolutePathModel.UriStrModel
 
   /**
@@ -167,7 +167,7 @@ interface StorageRepository {
    *
    * Run in IO threads.
    */
-  suspend fun getAudioMetadataOrNull(filePath: StoragePathModel): AudioMetadata?
+  suspend fun getAudioMetadataOrNull(path: StoragePathModel): AudioMetadata?
 
   /**
    * No exception will be thrown. If uri invalid, return null. else return metadata that might be
@@ -175,7 +175,7 @@ interface StorageRepository {
    *
    * Run in IO threads.
    */
-  suspend fun getAudioMetadataOrNull(fileAbsolutePath: AbsolutePathModel): AudioMetadata?
+  suspend fun getImageMetadataOrNull(path: StoragePathModel): ImageMetadata?
 
   /**
    * No exception will be thrown. If uri invalid, return null. else return metadata that might be
@@ -183,15 +183,7 @@ interface StorageRepository {
    *
    * Run in IO threads.
    */
-  suspend fun getImageMetadataOrNull(fileAbsolutePath: AbsolutePathModel): ImageMetadata?
-
-  /**
-   * No exception will be thrown. If uri invalid, return null. else return metadata that might be
-   * inaccurate in edge condition where data is corrupted.
-   *
-   * Run in IO threads.
-   */
-  suspend fun getVideoMetadataOrNull(fileAbsolutePath: AbsolutePathModel): VideoMetadata?
+  suspend fun getVideoMetadataOrNull(path: StoragePathModel): VideoMetadata?
 
   /**
    * No exception will be thrown. If uri invalid, return null. else return metadata
@@ -199,7 +191,7 @@ interface StorageRepository {
    * Run in IO threads.
    */
   suspend fun getGenericFileMetadataOrNull(
-      fileAbsolutePath: AbsolutePathModel
+    path: StoragePathModel
   ): GenericFileMetadata?
 
   /**
@@ -207,5 +199,6 @@ interface StorageRepository {
    *
    * Run in IO threads.
    */
-  suspend fun getMimetypeOrNull(fileAbsolutePath: AbsolutePathModel): String?
+  suspend fun getMimetypeOrNull(path: StoragePathModel): String?
+
 }

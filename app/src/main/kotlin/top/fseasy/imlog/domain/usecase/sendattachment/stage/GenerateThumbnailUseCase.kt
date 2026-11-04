@@ -40,14 +40,14 @@ constructor(
    * @throws CancellationException don't need to cache it!
    */
   suspend operator fun invoke(
-      messageId: MessageId,
-      userId: UserId,
-      topicId: TopicId,
-      messageTimestamp: Instant,
-      messageType: MessageType,
-      srcUriStr: UriStr?,
-      cacheFilePath: StoragePathModel.InternalOnly,
-      fileMetadata: FileMetadataUnion,
+    messageId: MessageId,
+    userId: UserId,
+    topicId: TopicId,
+    messageTimestamp: Instant,
+    messageType: MessageType,
+    srcUriStr: UriStr?,
+    cacheFilePath: StoragePathModel.Internal,
+    fileMetadata: FileMetadataUnion,
   ): GenerateThumbnailStageResult {
 
     val generateFunction =
@@ -164,10 +164,10 @@ constructor(
    * @throws CancellationException
    */
   private suspend fun generateOnTowSources(
-      srcUriStr: UriStr?,
-      cacheFilePath: StoragePathModel.InternalOnly,
-      fileMetadata: FileMetadataUnion,
-      executeGenerate: suspend (AbsolutePathModel, FileMetadataUnion) -> ByteArray,
+    srcUriStr: UriStr?,
+    cacheFilePath: StoragePathModel.Internal,
+    fileMetadata: FileMetadataUnion,
+    executeGenerate: suspend (AbsolutePathModel, FileMetadataUnion) -> ByteArray,
   ): ByteArray {
     // First try source, continue if none or fail
     if (srcUriStr != null) {
