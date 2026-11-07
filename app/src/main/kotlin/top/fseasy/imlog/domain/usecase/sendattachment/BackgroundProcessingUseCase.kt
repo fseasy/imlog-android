@@ -6,8 +6,8 @@ import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyFileAndUpdateDbUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageResult
-import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingStageResult
-import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CleanupStageResult
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CleanupUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailStageResult
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailUseCase
 
@@ -23,11 +23,11 @@ import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailUse
 class BackgroundProcessingUseCase
 @Inject
 constructor(
-    private val storagePathUseCase: StoragePathUseCase,
-    private val attachmentPathUseCase: AttachmentPathUseCase,
-    private val copyFileAndUpdateDbUseCase: CopyFileAndUpdateDbUseCase,
-    private val finishProcessingUseCase: FinishProcessingUseCase,
-    private val generateThumbnailUseCase: GenerateThumbnailUseCase,
+  private val storagePathUseCase: StoragePathUseCase,
+  private val attachmentPathUseCase: AttachmentPathUseCase,
+  private val copyFileAndUpdateDbUseCase: CopyFileAndUpdateDbUseCase,
+  private val cleanupUseCase: CleanupUseCase,
+  private val generateThumbnailUseCase: GenerateThumbnailUseCase,
 ) {
   /**
    * Should be called in background process (like Worker in Android) to make the following logic
@@ -58,7 +58,7 @@ constructor(
             )
     ) {
       is GenerateThumbnailStageResult.Failure ->
-          return finishProcessingUseCase.onFailure(
+          return cleanupUseCase.onFailure(
               messageId = messageId,
               stage = failureTypeMapper.mapThumbnailFailure(result.type),
               errorUserRetryable = result.retryable,
@@ -82,7 +82,7 @@ constructor(
             )
     ) {
       is CopyStageResult.Failure ->
-          return finishProcessingUseCase.onFailure(
+          return cleanupUseCase.onFailure(
               messageId = messageId,
               stage = failureTypeMapper.mapSharedStorageCopyFailure(result.type),
               errorUserRetryable = result.retryable,
@@ -94,19 +94,19 @@ constructor(
     // 3. finish processing on success: clean cache and processing status record
     when (
         val result =
-            finishProcessingUseCase.onSuccess(
+            cleanupUseCase.onSuccess(
                 messageId,
                 internalCachePathModel = internalCacheFilePath,
             )
     ) {
-      is FinishProcessingStageResult.Failure ->
-          return finishProcessingUseCase.onFailure(
+      is CleanupStageResult.Failure ->
+          return cleanupUseCase.onFailure(
               messageId = messageId,
               stage = failureTypeMapper.mapFinishTaskFailure(result.type),
               errorUserRetryable = false, // system will retry it, user don't need to retry.
           )
 
-      is FinishProcessingStageResult.Success -> Timber.d("MessageFile from $messageId success")
+      is CleanupStageResult.Success -> Timber.d("MessageFile from $messageId success")
     }
   }
 }

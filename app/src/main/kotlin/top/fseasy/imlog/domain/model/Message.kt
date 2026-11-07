@@ -196,10 +196,10 @@ enum class MessageInputMode(val value: String) {
 
 @Serializable
 data class VoiceDraft(
-    val filePath: String, // base 底稿音频文件路径
+    val filename: String, // base 底稿音频文件路径
     val durationMs: Long, // base 底稿毫秒时长
     val waveformBase64: String, // base 底稿 5-bit 压缩后的波形转成 Base64 存储
-    val pendingChunkPath: String? = null // 正在录制、待合并的新分片路径
+    val pendingChunkFilename: String? = null, // 正在录制、待合并的新分片路径
 ) {
   // 辅助扩展属性，方便业务层直接使用
   val duration: Duration
@@ -209,9 +209,9 @@ data class VoiceDraft(
     get() = WaveformCodec5Bit.decode(Base64.decode(waveformBase64))
 
   companion object {
-    fun create(filePath: String, duration: Duration, waveformBytes: ByteArray): VoiceDraft {
+    fun create(filename: String, duration: Duration, waveformBytes: ByteArray): VoiceDraft {
       return VoiceDraft(
-          filePath = filePath,
+          filename = filename,
           durationMs = duration.inWholeMilliseconds,
           waveformBase64 = Base64.encode(waveformBytes),
       )

@@ -16,7 +16,7 @@ import top.fseasy.imlog.domain.repository.BackgroundTaskRunner
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyFileAndUpdateDbUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageResult
-import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingUseCase
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CleanupUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.InitializeAttachmentMessageUseCase
 
 /**
@@ -27,7 +27,7 @@ import top.fseasy.imlog.domain.usecase.sendattachment.stage.InitializeAttachment
  * 3. copy uri to internal, start background task. slower. [can be parallel]
  */
 abstract class SendAttachmentUseCaseBase(
-    internal val dependencies: SendUriUseCaseBaseDependencies2,
+  internal val dependencies: SendAttachmentDependencies,
 ) {
   protected abstract val messageTypeFromSendAction: MessageType
 
@@ -61,7 +61,7 @@ abstract class SendAttachmentUseCaseBase(
       userId: UserId,
       topicId: TopicId,
       messageTimestamp: Instant,
-  ): ResolveMetadataResult2? {
+  ): ResolveMetadataResult? {
     val messageType = resolveMessageTypeForRender(srcPath)
     val fileMetadata =
         getMetadataOrNullBasedOnMessageType(
@@ -76,7 +76,7 @@ abstract class SendAttachmentUseCaseBase(
               )
               return null
             }
-    return ResolveMetadataResult2(
+    return ResolveMetadataResult(
         srcPath = srcPath,
         userId = userId,
         topicId = topicId,
@@ -94,7 +94,7 @@ abstract class SendAttachmentUseCaseBase(
    * @return null when failed.
    */
   private suspend fun insertInitialMessage(
-      resolveMetadataResult: ResolveMetadataResult2,
+    resolveMetadataResult: ResolveMetadataResult,
   ): MessageId? {
     val messageId =
         try {
@@ -118,8 +118,8 @@ abstract class SendAttachmentUseCaseBase(
 
   /** Runs in IO threads for each necessary statements. */
   private suspend fun copyToInternalAndStartBackgroundTask(
-      resolveMetadataResult: ResolveMetadataResult2,
-      messageId: MessageId,
+    resolveMetadataResult: ResolveMetadataResult,
+    messageId: MessageId,
   ): Boolean {
     val copyResult =
         dependencies.copyFileAndUpdateDbUseCase.onSrcToInternalCache(
@@ -133,7 +133,7 @@ abstract class SendAttachmentUseCaseBase(
 
     return when (copyResult) {
       is CopyStageResult.Failure -> {
-        dependencies.finishProcessingUseCase.onFailure(
+        dependencies.cleanupUseCase.onFailure(
             messageId = messageId,
             stage = failureTypeMapper.mapCacheCopyFailure(copyResult.type),
             errorUserRetryable = copyResult.retryable,
@@ -181,18 +181,18 @@ abstract class SendAttachmentUseCaseBase(
   }
 }
 
-data class SendUriUseCaseBaseDependencies2
+data class SendAttachmentDependencies
 @Inject
 constructor(
-    val backgroundProcessingUseCase: BackgroundProcessingUseCase,
-    val storageRepository: StorageRepository,
-    val backgroundTaskRunner: BackgroundTaskRunner,
-    val initializeAttachmentMessageUseCase: InitializeAttachmentMessageUseCase,
-    val copyFileAndUpdateDbUseCase: CopyFileAndUpdateDbUseCase,
-    val finishProcessingUseCase: FinishProcessingUseCase,
+  val backgroundProcessingUseCase: BackgroundProcessingUseCase,
+  val storageRepository: StorageRepository,
+  val backgroundTaskRunner: BackgroundTaskRunner,
+  val initializeAttachmentMessageUseCase: InitializeAttachmentMessageUseCase,
+  val copyFileAndUpdateDbUseCase: CopyFileAndUpdateDbUseCase,
+  val cleanupUseCase: CleanupUseCase,
 )
 
-data class ResolveMetadataResult2(
+data class ResolveMetadataResult(
     val srcPath: StoragePathModel,
     val userId: UserId,
     val topicId: TopicId,

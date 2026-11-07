@@ -10,7 +10,7 @@ import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.StorageRepository
 import javax.inject.Inject
 
-class FinishProcessingUseCase
+class CleanupUseCase
 @Inject
 constructor(
     private val messageRepository: MessageRepository,
@@ -26,15 +26,15 @@ constructor(
   suspend fun onSuccess(
     messageId: MessageId,
     internalCachePathModel: StoragePathModel.Internal,
-  ): FinishProcessingStageResult {
+  ): CleanupStageResult {
     when (storageRepository.deleteFile(internalCachePathModel)) {
       is FileDeleteResult.FileNotExist,
       is FileDeleteResult.Success,
       -> Unit
 
       is FileDeleteResult.Error ->
-          return FinishProcessingStageResult.Failure(
-              FinishProcessingStageFailureType.DeleteCacheFile
+          return CleanupStageResult.Failure(
+              CleanupStageFailureType.DeleteCacheFile
           )
     }
 
@@ -44,11 +44,11 @@ constructor(
       throw e
     } catch (e: Exception) {
       Timber.i(e, "delete file processing task state failed")
-      return FinishProcessingStageResult.Failure(
-          FinishProcessingStageFailureType.DeleteTaskStateFromDb
+      return CleanupStageResult.Failure(
+          CleanupStageFailureType.DeleteTaskStateFromDb
       )
     }
-    return FinishProcessingStageResult.Success
+    return CleanupStageResult.Success
   }
 
   /**
@@ -81,13 +81,13 @@ constructor(
 }
 
 /** Used in finishing task stage */
-enum class FinishProcessingStageFailureType {
+enum class CleanupStageFailureType {
   DeleteCacheFile,
   DeleteTaskStateFromDb,
 }
 
-sealed interface FinishProcessingStageResult {
-  data object Success : FinishProcessingStageResult
+sealed interface CleanupStageResult {
+  data object Success : CleanupStageResult
 
-  data class Failure(val type: FinishProcessingStageFailureType) : FinishProcessingStageResult
+  data class Failure(val type: CleanupStageFailureType) : CleanupStageResult
 }

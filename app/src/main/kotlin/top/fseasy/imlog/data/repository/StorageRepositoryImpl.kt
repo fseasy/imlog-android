@@ -4,10 +4,13 @@ import android.content.Context
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.FileNotFoundException
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.io.path.createDirectories
 import kotlin.io.path.createParentDirectories
+import kotlin.io.path.exists
+import kotlin.io.path.fileSize
 import kotlin.io.path.writeBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -23,6 +26,7 @@ import top.fseasy.imlog.data.mapper.toUri
 import top.fseasy.imlog.data.mapper.toUriOrNull
 import top.fseasy.imlog.data.mapper.toUriOrThrow
 import top.fseasy.imlog.data.mapper.toUriStr
+import top.fseasy.imlog.data.model.syncAppendContent
 import top.fseasy.imlog.data.util.FileWriteMode
 import top.fseasy.imlog.data.util.MetadataResolveUtils
 import top.fseasy.imlog.data.util.MimeTypeUtils
@@ -179,6 +183,38 @@ constructor(
           }
         }
     return uri?.toUriStr()
+  }
+
+  override suspend fun fileExists(path: StoragePathModel.Internal): Boolean {
+    val nioPath = path.toNioPath(context)
+    return withContext(dispatcher) {
+      nioPath.exists()
+    }
+  }
+
+  override suspend fun fileSizeOrNull(path: StoragePathModel.Internal): Long? {
+    val nioPath = path.toNioPath(context)
+    return withContext(dispatcher) {
+      try {
+        nioPath.fileSize()
+      } catch (e: IOException) {
+        Timber.w(e, "Failed to get file size of path: $nioPath")
+        null
+      }
+    }
+  }
+
+  override suspend fun fileAppendContent(
+      base: StoragePathModel,
+      append: StoragePathModel,
+  ): Boolean {
+    val baseAbsolutePath =
+        resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(base) ?: return false
+    val appendAbsolutePath =
+        resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(append) ?: return false
+    return withContext(dispatcher) {
+      baseAbsolutePath.syncAppendContent(context, appendAbsolutePath)
+    }
   }
 
   /**

@@ -3,15 +3,15 @@ package top.fseasy.imlog.domain.usecase.sendattachment
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.VideoMessageProcessingErrorStage
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageFailureType
-import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingStageFailureType
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CleanupStageFailureType
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailStageFailureType
 import javax.inject.Inject
 
 class SendVideoMessageUseCase
 @Inject
 constructor(
-    dependencies: SendUriUseCaseBaseDependencies,
-) : SendUriUseCaseBase(dependencies) {
+  dependencies: SendAttachmentDependencies,
+) : SendAttachmentUseCaseBase(dependencies) {
   override val messageTypeFromSendAction: MessageType
     get() = MessageType.Video
 
@@ -53,9 +53,9 @@ internal val videoProcessingFailureTypeMapper =
         },
         mapFinishTaskFailure = { finishFailureType ->
           when (finishFailureType) {
-            FinishProcessingStageFailureType.DeleteCacheFile ->
+            CleanupStageFailureType.DeleteCacheFile ->
                 VideoMessageProcessingErrorStage.DeleteInternalFileCache
-            FinishProcessingStageFailureType.DeleteTaskStateFromDb ->
+            CleanupStageFailureType.DeleteTaskStateFromDb ->
                 VideoMessageProcessingErrorStage.DeleteTaskStateFromDb
           }
         },

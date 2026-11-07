@@ -2,18 +2,17 @@ package top.fseasy.imlog.features.home.topiclog.composer2
 
 import android.content.Context
 import java.io.File
-import kotlin.io.path.absolutePathString
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import timber.log.Timber
-import top.fseasy.imlog.data.mapper.toNioPath
+import top.fseasy.imlog.R
 import top.fseasy.imlog.data.util.appendContent
 import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.TopicId
@@ -24,8 +23,10 @@ import top.fseasy.imlog.domain.recorder.RecordingPrompt
 import top.fseasy.imlog.domain.recorder.RecordingSessionState
 import top.fseasy.imlog.domain.recorder.VoiceRecordingCoordinator
 import top.fseasy.imlog.domain.recorder.WaveformCodec5Bit
+import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
+import top.fseasy.imlog.domain.util.runSuspendCatching
 
 // 宏观模式：只保留结构性数据，低频：只有切模式时才发射
 sealed interface VoiceComposerMode {
@@ -60,8 +61,10 @@ class VoiceComposerStateHolder(
     private val topicId: TopicId,
     private val authState: StateFlow<AuthState>,
     private val storagePathUseCase: StoragePathUseCase,
+    private val storageRepository: StorageRepository,
     private val sendVoiceMessageUseCase: SendVoiceMessageUseCase,
     private val coordinator: VoiceRecordingCoordinator,
+    private val onShowSnackbar: (String) -> Unit,
     private val scope: CoroutineScope, // 由 ComposerViewModel 的 viewModelScope 注入
     private val context: Context,
 ) : AutoCloseable {
@@ -106,23 +109,39 @@ class VoiceComposerStateHolder(
           .map { it.seconds }
 
   fun restoreDraft(draft: VoiceDraft) {
-    scope.launch(Dispatchers.IO) {
+    launchWithUserId { userId ->
+      val baseFilePath = restoreDraftPath(userId, filename = draft.filename)
+      // First check if base audio file is OK! if not, discard the draft
+      if (
+          !storageRepository.fileExists(baseFilePath) ||
+              (storageRepository.fileSizeOrNull(baseFilePath) ?: 0) <= 0
+      ) {
+        Timber.w(
+            "Restore draft get invalid base audio: ${draft.filename}, not exists or empty. Discard"
+        )
+        return@launchWithUserId
+      }
+
       var safeDraft = draft
 
       // 检查是否有上次崩溃遗留的未合并分片
-      if (!draft.pendingChunkPath.isNullOrBlank()) {
-        val pendingFile = File(draft.pendingChunkPath)
-        val baseFile = File(draft.filePath)
+      if (!draft.pendingChunkFilename.isNullOrBlank()) {
+        val pendingFilePath = restoreDraftPath(userId, filename = draft.pendingChunkFilename)
 
-        if (pendingFile.exists() && pendingFile.length() > 0L) {
+        if (
+            storageRepository.fileExists(pendingFilePath) &&
+                (storageRepository.fileSizeOrNull(pendingFilePath) ?: 0) > 0
+        ) {
           Timber.w("Detected unfinished recording chunk from crash, recovering...")
           // 奇迹救援：把断电前录的声音拼回 baseFile
-          baseFile.appendContent(pendingFile)
+          val isSuccess = storageRepository.fileAppendContent(baseFilePath, pendingFilePath)
+          if (!isSuccess) {
+            Timber.w("Failed to append pending audio to base audio. Have to give up")
+          }
         }
-        pendingFile.delete()
-
+        storageRepository.deleteFile(pendingFilePath)
         // 修复完成，把 pendingChunkPath 擦除还原为干净的草稿
-        safeDraft = draft.copy(pendingChunkPath = null)
+        safeDraft = draft.copy(pendingChunkFilename = null)
       }
 
       // 回归主线程，安全发布恢复后的草稿
@@ -130,94 +149,96 @@ class VoiceComposerStateHolder(
     }
   }
 
-  fun onFreshVoiceNote() {
+  fun onNewVoiceNote() {
     launchWithUserId { userId ->
       // Just in case: in general flow, current draft should be null in this condition
       clearDraftInternal(false)
-      val path = generateVoiceRecordingOutputPathInMessageCacheRule(userId).toString()
-      coordinator.onDirectLock(RecordingPrompt.Default, path)
+      val path = newVoiceDraftPath(userId)
+      coordinator.onDirectLock(RecordingPrompt.Default, path).onFailure { e ->
+        onShowSnackbar(
+            "${context.getString(R.string.composer_voice_note_start_failed_tip)}: ${e.localizedMessage}"
+        )
+        // Delete file just in case
+        storageRepository.deleteFile(path)
+      }
     }
   }
 
   /** “继续录音” 绝不把 draftState 置 null，而是打上 pending 事务标记写入 DB！ */
-  fun resumeRecordingFromDraft() {
+  fun onResumeRecordingFromDraft() {
     val currentBase = draftState.value ?: return
 
     launchWithUserId { userId ->
       // 生成新的分片临时文件
-      val newChunkPath = generateVoiceRecordingOutputPathInMessageCacheRule(userId).toString()
+      val newChunkPath = newVoiceDraftPath(userId)
 
       // 核心步骤 A：先写“事务日志”到 DB！
       // 记录我们正在录制 newChunkPath，底稿绝不丢失
-      val transactionDraft = currentBase.copy(pendingChunkPath = newChunkPath)
+      val transactionDraft =
+          currentBase.copy(pendingChunkFilename = newChunkPath.fullRelativePath.last())
       _draftState.update { transactionDraft } // 这会触发 ViewModel 的 combine 立即安全持久化到 DB！
       val prompt = RecordingPrompt.Default
       // 核心步骤 B：启动录音引擎
-      coordinator.onDirectLock(prompt, destinationPath = newChunkPath)
+      coordinator.onDirectLock(prompt, destinationPath = newChunkPath).onFailure { e ->
+        onShowSnackbar(
+            "${context.getString(R.string.composer_voice_note_start_failed_tip)}: ${e.localizedMessage}"
+        )
+        storageRepository.deleteFile(newChunkPath)
+      }
     }
   }
 
-  private fun generateVoiceRecordingOutputPathInMessageCacheRule(
+  private fun newVoiceDraftPath(
       userId: UserId,
       now: Instant = Clock.System.now(),
-  ): java.nio.file.Path {
-    val filename =
-        storagePathUseCase.buildTimestampedFilename(
-            now,
-            originalFilename = coordinator.generateDefaultFilename("voice"),
-        )
-    val outputFilePath =
-        storagePathUseCase.buildMessageCacheFileStoragePath(
-            userId = userId,
-            filename = filename,
-        )
-    return outputFilePath.toNioPath(context)
-  }
+  ) =
+      sendVoiceMessageUseCase.newVoiceDraftPath(
+          userId,
+          messageTimestamp = now,
+          audioFileExtension = coordinator.outputAudioFileExtension,
+      )
 
-  private fun
+  private fun restoreDraftPath(userId: UserId, filename: String) =
+      sendVoiceMessageUseCase.restoreDraftPath(userId = userId, filename = filename)
 
   // --- 手势动作 ---
   fun onHoldStart() {
-    scope.launch {
-      val userId = (authState.value as? AuthState.Authenticated)?.userId ?: return@launch
-
-      val path = generateVoiceRecordingOutputPathInMessageCacheRule(userId).absolutePathString()
-      coordinator.onHoldDown(path)
+    launchWithUserId { userId ->
+      val path = newVoiceDraftPath(userId)
+      coordinator.onHoldDown(path).onFailure { e ->
+        onShowSnackbar(
+            "${context.getString(R.string.composer_hold_to_record_failed_tip)}: ${e.localizedMessage}"
+        )
+        storageRepository.deleteFile(path)
+      }
     }
   }
 
   fun onHoldToLockGesture() {
+    // NO io operation
     scope.launch {
       // NOTE! currently we have to delete the old one except implement multiple drafts!
       clearDraftInternal(false)
-      coordinator.onHoldToLockGesture(RecordingPrompt.Default)
+      if (!coordinator.onHoldToLockGesture(RecordingPrompt.Default)) {
+        onShowSnackbar(context.getString(R.string.composer_hold_to_record_lock_failed_tip))
+      }
     }
   }
 
   fun onHoldCancel() {
-    scope.launch { coordinator.onHoldCancel() }
+    scope.launch(Dispatchers.IO) {
+      coordinator.onHoldCancel()?.let { storageRepository.deleteFile(it.filePath) }
+    }
   }
 
   fun onHoldRelease() {
-    scope.launch {
+    scope.launch(Dispatchers.IO) {
       coordinator.onHoldRelease()?.let { sendRawChunkInternal(it) }
     }
   }
 
-  fun pauseOrExit(): VoiceDraft? {
-    var updatedDraft: VoiceDraft? = null
-    runCatching {
-      // 若处于退出场景，必须阻塞完成物理停止
-      val chunkResult = runBlocking { coordinator.onStopLocked() }
-      if (chunkResult != null) {
-        updatedDraft = mergeChunkIntoDraftInternal(chunkResult)
-      }
-    }
-    return updatedDraft
-  }
-
   /** 点击【发送】（无论是正在录音中点发送，还是在草稿态点发送） */
-  fun sendLockedOrDraft() {
+  fun onSendLockedOrDraft() {
     scope.launch(Dispatchers.IO) {
       val chunkResult = coordinator.onStopLocked()
       val finalDraft =
@@ -233,6 +254,12 @@ class VoiceComposerStateHolder(
       }
     }
   }
+
+  suspend fun stopVoiceNote(): VoiceDraft? = runSuspendCatching {
+    val chunkResult = coordinator.onStopLocked() ?: return@runSuspendCatching null
+    mergeChunkIntoDraftInternal(chunkResult)
+  }
+      .getOrNull()
 
   fun discard() {
     scope.launch(Dispatchers.IO) {
@@ -308,10 +335,11 @@ class VoiceComposerStateHolder(
   }
 
   private fun launchWithUserId(
+      context: CoroutineDispatcher = Dispatchers.IO,
       block: suspend (userId: UserId) -> Unit,
   ) {
     val userId = (authState.value as? AuthState.Authenticated)?.userId ?: return
-    scope.launch {
+    scope.launch(context) {
       block(userId)
     }
   }

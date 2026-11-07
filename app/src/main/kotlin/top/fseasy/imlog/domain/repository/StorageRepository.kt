@@ -97,6 +97,37 @@ interface StorageRepository {
   ): AbsolutePathModel.UriStrModel
 
   /**
+   * Run in IO thread in io parts. It's effective both for file & directory
+   *
+   * TODO: currently we only impl the Internal api. for Shared, we need another overload function.
+   *   DON't impl a function that accept the direct StoragePathModel, as it has `Dual` subtype.
+   */
+  suspend fun fileExists(path: StoragePathModel.Internal): Boolean
+
+  /**
+   * Run in IO thread in io parts.
+   *
+   * NO Exception!
+   *
+   * @return size in bytes if it's a regular file. Else return null. Generally, it occurs only if
+   *   path not exists. NOTE: for Directory, it returns the dirs-file size, not the accumulated size
+   *   of files it contains.
+   */
+  suspend fun fileSizeOrNull(path: StoragePathModel.Internal): Long?
+
+
+  /**
+   * Run in IO thread in io parts.
+   *
+   * NO catchable Exception! some system level exception will be raised.
+   *
+   * @return size in bytes if it's a regular file. Else return null. Generally, it occurs only if
+   *   path not exists. NOTE: for Directory, it returns the dirs-file size, not the accumulated size
+   *   of files it contains.
+   */
+  suspend fun fileAppendContent(base: StoragePathModel, append: StoragePathModel): Boolean
+
+  /**
    * Run in IO thread in io parts.
    *
    * @param mimeType: set it properly when filePathModel includes Uri.
@@ -190,9 +221,7 @@ interface StorageRepository {
    *
    * Run in IO threads.
    */
-  suspend fun getGenericFileMetadataOrNull(
-    path: StoragePathModel
-  ): GenericFileMetadata?
+  suspend fun getGenericFileMetadataOrNull(path: StoragePathModel): GenericFileMetadata?
 
   /**
    * No exception will be thrown. If uri invalid, return null. else return mimetype
@@ -200,5 +229,4 @@ interface StorageRepository {
    * Run in IO threads.
    */
   suspend fun getMimetypeOrNull(path: StoragePathModel): String?
-
 }

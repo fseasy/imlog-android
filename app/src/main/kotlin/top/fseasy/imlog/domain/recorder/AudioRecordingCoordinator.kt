@@ -4,42 +4,41 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.getAndUpdate
+import top.fseasy.imlog.domain.model.StoragePathModel
 
-/**
- * 业务上，录音有 2 种模式：
- *
- * 1. Hold To Record, 持续按压录音
- * 2. Voice Note, 点按录音，不需要持续；允许后台，所以要起一个 service
- *
- * 而且，我们允许 HoldToRecord -> VoiceNote, 转换过程中，要保证 AudioRecorder 不变（存活），只改变 ui，同时增加 一个 Service 保活。
- *
- * 这个类就是协调上述的业务逻辑：同时控制 recorder、service.
- *
- * A general implementation, intend for KMP migration.
- *
- * 依赖注入：由各平台提供具体实现, 为了跨平台，手工注入而不使用注入工具
- */
 class VoiceRecordingCoordinator(
     private val recorder: AudioRecorder,
     private val guardian: RecordingGuardian = RecordingGuardian.NoOp,
 ) {
-
-  fun generateDefaultFilename(prefix: String = "recording") =
-      recorder.generateDefaultFilename(prefix)
+  val outputAudioFileExtension: String
+    get() = recorder.outputAudioFileExtension
 
   private val _sessionState = MutableStateFlow<RecordingSessionState>(RecordingSessionState.Idle)
   val sessionState: StateFlow<RecordingSessionState> = _sessionState.asStateFlow()
 
   val recordingSnapshot: StateFlow<RecordingSnapshot> = recorder.snapshot
 
-  /** 1. 按下 Hold: 纯 CAS 比较 只有当前确实是 Idle 时，原子切换为 Holding 并开录 */
-  suspend fun onHoldDown(destinationPath: String) {
-    if (_sessionState.compareAndSet(RecordingSessionState.Idle, RecordingSessionState.Holding)) {
-      recorder.start(destinationPath)
+  /** 1. 按下 Hold: 纯 CAS 比较，失败回滚状态，透传 Result */
+  suspend fun onHoldDown(destinationPath: StoragePathModel.Internal): Result<Unit> {
+    if (!_sessionState.compareAndSet(RecordingSessionState.Idle, RecordingSessionState.Holding)) {
+      return Result.failure(IllegalStateException("Cannot hold to record when not in Idle state"))
     }
+
+    return recorder
+        .start(destinationPath)
+        .onSuccess {
+          // 防御极速取消：如果启动完成前，外部就已经把状态取消成 Idle 了，立刻补杀底层录音
+          if (_sessionState.value == RecordingSessionState.Idle) {
+            recorder.cancel()
+          }
+        }
+        .onFailure {
+          // 启动失败，原子回滚状态，防止状态死锁在 Holding
+          _sessionState.compareAndSet(RecordingSessionState.Holding, RecordingSessionState.Idle)
+        }
   }
 
-  /** 2. 松开 Hold: 纯 CAS 比较 只有当前确实是 Holding 时，原子切回 Idle 并停止落盘 */
+  /** 2. 松开 Hold: 纯 CAS 比较 */
   suspend fun onHoldRelease(): AudioRecordResult? {
     return if (
         _sessionState.compareAndSet(RecordingSessionState.Holding, RecordingSessionState.Idle)
@@ -51,35 +50,57 @@ class VoiceRecordingCoordinator(
   }
 
   /** 3. 取消 Hold: 纯 CAS 比较 */
-  suspend fun onHoldCancel() {
-    if (_sessionState.compareAndSet(RecordingSessionState.Holding, RecordingSessionState.Idle)) {
+  suspend fun onHoldCancel(): AudioRecordResult.Failure? {
+    return if (
+        _sessionState.compareAndSet(RecordingSessionState.Holding, RecordingSessionState.Idle)
+    ) {
       recorder.cancel()
+    } else {
+      null
     }
   }
 
-  /** 4. 上滑锁定手势: 纯 CAS 比较 只有当前是 Holding，才原子切换到 Locked(isPaused = false)，并触发保活提权 */
-  fun onHoldToLockGesture(prompt: RecordingPrompt) {
-    if (_sessionState.compareAndSet(RecordingSessionState.Holding, RecordingSessionState.Locked)) {
+  /** 4. 上滑锁定手势: 纯 CAS 争胜，手势与松开并发时，Lock 优先 */
+  fun onHoldToLockGesture(prompt: RecordingPrompt): Boolean {
+    val success =
+        _sessionState.compareAndSet(
+            RecordingSessionState.Holding,
+            RecordingSessionState.Locked,
+        )
+    if (success) {
       guardian.startGuarding(prompt)
     }
+    return success
   }
 
-  /** 5. 直接开始长录音: 纯 CAS 比较 */
+  /** 5. 直接开始长录音: 失败必须停掉保活，防止前台服务泄漏 */
   suspend fun onDirectLock(
       prompt: RecordingPrompt,
-      destinationPath: String,
-  ) {
-    if (_sessionState.compareAndSet(RecordingSessionState.Idle, RecordingSessionState.Locked)) {
-      guardian.startGuarding(prompt)
-      recorder.start(destinationPath)
+      destinationPath: StoragePathModel.Internal,
+  ): Result<Unit> {
+    if (!_sessionState.compareAndSet(RecordingSessionState.Idle, RecordingSessionState.Locked)) {
+      return Result.failure(IllegalStateException("Cannot start voice note when not in Idle state"))
     }
+
+    guardian.startGuarding(prompt)
+
+    return recorder
+        .start(destinationPath)
+        .onSuccess {
+          // 防御极速取消：如果启动期间已经被取消成了 Idle，立刻释放保活与录音
+          if (_sessionState.value == RecordingSessionState.Idle) {
+            guardian.stopGuarding()
+            recorder.cancel()
+          }
+        }
+        .onFailure {
+          // 启动失败，必须关闭保活并回滚状态！
+          guardian.stopGuarding()
+          _sessionState.compareAndSet(RecordingSessionState.Locked, RecordingSessionState.Idle)
+        }
   }
 
-  /**
-   * 8. 锁定态完成并发送: 提示：此处因为 Locked 可能是 isPaused=true 也可能是 false，
-   *
-   * 采用 getAndUpdate 一行代码兼容两种情况，比写两次 CAS 更加干净！
-   */
+  /** 8. 锁定态完成并发送: getAndUpdate 原子提取前置状态 */
   suspend fun onStopLocked(): AudioRecordResult? {
     val previousState = _sessionState.getAndUpdate { current ->
       if (current is RecordingSessionState.Locked) RecordingSessionState.Idle else current
@@ -93,15 +114,17 @@ class VoiceRecordingCoordinator(
     }
   }
 
-  /** 9. 锁定态取消: */
-  suspend fun onCancelLocked() {
+  /** 9. 锁定态取消: getAndUpdate 原子提取前置状态 */
+  suspend fun onCancelLocked(): AudioRecordResult.Failure? {
     val previousState = _sessionState.getAndUpdate { current ->
       if (current is RecordingSessionState.Locked) RecordingSessionState.Idle else current
     }
 
-    if (previousState is RecordingSessionState.Locked) {
+    return if (previousState is RecordingSessionState.Locked) {
       guardian.stopGuarding()
       recorder.cancel()
+    } else {
+      null
     }
   }
 }

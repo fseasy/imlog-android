@@ -1,8 +1,8 @@
 package top.fseasy.imlog.domain.recorder
 
-import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlinx.coroutines.flow.StateFlow
+import top.fseasy.imlog.domain.model.StoragePathModel
 
 /**
  * 录音状态快照（纯 Kotlin，支持 Compose 跨平台）
@@ -17,36 +17,39 @@ data class RecordingSnapshot(
   enum class Status {
     Idle,
     Recording,
-    Paused,
-    Stopped,
   }
 }
 
-data class AudioRecordResult(
-    val filePath: String,
-    val duration: Duration,
-    val waveform: List<Float>,
-)
+sealed interface AudioRecordResult {
+  val filePath: StoragePathModel.Internal
 
-/** 跨平台录音器通用接口 未来 iOS 可基于 AVAudioEngine / AVAudioRecorder 实现该接口 */
+  data class Success(
+      override val filePath: StoragePathModel.Internal,
+      val duration: Duration,
+      val waveform: List<Float>,
+  ) : AudioRecordResult
+
+  data class Failure(override val filePath: StoragePathModel.Internal) : AudioRecordResult
+}
+
+/**
+ * 跨平台录音器通用接口 未来 iOS 可基于 AVAudioEngine / AVAudioRecorder 实现该接口
+ *
+ * NOTE： AudioRecorder shouldn't delete output file in any condition, leaving it to business layer
+ */
 interface AudioRecorder : AutoCloseable {
   val snapshot: StateFlow<RecordingSnapshot>
 
-  suspend fun start(destinationPath: String): Result<Unit>
+  suspend fun start(destinationPath: StoragePathModel.Internal): Result<Unit>
 
   suspend fun stop(): AudioRecordResult?
 
-  suspend fun cancel()
+  /** Return the failure with given `destinationPath` in [start] to let the business layer delete it. */
+  suspend fun cancel(): AudioRecordResult.Failure?
 
   /** 音频文件后缀（包含点号，如 ".m4a" 或 ".aac"） */
-  val fileExtension: String
+  val outputAudioFileExtension: String
 
   /** 音频 MIME 类型，如 "audio/mp4" 或 "audio/aac" */
-  val mimeType: String
-
-  /** 生成默认文件名（依赖当前实现类实际生效的 [fileExtension]） */
-  fun generateDefaultFilename(prefix: String = "recording"): String {
-    val timestamp = Clock.System.now().toEpochMilliseconds()
-    return "${prefix}_${timestamp}$fileExtension"
-  }
+  val outputAudioMimeType: String
 }

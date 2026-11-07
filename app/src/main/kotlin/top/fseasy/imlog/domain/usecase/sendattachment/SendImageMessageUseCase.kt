@@ -3,15 +3,15 @@ package top.fseasy.imlog.domain.usecase.sendattachment
 import top.fseasy.imlog.domain.model.ImageMessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageFailureType
-import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingStageFailureType
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CleanupStageFailureType
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.GenerateThumbnailStageFailureType
 import javax.inject.Inject
 
 class SendImageMessageUseCase
 @Inject
 constructor(
-    dependencies: SendUriUseCaseBaseDependencies,
-) : SendUriUseCaseBase(dependencies) {
+  dependencies: SendAttachmentDependencies,
+) : SendAttachmentUseCaseBase(dependencies) {
   override val messageTypeFromSendAction: MessageType
     get() = MessageType.Image
 
@@ -53,9 +53,9 @@ internal val imageProcessingFailureTypeMapper =
         },
         mapFinishTaskFailure = { finishFailureType ->
           when (finishFailureType) {
-            FinishProcessingStageFailureType.DeleteCacheFile ->
+            CleanupStageFailureType.DeleteCacheFile ->
                 ImageMessageProcessingErrorStage.DeleteInternalFileCache
-            FinishProcessingStageFailureType.DeleteTaskStateFromDb ->
+            CleanupStageFailureType.DeleteTaskStateFromDb ->
                 ImageMessageProcessingErrorStage.DeleteTaskStateFromDb
           }
         },

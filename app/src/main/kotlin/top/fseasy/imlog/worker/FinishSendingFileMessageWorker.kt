@@ -8,7 +8,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
-import top.fseasy.imlog.domain.usecase.sendattachment.SendRunBackgroundUseCaseFactory
+import top.fseasy.imlog.domain.usecase.sendattachment.SendAttachmentUseCaseFactory
 import top.fseasy.imlog.domain.util.defaultJson
 
 @HiltWorker
@@ -17,11 +17,11 @@ class FinishSendingFileMessageWorker
 constructor(
     @Assisted context: Context,
     @Assisted workerParams: WorkerParameters,
-    private val sendRunBackgroundUseCase: SendRunBackgroundUseCaseFactory,
+    private val sendUseCaseFactory: SendAttachmentUseCaseFactory,
 ) : CoroutineWorker(appContext = context, workerParams) {
 
   suspend fun executeUseCase(payload: FinishSendingFileWorkerPayload) {
-    sendRunBackgroundUseCase.get(payload.messageType).runBackground(payload)
+    sendUseCaseFactory.get(payload.messageType).runBackground(payload)
   }
 
   override suspend fun doWork(): Result {

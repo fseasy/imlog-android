@@ -3,14 +3,14 @@ package top.fseasy.imlog.domain.usecase.sendattachment
 import top.fseasy.imlog.domain.model.AudioMessageProcessingErrorStage
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.usecase.sendattachment.stage.CopyStageFailureType
-import top.fseasy.imlog.domain.usecase.sendattachment.stage.FinishProcessingStageFailureType
+import top.fseasy.imlog.domain.usecase.sendattachment.stage.CleanupStageFailureType
 import javax.inject.Inject
 
 class SendAudioMessageUseCase
 @Inject
 constructor(
-    dependencies: SendUriUseCaseBaseDependencies,
-) : SendUriUseCaseBase(dependencies = dependencies) {
+  dependencies: SendAttachmentDependencies,
+) : SendAttachmentUseCaseBase(dependencies = dependencies) {
   override val messageTypeFromSendAction: MessageType
     get() = MessageType.Audio
 
@@ -41,9 +41,9 @@ internal val audioProcessingFailureTypeMapper =
         mapThumbnailFailure = { error("Audio message don't have generate-thumbnail stage") },
         mapFinishTaskFailure = { finishFailureType ->
           when (finishFailureType) {
-            FinishProcessingStageFailureType.DeleteCacheFile ->
+            CleanupStageFailureType.DeleteCacheFile ->
                 AudioMessageProcessingErrorStage.DeleteInternalFileCache
-            FinishProcessingStageFailureType.DeleteTaskStateFromDb ->
+            CleanupStageFailureType.DeleteTaskStateFromDb ->
                 AudioMessageProcessingErrorStage.DeleteTaskStateFromDb
           }
         },
