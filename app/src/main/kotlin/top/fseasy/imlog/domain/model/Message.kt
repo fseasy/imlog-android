@@ -11,6 +11,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 import timber.log.Timber
 import top.fseasy.imlog.domain.recorder.WaveformCodec5Bit
+import top.fseasy.imlog.domain.recorder.deserializeToByteArray
 
 enum class MessageType(val value: String) {
   Text("text"),
@@ -206,7 +207,7 @@ data class VoiceDraft(
     get() = durationMs.milliseconds
 
   val waveform: FloatArray
-    get() = WaveformCodec5Bit.decode(Base64.decode(waveformBase64))
+    get() = WaveformCodec5Bit.decode(waveformBase64.deserializeToByteArray())
 
   companion object {
     fun create(filename: String, duration: Duration, waveformBytes: ByteArray): VoiceDraft {

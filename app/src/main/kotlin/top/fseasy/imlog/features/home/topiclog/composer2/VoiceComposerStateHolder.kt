@@ -23,6 +23,8 @@ import top.fseasy.imlog.domain.recorder.RecordingPrompt
 import top.fseasy.imlog.domain.recorder.RecordingSessionState
 import top.fseasy.imlog.domain.recorder.VoiceRecordingCoordinator
 import top.fseasy.imlog.domain.recorder.WaveformCodec5Bit
+import top.fseasy.imlog.domain.recorder.deserializeToByteArray
+import top.fseasy.imlog.domain.recorder.serializeToString
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
@@ -57,6 +59,11 @@ sealed interface VoiceComposerMode {
   ) : VoiceComposerMode
 }
 
+/**
+ * 1. subscribe the [composerMode] and [draftState] to get the status.
+ * 2. It's not autocloseable, as the final draft state must be handled within business logic. call
+ *    onTeardown
+ */
 class VoiceComposerStateHolder(
     private val topicId: TopicId,
     private val authState: StateFlow<AuthState>,
@@ -67,7 +74,7 @@ class VoiceComposerStateHolder(
     private val onShowSnackbar: (String) -> Unit,
     private val scope: CoroutineScope, // 由 ComposerViewModel 的 viewModelScope 注入
     private val context: Context,
-) : AutoCloseable {
+) {
 
   private val _draftState = MutableStateFlow<VoiceDraft?>(null)
   val draftState: StateFlow<VoiceDraft?> = _draftState.asStateFlow()
@@ -255,6 +262,35 @@ class VoiceComposerStateHolder(
     }
   }
 
+  suspend fun teardownWhenExit(): VoiceDraft? {
+    val currentMode = composerMode.value
+    return when (currentMode) {
+      is VoiceComposerMode.ActiveRecording -> {
+        // stop and generate draft
+        when (val recordingResult = coordinator.onStopLocked()) {
+          is AudioRecordResult.Failure -> {
+            storageRepository.deleteFile(recordingResult.filePath)
+            draftState.value
+          }
+          is AudioRecordResult.Success -> {
+            mergeChunkIntoDraftInternal(recordingChunkResult = recordingResult)
+          }
+          null -> {
+            Timber.w("Invalid state that get null under: [active-recording -> stop]")
+            _draftState.value
+          }
+        }
+      }
+      is VoiceComposerMode.Draft -> currentMode.draft
+      VoiceComposerMode.Holding -> {
+        // cancel
+        coordinator.onHoldCancel()?.let { storageRepository.deleteFile(it.filePath) }
+        null
+      }
+      VoiceComposerMode.Idle -> TODO()
+    }
+  }
+
   suspend fun stopVoiceNote(): VoiceDraft? = runSuspendCatching {
     val chunkResult = coordinator.onStopLocked() ?: return@runSuspendCatching null
     mergeChunkIntoDraftInternal(chunkResult)
@@ -263,47 +299,70 @@ class VoiceComposerStateHolder(
 
   fun discard() {
     scope.launch(Dispatchers.IO) {
-      coordinator.onCancelLocked()
+      coordinator.onCancelLocked()?.let { storageRepository.deleteFile(it.filePath) }
       clearDraftInternal(keepDraftFile = false)
     }
   }
 
-  private fun mergeChunkIntoDraftInternal(chunkResult: AudioRecordResult): VoiceDraft {
+  private suspend fun mergeChunkIntoDraftInternal(
+      userId: UserId,
+      recordingChunkResult: AudioRecordResult,
+  ): VoiceDraft? {
     val base = _draftState.value
-    val newChunkFile = File(chunkResult.filePath)
-
-    val finalFile: File
-    val totalDuration: Duration
-    val totalWaveform: List<Float>
-
-    if (base != null) {
-      val baseFile = File(base.filePath)
-      // 物理追加 AAC_ADTS 流
-      baseFile.appendContent(newChunkFile)
-      newChunkFile.delete()
-
-      finalFile = baseFile
-      totalDuration = base.duration + chunkResult.duration
-      totalWaveform = base.waveform.toList() + chunkResult.waveform
+    return if (base == null) {
+      when (recordingChunkResult) {
+        is AudioRecordResult.Failure -> {
+          storageRepository.deleteFile(recordingChunkResult.filePath)
+          null
+        }
+        is AudioRecordResult.Success -> {
+          VoiceDraft(
+              filename = recordingChunkResult.filePath.fullRelativePath.last(),
+              durationMs = recordingChunkResult.duration.inWholeMilliseconds,
+              waveformBase64 =
+                  WaveformCodec5Bit.encode(
+                          recordingChunkResult.waveform,
+                          recordingChunkResult.duration.inWholeSeconds,
+                      )
+                      .serializeToString(),
+              pendingChunkFilename = null,
+          )
+        }
+      }
     } else {
-      finalFile = newChunkFile
-      totalDuration = chunkResult.duration
-      totalWaveform = chunkResult.waveform
+      when (recordingChunkResult) {
+        is AudioRecordResult.Failure -> {
+          storageRepository.deleteFile(recordingChunkResult.filePath)
+          base.copy(pendingChunkFilename = null)
+        }
+        is AudioRecordResult.Success -> {
+          // the file has already been checked. Just append to base file.
+          val baseFilePath = restoreDraftPath(userId, base.filename)
+          val isSuccess =
+              storageRepository.fileAppendContent(baseFilePath, recordingChunkResult.filePath)
+          if (!isSuccess) {
+            Timber.w(
+                "Failed to append new audio recording chunking to base. " +
+                    "${recordingChunkResult.filePath} -> $baseFilePath"
+            )
+          }
+          storageRepository.deleteFile(recordingChunkResult.filePath)
+          val mergedDurationMs = base.durationMs + recordingChunkResult.duration.inWholeMilliseconds
+          val mergedWaveformCompressedBytes =
+              WaveformCodec5Bit.appendSegment(
+                  oldBytes = base.waveformBase64.deserializeToByteArray(),
+                  oldDurationSeconds = base.duration.inWholeSeconds,
+                  newRawAmplitudes = recordingChunkResult.waveform,
+                  newDurationSeconds = recordingChunkResult.duration.inWholeSeconds,
+              )
+          base.copy(
+              durationMs = mergedDurationMs,
+              waveformBase64 = mergedWaveformCompressedBytes.serializeToString(),
+              pendingChunkFilename = null,
+          )
+        }
+      }
     }
-
-    val targetBars = WaveformCodec5Bit.calculateTargetBars(totalDuration.inWholeSeconds)
-    val compressedWaveform = WaveformCodec5Bit.encode(totalWaveform, targetBars)
-
-    // 事务提交：生成移除了 pendingChunkPath 标记的最终草稿
-    val committedDraft =
-        VoiceDraft.create(
-            filePath = finalFile.absolutePath,
-            duration = totalDuration,
-            waveformBytes = compressedWaveform,
-        )
-
-    _draftState.value = committedDraft
-    return committedDraft
   }
 
   private suspend fun sendRawChunkInternal(result: AudioRecordResult) {
@@ -328,10 +387,6 @@ class VoiceComposerStateHolder(
       it.pendingChunkPath?.let { chunk -> File(chunk).delete() }
     }
     _draftState.update { null }
-  }
-
-  override fun close() {
-    pauseOrExit()
   }
 
   private fun launchWithUserId(

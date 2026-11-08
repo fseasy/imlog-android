@@ -49,7 +49,13 @@ class VoiceRecordingCoordinator(
     }
   }
 
-  /** 3. 取消 Hold: 纯 CAS 比较 */
+  /**
+   * 取消 Hold: 纯 CAS 比较
+   *
+   * Cancel action Run in IO thread for necessary parts.
+   *
+   * No exception will be thrown.
+   */
   suspend fun onHoldCancel(): AudioRecordResult.Failure? {
     return if (
         _sessionState.compareAndSet(RecordingSessionState.Holding, RecordingSessionState.Idle)

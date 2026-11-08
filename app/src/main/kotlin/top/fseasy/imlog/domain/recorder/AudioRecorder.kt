@@ -26,8 +26,28 @@ sealed interface AudioRecordResult {
   data class Success(
       override val filePath: StoragePathModel.Internal,
       val duration: Duration,
-      val waveform: List<Float>,
-  ) : AudioRecordResult
+      val waveform: FloatArray,
+  ) : AudioRecordResult {
+    override fun equals(other: Any?): Boolean {
+      if (this === other) return true
+      if (javaClass != other?.javaClass) return false
+
+      other as Success
+
+      if (filePath != other.filePath) return false
+      if (duration != other.duration) return false
+      if (!waveform.contentEquals(other.waveform)) return false
+
+      return true
+    }
+
+    override fun hashCode(): Int {
+      var result = filePath.hashCode()
+      result = 31 * result + duration.hashCode()
+      result = 31 * result + waveform.contentHashCode()
+      return result
+    }
+  }
 
   data class Failure(override val filePath: StoragePathModel.Internal) : AudioRecordResult
 }

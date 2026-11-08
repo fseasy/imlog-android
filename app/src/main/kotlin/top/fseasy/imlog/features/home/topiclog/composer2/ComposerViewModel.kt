@@ -323,27 +323,6 @@ constructor(
     }
   }
 
-  suspend fun onRecordingFinished(result: AudioRecordResult) {
-    val durationSeconds = result.duration.inWholeSeconds
-
-    // 1. 动态决定存 30 还是 100 根
-    val targetBars = WaveformCodec5Bit.calculateTargetBars(durationSeconds)
-
-    // 2. 5-bit 极限压缩（仅产生 20 ~ 64 字节）
-    val compressedBytes = WaveformCodec5Bit.encode(result.waveform, targetBars)
-
-    // 3. 存入数据库
-    messageDao.insert(
-        MessageEntity(
-            messageId = uuid(),
-            audioPath = result.filePath,
-            audioDurationMs = result.duration.inWholeMilliseconds,
-            waveform = compressedBytes, // 直接持久化 ByteArray
-            timestamp = System.currentTimeMillis(),
-        )
-    )
-  }
-
   /**
    * @param unifiedMessageType if it has the same messageType, set it to avoid get-metadata logic,
    *   else leave it null

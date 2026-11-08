@@ -90,6 +90,11 @@ class AndroidAudioRecorder(
     result
   }
 
+  /**
+   * Run in IO thread for necessary parts.
+   *
+   * No exception will be thrown
+   */
   override suspend fun cancel(): AudioRecordResult.Failure? = mutex.withLock {
     val session = activeSession ?: return null
     activeSession = null
@@ -99,9 +104,10 @@ class AndroidAudioRecorder(
   }
 
   override fun close() {
-    activeSession?.syncRelease()
-    activeSession = null
     _snapshot.value = RecordingSnapshot(status = RecordingSnapshot.Status.Idle)
+    val currentSession = activeSession ?: return
+    activeSession = null
+    currentSession.syncRelease()
   }
 
   override val outputAudioFileExtension: String = ".aac"
@@ -119,6 +125,8 @@ private constructor(
     private val onSnapshot: (duration: Duration, pulse: Float) -> Unit,
 ) {
   private val collectedWaveform = ArrayList<Float>(500)
+  /** 只所以用锁而非 join 来互斥读写，是因为非常极端的情况下，JNI 读取可能卡死，这样 Join 会连带卡死我们的程序。 */
+  private val collectedWaveformLock = Any()
   private var tickerJob: Job? = null
 
   private fun startTicker() {
@@ -127,30 +135,31 @@ private constructor(
           while (isActive) {
             val currentDuration = startMark.elapsedNow()
 
-            // 1. 读取振幅：若硬件未就绪或发生偶发瞬态抖动，getOrNull 返回 null
-            val rawAmp = runCatching { mediaRecorder.maxAmplitude }.getOrNull()
+            // 1. 读取振幅：若硬件未就绪或发生偶发瞬态抖动，getOrNull 返回 null, 补上 0 来对齐时间
+            val rawAmp = runCatching { mediaRecorder.maxAmplitude }.getOrNull() ?: 0
 
             // 前面是一个长耗时的 JNI 操作；可能在这个时间内，协程收到 cancel 信号，所以再做一个快速检查
             if (!isActive) break
 
-            if (rawAmp == null) {
-              // 保持 UI 计时器正常运转，但不向波形列表塞脏数据
-              onSnapshot(currentDuration, 0f)
-              delay(sampleInterval)
-              continue
-            }
-
             val pulse = (rawAmp / 32767f).coerceIn(0f, 1f).pow(0.5f)
-            collectedWaveform.add(pulse)
+            // Synchronize to avoid race-condition when cancel/stop
+            synchronized(collectedWaveformLock) {
+              collectedWaveform.add(pulse)
+            }
             onSnapshot(currentDuration, pulse)
             delay(sampleInterval)
           }
         }
   }
 
+  /**
+   * No exception should be thrown except that we didn't have the access permission of the file
+   * (should be impossible here)
+   */
   suspend fun stop(): AudioRecordResult {
-    // 1. 立即发出采样取消信号
+    // 1. 立即发出采样取消信号, 再等 recorder 关闭后再去拷贝数据，减少 race-condition 和录音脏数据
     tickerJob?.cancel()
+    tickerJob = null
 
     // 2. 硬件停止、释放与文件检查，全部收拢进 IO 线程（确保 Main-Thread Safe）
     val duration = startMark.elapsedNow()
@@ -160,18 +169,21 @@ private constructor(
           stopOk && outputPath.file.exists() && outputPath.file.length() > 0
         }
 
-    // 3. 在读取波形前等待 ticker 彻底退出
-    tickerJob?.join()
-    tickerJob = null
+    // 3. 现在同步读波形——不用管 tickerJob 是否实际已结束
+    val finalWaveform =
+        synchronized(collectedWaveformLock) {
+          collectedWaveform.toFloatArray()
+        }
 
     // 4. 安全结算
     return if (isSuccess) {
-      AudioRecordResult.Success(outputPath.path, duration, collectedWaveform)
+      AudioRecordResult.Success(outputPath.path, duration, finalWaveform)
     } else {
       AudioRecordResult.Failure(outputPath.path)
     }
   }
 
+  /** Run in IO thread for necessary parts. No lower-level exception will be thrown */
   suspend fun cancel(): AudioRecordResult.Failure {
     withContext(Dispatchers.IO) {
       syncRelease()
@@ -179,14 +191,15 @@ private constructor(
     return AudioRecordResult.Failure(outputPath.path)
   }
 
+  /** No exception */
   fun syncRelease() {
-    // 不关心波形结果，直接取消采样协程，无需 join 挂起等待
     tickerJob?.cancel()
     tickerJob = null
 
     stopAndReleaseMediaRecorder()
   }
 
+  /** swallow all exceptions */
   private fun stopAndReleaseMediaRecorder(): Boolean {
     return try {
       mediaRecorder.stop()
@@ -200,6 +213,10 @@ private constructor(
   }
 
   companion object {
+    /**
+     * @throws IllegalStateException from MediaRecorder
+     * @throws SecurityException from file (parent dirs) creating
+     */
     suspend fun start(
         context: Context,
         scope: CoroutineScope,
@@ -236,6 +253,7 @@ private constructor(
           .apply { startTicker() }
     }
 
+    /** @throws IllegalStateException */
     private fun syncCreateMediaRecorder(context: Context, file: File): MediaRecorder =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
               MediaRecorder(context)
@@ -258,6 +276,7 @@ private data class ResolvedStoragePath(
     val file: File,
 ) {
   companion object {
+    /** @throws SecurityException */
     fun syncCreate(path: StoragePathModel.Internal, context: Context): ResolvedStoragePath {
       val file = path.toNioPath(context).toFile().apply { parentFile?.mkdirs() }
       return ResolvedStoragePath(path = path, file = file)
