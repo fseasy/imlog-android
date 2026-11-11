@@ -51,7 +51,7 @@
         </provider>
 
         <service
-            android:name=".data.recorder.VoiceRecordingService"
+            android:name=".data.audio.VoiceRecordingService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
     </application>

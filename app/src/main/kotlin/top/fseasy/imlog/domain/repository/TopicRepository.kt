@@ -1,5 +1,7 @@
 package top.fseasy.imlog.domain.repository
 
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.MessageDraft
@@ -9,8 +11,7 @@ import top.fseasy.imlog.domain.model.TopicAvatarModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicPreference
 import top.fseasy.imlog.domain.model.UserId
-import kotlin.time.Clock
-import kotlin.time.Instant
+import top.fseasy.imlog.domain.model.VoiceDraft
 
 interface TopicRepository {
   /**
@@ -80,7 +81,19 @@ interface TopicRepository {
   suspend fun getMessageDraft(userId: UserId, topicId: TopicId): MessageDraft?
 
   /** Run in IO thread. */
-  suspend fun setMessageDraft(userId: UserId, topicId: TopicId, draft: MessageDraft?): Boolean
+  suspend fun setMessageDraftQuotedMessageId(
+      userId: UserId,
+      topicId: TopicId,
+      quotedMessageId: MessageId,
+  ): Boolean
+
+  suspend fun setMessageDraftVoiceContent(
+      userId: UserId,
+      topicId: TopicId,
+      draft: VoiceDraft?,
+  ): Boolean
+
+  suspend fun setMessageDraftTextContent(userId: UserId, topicId: TopicId, draft: String?): Boolean
 
   /** Topic Mark-Read operation: set last-read-message-id, typically used when sending message */
   fun syncUpdateTopicLastReadMessageId(

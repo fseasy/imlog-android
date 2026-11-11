@@ -229,4 +229,6 @@ interface StorageRepository {
    * Run in IO threads.
    */
   suspend fun getMimetypeOrNull(path: StoragePathModel): String?
+
+  suspend fun getMediaDurationOrNull(path: StoragePathModel): kotlin.time.Duration?
 }

@@ -3,6 +3,10 @@ package top.fseasy.imlog.data.repository
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
+import javax.inject.Inject
+import javax.inject.Singleton
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -18,15 +22,12 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.TopicMemberRole
 import top.fseasy.imlog.domain.model.TopicPreference
 import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.model.VoiceDraft
 import top.fseasy.imlog.domain.repository.TopicRepository
-import top.fseasy.imlog.sqldelight.SqlDelightDb
-import top.fseasy.imlog.sqldelight.Topic_message_state
-import javax.inject.Inject
-import javax.inject.Singleton
-import kotlin.time.Clock
-import kotlin.time.Instant
 import top.fseasy.imlog.sqldelight.GetCurrentUserHomeScreenTopics as HomeTopicEntity
+import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.Topic_members as TopicMemberEntity
+import top.fseasy.imlog.sqldelight.Topic_message_state
 import top.fseasy.imlog.sqldelight.Topic_preference as TopicPreferenceEntity
 import top.fseasy.imlog.sqldelight.Topics as TopicEntity
 
@@ -124,7 +125,9 @@ constructor(
             topic_id = topicId,
             user_id = creatorId,
             last_read_message_id = null,
-            draft = null,
+            draft_quoted_message_id = null,
+            draft_text_content = null,
+            draft_voice_content = null,
         )
     )
     return topicId
@@ -259,27 +262,61 @@ constructor(
 
   override suspend fun getMessageDraft(userId: UserId, topicId: TopicId): MessageDraft? =
       withContext(dispatcher) {
-        database.topicSelectQueries
-            .getMessageDraft(topicId = topicId, userId = userId)
-            .executeAsOneOrNull()
-            ?.draft
-            ?.getOrNull() // .draft is Result<MessageDraft>
+        val entity =
+            database.topicSelectQueries
+                .getMessageDraft(topicId = topicId, userId = userId)
+                .executeAsOneOrNull() ?: return@withContext null
+        buildMessageDraft(
+            quotedMessageId = entity.draft_quoted_message_id,
+            textContent = entity.draft_text_content,
+            voiceContent = entity.draft_voice_content
+        )
       }
 
-  override suspend fun setMessageDraft(
+  override suspend fun setMessageDraftQuotedMessageId(
       userId: UserId,
       topicId: TopicId,
-      draft: MessageDraft?,
+      quotedMessageId: MessageId,
+  ): Boolean =
+      withContext(dispatcher) {
+        database.topicUpdateQueries
+            .updateTopicMessageDraftQuotedMessageId(
+                quotedMessageId,
+                topicId = topicId,
+                triggerUserId = userId,
+            )
+            .value > 0L
+      }
+
+  override suspend fun setMessageDraftVoiceContent(
+      userId: UserId,
+      topicId: TopicId,
+      draft: VoiceDraft?,
   ): Boolean =
       withContext(dispatcher) {
         val wrapperValue =
             when (draft) {
               null -> null
-              is MessageDraft -> Result.success(draft)
+              is VoiceDraft -> Result.success(draft)
             }
         database.topicUpdateQueries
-            .updateTopicMessageDraft(
+            .updateTopicMessageDraftVoice(
                 wrapperValue,
+                topicId = topicId,
+                triggerUserId = userId,
+            )
+            .value > 0L
+      }
+
+  override suspend fun setMessageDraftTextContent(
+      userId: UserId,
+      topicId: TopicId,
+      draft: String?,
+  ): Boolean =
+      withContext(dispatcher) {
+        database.topicUpdateQueries
+            .updateTopicMessageDraftText(
+                newText = draft,
                 topicId = topicId,
                 triggerUserId = userId,
             )
@@ -340,6 +377,11 @@ constructor(
         } else {
           null
         }
+    val messageDraft = buildMessageDraft(
+        quotedMessageId = draft_quoted_message_id,
+        textContent = draft_text_content,
+        voiceContent = draft_voice_content
+    )
     return HomeTopic(
         id = id,
         name = name,
@@ -349,7 +391,24 @@ constructor(
         hasUnread = has_unread == 1L,
         messageUpdatedAt = Instant.fromEpochMilliseconds(topic_message_update_at),
         lastMessagePreview = lastMessagePreview,
-        draft = draft?.getOrNull(),
+        draft = messageDraft,
     )
+  }
+
+  private fun buildMessageDraft(
+      quotedMessageId: MessageId?,
+      textContent: String?,
+      voiceContent: Result<VoiceDraft>?,
+  ): MessageDraft? {
+    return if (textContent.isNullOrEmpty() && voiceContent == null && quotedMessageId == null) {
+      null
+    } else {
+      MessageDraft(
+          inputMode = null,
+          quotedMessageId = quotedMessageId,
+          text = textContent,
+          voiceNote = voiceContent?.getOrNull(),
+      )
+    }
   }
 }

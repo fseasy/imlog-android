@@ -24,7 +24,9 @@ SELECT
     -- for ui display and sort：if has message: m.created_at, else topic.created_at
     COALESCE(m.created_at, t.created_at) AS topic_message_update_at,
     -- for message snippet ui: 1. draft 2. last message 3. description
-    tms.draft,
+    tms.draft_quoted_message_id,
+    tms.draft_text_content,
+    tms.draft_voice_content,
     m.type AS last_message_type,
     m.text AS last_message_text,
     m.sender_id AS last_message_sender_id, -- prefer message source to escape user deletion case
@@ -70,7 +72,10 @@ SELECT * FROM topic_preference WHERE topic_id = :topic_id AND user_id = :user_id
 
 --| topic-message-state queries
 getMessageDraft:
-SELECT draft
+SELECT
+    draft_quoted_message_id,
+    draft_text_content,
+    draft_voice_content
 FROM topic_message_state
 WHERE
     topic_id = :topicId

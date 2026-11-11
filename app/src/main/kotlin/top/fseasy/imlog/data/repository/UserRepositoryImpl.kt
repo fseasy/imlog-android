@@ -49,7 +49,7 @@ constructor(
           .distinctUntilChanged()
           .stateIn(
               scope = applicationIoScope,
-              started = SharingStarted.WhileSubscribed(5_000),
+              started = SharingStarted.Eagerly,
               initialValue = AuthState.Loading,
           )
 

@@ -60,10 +60,24 @@ SET
 WHERE topic_id = :topicId
     AND user_id = :triggerUserId;
 
-updateTopicMessageDraft:
+updateTopicMessageDraftQuotedMessageId:
 UPDATE topic_message_state
 SET
-    draft = :newDraft
+    draft_quoted_message_id = :newQuotedMessageId
+WHERE topic_id = :topicId
+    AND user_id = :triggerUserId;
+
+updateTopicMessageDraftText:
+UPDATE topic_message_state
+SET
+    draft_text_content = :newText
+WHERE topic_id = :topicId
+    AND user_id = :triggerUserId;
+
+updateTopicMessageDraftVoice:
+UPDATE topic_message_state
+SET
+    draft_voice_content = :newVoice
 WHERE topic_id = :topicId
     AND user_id = :triggerUserId;
 

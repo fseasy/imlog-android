@@ -1,0 +1,112 @@
+package top.fseasy.imlog.domain.usecase.composer.sendattachment
+
+import javax.inject.Inject
+import timber.log.Timber
+import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
+import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.CopyFileAndUpdateDbUseCase
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.CopyStageResult
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.CleanupStageResult
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.CleanupUseCase
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.GenerateThumbnailStageResult
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.GenerateThumbnailUseCase
+
+/**
+ * A common flow for Attachment Processing Steps that will be run in background (i.e., not in
+ * coroutine)
+ *
+ * Steps:
+ * 1. generate thumbnail if necessary
+ * 2. copy raw file to shared storage
+ * 3. clean up
+ */
+class BackgroundProcessingUseCase
+@Inject
+constructor(
+  private val storagePathUseCase: StoragePathUseCase,
+  private val attachmentPathUseCase: AttachmentPathUseCase,
+  private val copyFileAndUpdateDbUseCase: CopyFileAndUpdateDbUseCase,
+  private val cleanupUseCase: CleanupUseCase,
+  private val generateThumbnailUseCase: GenerateThumbnailUseCase,
+) {
+  /**
+   * Should be called in background process (like Worker in Android) to make the following logic
+   * running more stably
+   */
+  internal suspend operator fun invoke(
+      payload: FinishSendingFileWorkerPayload,
+      failureTypeMapper: ProcessingFailureTypeMapper,
+  ) {
+    val internalCacheFilePath =
+        attachmentPathUseCase.generateInternalCachePath(
+            userId = payload.userId,
+            cacheFilename = payload.internalCacheFilename,
+        )
+    val messageId = payload.messageId
+    // 1. generate thumbnail
+    when (
+        val result =
+            generateThumbnailUseCase(
+                messageId = messageId,
+                userId = payload.userId,
+                topicId = payload.topicId,
+                messageTimestamp = payload.messageTimestamp,
+                messageType = payload.messageType,
+                srcUriStr = payload.srcUriStr,
+                cacheFilePath = internalCacheFilePath,
+                fileMetadata = payload.fileMetadata,
+            )
+    ) {
+      is GenerateThumbnailStageResult.Failure ->
+          return cleanupUseCase.onFailure(
+              messageId = messageId,
+              stage = failureTypeMapper.mapThumbnailFailure(result.type),
+              errorUserRetryable = result.retryable,
+          )
+
+      is GenerateThumbnailStageResult.Success,
+      is GenerateThumbnailStageResult.Skip,
+      -> Unit
+    }
+    // 2. copy internal cache to shared storage
+    when (
+        val result =
+            copyFileAndUpdateDbUseCase.onInternalToSharedStorage(
+                messageId = messageId,
+                userId = payload.userId,
+                topicId = payload.topicId,
+                messageTimestamp = payload.messageTimestamp,
+                originalDisplayName = payload.fileMetadata.displayName,
+                internalCacheFilePath = internalCacheFilePath,
+                mimeType = payload.fileMetadata.mimeType,
+            )
+    ) {
+      is CopyStageResult.Failure ->
+          return cleanupUseCase.onFailure(
+              messageId = messageId,
+              stage = failureTypeMapper.mapSharedStorageCopyFailure(result.type),
+              errorUserRetryable = result.retryable,
+          )
+
+      is CopyStageResult.Success -> Unit
+    }
+
+    // 3. finish processing on success: clean cache and processing status record
+    when (
+        val result =
+            cleanupUseCase.onSuccess(
+                messageId,
+                internalCachePathModel = internalCacheFilePath,
+            )
+    ) {
+      is CleanupStageResult.Failure ->
+          return cleanupUseCase.onFailure(
+              messageId = messageId,
+              stage = failureTypeMapper.mapFinishTaskFailure(result.type),
+              errorUserRetryable = false, // system will retry it, user don't need to retry.
+          )
+
+      is CleanupStageResult.Success -> Timber.d("MessageFile from $messageId success")
+    }
+  }
+}

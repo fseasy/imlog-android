@@ -8,7 +8,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
-import top.fseasy.imlog.domain.usecase.sendattachment.SendAttachmentUseCaseFactory
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendAttachmentUseCaseFactory
 import top.fseasy.imlog.domain.util.defaultJson
 
 @HiltWorker

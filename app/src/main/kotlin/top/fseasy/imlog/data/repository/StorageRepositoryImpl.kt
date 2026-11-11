@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.data.mapper.ensureDirectorUri
 import top.fseasy.imlog.data.mapper.ensureFileUri
+import top.fseasy.imlog.data.mapper.findUriOrThrow
 import top.fseasy.imlog.data.mapper.toAbsolutePathWithoutCreating
 import top.fseasy.imlog.data.mapper.toAbsolutePathsWithoutCreating
 import top.fseasy.imlog.data.mapper.toFile
@@ -28,6 +29,7 @@ import top.fseasy.imlog.data.mapper.toUriOrThrow
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.data.model.syncAppendContent
 import top.fseasy.imlog.data.util.FileWriteMode
+import top.fseasy.imlog.data.util.MediaDurationUtils
 import top.fseasy.imlog.data.util.MetadataResolveUtils
 import top.fseasy.imlog.data.util.MimeTypeUtils
 import top.fseasy.imlog.data.util.UriPathUtil
@@ -47,6 +49,7 @@ import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VideoMetadata
 import top.fseasy.imlog.domain.repository.StorageRepository
+import top.fseasy.imlog.domain.util.runSuspendCatching
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 
 @Singleton
@@ -147,6 +150,25 @@ constructor(
   override suspend fun getMimetypeOrNull(path: StoragePathModel): String? =
       resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(path)?.let {
         MimeTypeUtils.getMimeTypeOrNull(it, context = context)
+      }
+
+  override suspend fun getMediaDurationOrNull(path: StoragePathModel): kotlin.time.Duration? =
+      withContext(dispatcher) {
+        when (path) {
+          is StoragePathModel.Dual -> getMediaDurationOrNull(path.toInternal())
+          is StoragePathModel.Internal -> {
+            MediaDurationUtils.getDurationOrNull(path.toNioPath(context).toFile())
+          }
+          is StoragePathModel.Shared -> {
+            val uri = runSuspendCatching {
+              path.findUriOrThrow(::getSharedStorageRootUriWithCache, context = context)
+            }.getOrNull() ?: return@withContext null
+            MediaDurationUtils.getDurationOrNull(
+                context,
+                uri = uri
+            )
+          }
+        }
       }
 
   /**

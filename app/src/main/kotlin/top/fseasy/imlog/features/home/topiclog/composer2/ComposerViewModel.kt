@@ -52,16 +52,15 @@ import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VoiceDraft
-import top.fseasy.imlog.domain.recorder.RecordingSnapshot
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
-import top.fseasy.imlog.domain.usecase.SendTextMessageUseCase
+import top.fseasy.imlog.domain.usecase.composer.SendTextMessageUseCase
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.ResolveMetadataResult
-import top.fseasy.imlog.domain.usecase.sendattachment.SendUriUseCaseBase
-import top.fseasy.imlog.domain.usecase.sendattachment.SendUriUseCaseFactory
-import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.fileMimeTypeToMessageType
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.ResolveMetadataResult
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendUriUseCaseBase
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendUriUseCaseFactory
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendVoiceMessageUseCase
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.fileMimeTypeToMessageType
 import top.fseasy.imlog.domain.util.runSuspendCatching
 import top.fseasy.imlog.features.home.topiclog.composer.ComposerUiEffect
 import top.fseasy.imlog.features.home.topiclog.composer.MessageInputModeUi
@@ -74,6 +73,7 @@ import top.fseasy.imlog.navigation.MainScreen
 // SQLite writing is single thread, so it is useless that set it higher
 private const val ATTACHMENT_RESOLVE_METADATA_CONCURRENCY = 6
 private const val ATTACHMENT_COPY_CONCURRENCY = 3
+
 
 @OptIn(FlowPreview::class)
 @HiltViewModel
@@ -95,36 +95,6 @@ constructor(
   private val authState = userRepository.authState
 
   private val voiceRecordingCoordinator = (application as ImLogApplication).recordingCoordinator
-  // ① 低频业务状态（只在状态改变时重组，几分钟才变一次）
-  // 底部按钮、草稿栏只需监听这个
-  val status: StateFlow<RecordingSnapshot.Status> =
-      recorder.snapshot
-          .map { it.status }
-          .distinctUntilChanged()
-          .stateIn(
-              viewModelScope,
-              SharingStarted.WhileSubscribed(5000),
-              RecordingSnapshot.Status.Idle,
-          )
-
-  // ② 秒级展示时间（将 10Hz 降频到 1Hz，每秒只重组 1 次，而不是 10 次！）
-  val formattedTimer: StateFlow<String> =
-      recorder.snapshot
-          .map { formatDuration(it.duration.inWholeSeconds) }
-          .distinctUntilChanged() // 核心：秒数没变就不发射！
-          .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "00:00")
-
-  // ③ 原始高频脉冲（专门给 Canvas 绘图使用）
-  val currentPulse: StateFlow<Float> =
-      recorder.snapshot
-          .map { it.currentPulse }
-          .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
-
-  // ④ 历史波形数组（采用 ImmutableList 保证 Compose 能够安全 Skip）
-  val waveform: StateFlow<ImmutableList<Float>> =
-      recorder.snapshot
-          .map { it.waveform.toPersistentList() }
-          .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), persistentListOf())
 
   val voiceRecorderStateHolder =
       VoiceRecorderStateHolder(
@@ -136,7 +106,7 @@ constructor(
           .also(::addCloseable)
   val voiceComposerStateHolder =
       VoiceComposerStateHolder(
-          scope = viewModelScope,
+          viewModelScope = viewModelScope,
           coordinator = (application as ImLogApplication).recordingCoordinator,
           storagePathUseCase = storagePathUseCase,
           topicId = topicId,

@@ -16,7 +16,7 @@ import top.fseasy.imlog.data.util.VoiceRecorderState
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.usecase.StoragePathUseCase
-import top.fseasy.imlog.domain.usecase.sendattachment.SendVoiceMessageUseCase
+import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendVoiceMessageUseCase
 
 class VoiceRecordingUiState(
     val recorderState: VoiceRecorderState = VoiceRecorderState.Idle,

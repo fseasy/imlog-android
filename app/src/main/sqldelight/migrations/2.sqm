@@ -1,5 +1,8 @@
 import top.fseasy.imlog.domain.model.MessageId;
 import top.fseasy.imlog.domain.model.StoragePathModel;
+import top.fseasy.imlog.domain.model.TopicId;
+import top.fseasy.imlog.domain.model.UserId;
+import top.fseasy.imlog.domain.model.VoiceDraft;
 
 -- Migrations:
 -- 1. table `message_attachment_processing_task_states` (by table rebuild way):
@@ -45,3 +48,32 @@ DROP TABLE message_attachment_processing_task_states;
 
 -- 4. rename
 ALTER TABLE message_attachment_processing_task_states_new RENAME TO message_attachment_processing_task_states;
+
+---------
+-- table `topic_message_state` migration
+-- change draft structure
+-- 1. delete draft(Result<MessageDraft>)
+-- 2. add text_draft, voice_draft
+---------
+-- create temp
+CREATE TABLE tmp_topic_message_state (
+    topic_id TEXT AS TopicId NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    user_id TEXT AS UserId NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    last_read_message_id TEXT AS MessageId,
+    draft_quoted_message_id TEXT AS MessageId,
+    draft_text_content TEXT,
+    -- Use Result to handle parsing error condition
+    draft_voice_content TEXT AS kotlin.Result<VoiceDraft>,
+    PRIMARY KEY (topic_id, user_id)
+);
+-- migration: NOTE, here we just dropped the old draft(Result<MessageDraft>).
+--      it's recommended to register a callback to parse it and fill to the new field.
+--      as currently it's in deving stage, no customer data, we just delete them.
+INSERT INTO tmp_topic_message_state
+    (topic_id, user_id, last_read_message_id)
+SELECT topic_id, user_id, last_read_message_id
+FROM topic_message_state;
+-- delete old
+DROP TABLE topic_message_state;
+-- rename temp
+ALTER TABLE tmp_topic_message_state RENAME TO topic_message_state;

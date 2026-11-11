@@ -6,6 +6,7 @@ import top.fseasy.imlog.domain.model.TopicId;
 import top.fseasy.imlog.domain.model.TopicMemberRole;
 import top.fseasy.imlog.domain.model.TopicPresetAvatar;
 import top.fseasy.imlog.domain.model.UserId;
+import top.fseasy.imlog.domain.model.VoiceDraft;
 
 -- TODO
 -- 在考虑数据同步的时候，数据库可能要重新设计，特别的，可能要把 delete 变成 soft-delete!
@@ -62,8 +63,10 @@ CREATE TABLE topic_message_state (
     topic_id TEXT AS TopicId NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
     user_id TEXT AS UserId NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     last_read_message_id TEXT AS MessageId,
+    draft_quoted_message_id TEXT AS MessageId,
+    draft_text_content TEXT,
     -- Use Result to handle parsing error condition
-    draft TEXT AS kotlin.Result<MessageDraft>,
+    draft_voice_content TEXT AS kotlin.Result<VoiceDraft>,
     PRIMARY KEY (topic_id, user_id)
 );
 

@@ -12,10 +12,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import javax.inject.Inject
 import timber.log.Timber
-import top.fseasy.imlog.data.recorder.AndroidAudioRecorder
-import top.fseasy.imlog.data.recorder.AndroidRecordingGuardian
+import top.fseasy.imlog.data.audio.AndroidAudioRecorder
+import top.fseasy.imlog.data.audio.AndroidRecordingGuardian
 import top.fseasy.imlog.data.util.CrashReportingTree
-import top.fseasy.imlog.domain.recorder.VoiceRecordingCoordinator
+import top.fseasy.imlog.domain.audio.VoiceRecordingCoordinator
 
 @HiltAndroidApp
 class ImLogApplication : Application(), Configuration.Provider {
