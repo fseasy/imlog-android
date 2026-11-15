@@ -20,7 +20,7 @@
  *
  *   user storage root: $root/$user_id/
  */
-package top.fseasy.imlog.domain.usecase
+package top.fseasy.imlog.domain.usecase.pathpolicy
 
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -104,7 +104,7 @@ constructor(
    * To determine the root dir of shared storage root. Here we can't provide the final result, We
    * can only provide the kernel path-judge logic.
    *
-   * @see InitializeUserStorageUseCase.determineSharedStorageRootUri
+   * @see top.fseasy.imlog.domain.usecase.InitializeUserStorageUseCase.determineSharedStorageRootUri
    */
   fun needsSubDirForActualSharedStorageRoot(userSelectedRootDirName: String): Boolean {
     return userSelectedRootDirName.contains(appStaticName, ignoreCase = true)
@@ -168,7 +168,7 @@ constructor(
    * Rule: `$time_prefix + $truncated_original_name + .suffix`
    */
   fun buildUserFriendlyTimestampedFilename(
-      timestamp: kotlin.time.Instant,
+      timestamp: Instant,
       originalFilename: String,
   ): String = addPrefixToFilename(formatToUtcDayAndTime(timestamp), originalFilename)
 
@@ -183,7 +183,7 @@ constructor(
    *  ```
    *
    */
-  fun buildTimestampedFilename(timestamp: kotlin.time.Instant, originalFilename: String): String {
+  fun buildTimestampedFilename(timestamp: Instant, originalFilename: String): String {
     val prefix = "${timestamp.toEpochMilliseconds()}-${Random.nextInt(1000)}"
     return addPrefixToFilename(prefix, originalFilename)
   }
@@ -231,7 +231,7 @@ constructor(
   fun buildMessageRawFileStoragePath(
       userId: UserId,
       topicId: TopicId,
-      timestamp: kotlin.time.Instant,
+      timestamp: Instant,
       filename: String,
   ): StoragePathModel.Shared =
       StoragePathModel.Shared(
@@ -282,7 +282,7 @@ constructor(
       userId: UserId,
       resourceName: ResourceName,
       topicId: TopicId,
-      timestamp: kotlin.time.Instant,
+      timestamp: Instant,
       filename: String,
   ): List<String> {
     return buildList(6) {
@@ -294,7 +294,7 @@ constructor(
   }
 
   /** format = ${dd-HHmmss-SSS}-utc (on UTC) */
-  private fun formatToUtcDayAndTime(timestamp: kotlin.time.Instant): String {
+  private fun formatToUtcDayAndTime(timestamp: Instant): String {
     return timestamp.format(USER_FRIENDLY_UTC_TIME_FORMATTER, UtcOffset.ZERO)
   }
 
@@ -310,7 +310,7 @@ constructor(
    * @return List of partition paths, e.g., ["2024-06", "day11-20-utc"]
    * @see [Partition naming convention documentation link]
    */
-  private fun buildDatePartitionHierarchy(timestamp: kotlin.time.Instant): List<String> {
+  private fun buildDatePartitionHierarchy(timestamp: Instant): List<String> {
     val date = timestamp.toLocalDateTime(TimeZone.UTC).date
 
     val yearMonth = buildString {

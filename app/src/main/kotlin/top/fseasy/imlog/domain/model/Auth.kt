@@ -29,6 +29,17 @@ inline fun CoroutineScope.launchWithAuth(
   }
 }
 
+fun AuthState.authenticatedIdOrNull(): UserId? = (this as? AuthState.Authenticated)?.userId
+
+/** A sync auth function */
+inline fun withAuth(
+    authState: AuthState,
+    block: (userId: UserId) -> Unit,
+) {
+  val userId = (authState as? AuthState.Authenticated)?.userId ?: return
+  block(userId)
+}
+
 /** Waiting untile it's authenticated. */
 inline fun CoroutineScope.launchUntilAuth(
     authStateFlow: StateFlow<AuthState>,

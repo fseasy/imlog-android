@@ -11,8 +11,8 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.MessageRepository
 import top.fseasy.imlog.domain.repository.StorageRepository
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
-import top.fseasy.imlog.domain.usecase.composer.sendattachment.AttachmentPathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.AttachmentPathUseCase
 
 class CopyFileAndUpdateDbUseCase
 @Inject

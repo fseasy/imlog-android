@@ -17,8 +17,10 @@ sealed interface RecordingPrompt {
  * - iOS: 激活/停用 AVAudioSession 的后台音频模式，或启动 iOS 16+ Live Activity
  */
 interface RecordingGuardian {
+  /** No Exception. sync fun */
   fun startGuarding(prompt: RecordingPrompt)
 
+  /** No Exception. Sync fun */
   fun stopGuarding()
 
   // 默认空实现，方便测试或桌面端/Web端

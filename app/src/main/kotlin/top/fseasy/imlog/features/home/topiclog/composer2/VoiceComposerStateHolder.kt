@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import top.fseasy.imlog.R
+import top.fseasy.imlog.common.TransitionDecision
+import top.fseasy.imlog.common.TransitionResult
+import top.fseasy.imlog.common.tryTransition
 import top.fseasy.imlog.data.audio.AndroidAudioWaveformExtractor
 import top.fseasy.imlog.domain.audio.AudioRecordResult
 import top.fseasy.imlog.domain.audio.RecordingPrompt
@@ -25,13 +28,13 @@ import top.fseasy.imlog.domain.model.AuthState
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VoiceDraft
+import top.fseasy.imlog.domain.model.authenticatedIdOrNull
 import top.fseasy.imlog.domain.model.launchUntilAuth
-import top.fseasy.imlog.domain.model.launchWithAuth
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.composer.VoiceDraftUseCase
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendVoiceMessageUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 import top.fseasy.imlog.domain.util.runSuspendCatching
 import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
 
@@ -56,6 +59,16 @@ sealed interface VoiceComposerMode {
   data class Draft(val playerUiState: VoicePlayerUiState) : VoiceComposerMode
 }
 
+@Immutable
+sealed interface VoiceDraftUiState {
+  val isUpdating: Boolean
+
+  @Immutable data class Idle(override val isUpdating: Boolean = false) : VoiceDraftUiState
+
+  @Immutable
+  data class Active(override val isUpdating: Boolean, val draft: VoiceDraft) : VoiceDraftUiState
+}
+
 /**
  * 1. subscribe the [composerMode] to get the status.
  * 2. It's not autocloseable, as the final draft state must be handled within business logic. call
@@ -75,7 +88,7 @@ class VoiceComposerStateHolder(
     private val context: Context,
 ) {
 
-  private val _draftState = MutableStateFlow<VoiceDraft?>(null)
+  private val _draftState = MutableStateFlow<VoiceDraftUiState>(VoiceDraftUiState.Idle())
 
   val composerMode: StateFlow<VoiceComposerMode> =
       combine(coordinator.sessionState, _draftState) { session, draft ->
@@ -137,49 +150,104 @@ class VoiceComposerStateHolder(
   }
 
   fun onNewVoiceNote() {
-    if (_draftState.value != null) {
-      Timber.w("Invalid State: Call NewVoiceNote while we already has a nonnull draft")
+    val userId = authState.value.authenticatedIdOrNull() ?: return
+    // State guard
+    val stateTransitResult = _draftState.tryTransition { current ->
+      val couldTransit = current is VoiceDraftUiState.Idle && !current.isUpdating
+      if (!couldTransit) {
+        return@tryTransition TransitionDecision.Skip
+      }
+      TransitionDecision.Next(VoiceDraftUiState.Idle(isUpdating = true))
+    }
+    if (stateTransitResult !is TransitionResult.Done) {
+      Timber.w("Invalid State: Call NewVoiceNote while it's not idle, or it's already in updating")
       return
     }
-    viewModelScope.launchWithAuth(authState.value) { userId ->
-      val (path, newDraft) = draftUseCase.newVoiceDraft(userId)
-      _draftState.value = newDraft
-      coordinator.onDirectLock(RecordingPrompt.Default, path).onFailure { e ->
-        onShowSnackbar(
-            "${context.getString(R.string.composer_voice_note_start_failed_tip)}: ${e.localizedMessage}"
-        )
-        // Delete file just in case
-        storageRepository.deleteFile(path)
+
+    val newDraft = draftUseCase.newVoiceDraft(userId) // No exception here
+    viewModelScope.launch {
+      try {
+        coordinator
+            .onDirectLock(RecordingPrompt.Default, newDraft.path)
+            .onFailure { e ->
+              _draftState.update { VoiceDraftUiState.Idle(false) }
+              // Delete file just in case
+              storageRepository.deleteFile(newDraft.path)
+              onShowSnackbar(
+                  "${context.getString(R.string.composer_voice_note_start_failed_tip)}: ${e.localizedMessage}"
+              )
+            }
+            .onSuccess {
+              _draftState.update {
+                VoiceDraftUiState.Active(
+                    isUpdating = false,
+                    draft = newDraft,
+                )
+              }
+            }
+      } finally {
+        // restore state if unexpected exceptions occur in previous `onFailure/onSuccess`.
+        _draftState.tryTransition { current ->
+          if (current is VoiceDraftUiState.Idle && current.isUpdating) {
+            TransitionDecision.Next(VoiceDraftUiState.Idle(isUpdating = false))
+          } else {
+            TransitionDecision.Skip
+          }
+        }
       }
     }
   }
 
-  /** “继续录音” 绝不把 draftState 置 null，而是打上 pending 事务标记写入 DB！ */
-  fun onResumeRecordingFromDraft() {
-    val currentBase = draftState.value ?: return
+  fun onResumeRecording() {
+    val userId = authState.value.authenticatedIdOrNull() ?: return
+    // Guard
+    val stateTransitionResult = _draftState.tryTransition { current ->
+      if (
+          !current.isUpdating &&
+              current is VoiceDraftUiState.Active &&
+              current.draft is VoiceDraft.Committed
+      ) {
+        TransitionDecision.Next(current.copy(isUpdating = true))
+      } else {
+        TransitionDecision.Skip
+      }
+    }
+    if (stateTransitionResult !is TransitionResult.Done) {
+      Timber.w("Invalid state: Call ResumeRecording while on state = ${_draftState.value}")
+      return
+    }
+    val lockingState = stateTransitionResult.current as VoiceDraftUiState.Active
+    val baseDraft = lockingState.draft as VoiceDraft.Committed
+    // Just create a memory object, no side effects
+    val resumeDraft = draftUseCase.resumeVoiceDraft(baseDraft = baseDraft, userId = userId)
+    val pendingPath = resumeDraft.pendingChunkFilePath
 
-    launchWithUserId { userId ->
-      // 生成新的分片临时文件
-      val newChunkPath = newVoiceDraftPath(userId)
-
-      // 核心步骤 A：先写“事务日志”到 DB！
-      // 记录我们正在录制 newChunkPath，底稿绝不丢失
-      val transactionDraft =
-          currentBase.copy(pendingChunkFilename = newChunkPath.fullRelativePath.last())
-      _draftState.update { transactionDraft } // 这会触发 ViewModel 的 combine 立即安全持久化到 DB！
+    viewModelScope.launch {
       val prompt = RecordingPrompt.Default
-      // 核心步骤 B：启动录音引擎
-      coordinator.onDirectLock(prompt, destinationPath = newChunkPath).onFailure { e ->
-        onShowSnackbar(
-            "${context.getString(R.string.composer_voice_note_start_failed_tip)}: ${e.localizedMessage}"
-        )
-        storageRepository.deleteFile(newChunkPath)
+      try {
+        coordinator.onDirectLock(prompt, destinationPath = pendingPath).onFailure { e ->
+          // rollback state
+          _draftState.update { stateTransitionResult.previous }
+          storageRepository.deleteFile(pendingPath)
+          onShowSnackbar(
+              "${context.getString(R.string.composer_voice_note_start_failed_tip)}: ${e.localizedMessage}"
+          )
+        }.onSuccess {
+          _draftState.update { VoiceDraftUiState.Active(isUpdating = false, draft = resumeDraft) }
+        }
+      }
+      finally{
+        _draftState.tryTransition { state ->
+          // rollback if it's still in the guard entering state
+          if (state == lockingState) {
+            TransitionDecision.Next(stateTransitionResult.previous)
+          } else {
+            TransitionDecision.Skip
+          }
+        }
       }
     }
   }
-
-  private fun restoreDraftPath(userId: UserId, filename: String) =
-      sendVoiceMessageUseCase.restoreDraftPath(userId = userId, filename = filename)
 
   // --- 手势动作 ---
   fun onHoldStart() {

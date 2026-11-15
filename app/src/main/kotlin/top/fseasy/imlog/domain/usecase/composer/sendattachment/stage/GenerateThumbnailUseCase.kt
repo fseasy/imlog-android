@@ -21,7 +21,7 @@ import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.service.ThumbnailGenerateRequest
 import top.fseasy.imlog.domain.service.ThumbnailScale
 import top.fseasy.imlog.domain.service.ThumbnailService
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 
 private val thumbnailFormat = TIMELINE_THUMBNAIL_COMPRESS_FORMAT
 

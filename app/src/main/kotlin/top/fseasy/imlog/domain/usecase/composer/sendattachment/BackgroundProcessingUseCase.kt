@@ -3,13 +3,14 @@ package top.fseasy.imlog.domain.usecase.composer.sendattachment
 import javax.inject.Inject
 import timber.log.Timber
 import top.fseasy.imlog.domain.model.FinishSendingFileWorkerPayload
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.CopyFileAndUpdateDbUseCase
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.CopyStageResult
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.CleanupStageResult
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.CleanupUseCase
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.GenerateThumbnailStageResult
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.stage.GenerateThumbnailUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.AttachmentPathUseCase
 
 /**
  * A common flow for Attachment Processing Steps that will be run in background (i.e., not in

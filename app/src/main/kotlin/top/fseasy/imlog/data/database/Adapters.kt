@@ -1,6 +1,7 @@
 package top.fseasy.imlog.data.database
 
 import app.cash.sqldelight.ColumnAdapter
+import top.fseasy.imlog.data.model.VoiceDraftEntity
 import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.MessageDraft
 import top.fseasy.imlog.domain.model.MessageId
@@ -68,14 +69,14 @@ val messageTypeAdapter =
       override fun encode(value: MessageType): String = value.value
     }
 
-val messageDraftAdapter =
-    object : ColumnAdapter<Result<MessageDraft>, String> {
+val voiceDraftEntityAdapter =
+    object : ColumnAdapter<Result<VoiceDraftEntity>, String> {
 
       override fun decode(databaseValue: String) = runCatching {
-        defaultJson.decodeFromString<MessageDraft>(databaseValue)
+        defaultJson.decodeFromString<VoiceDraftEntity>(databaseValue)
       }
 
-      override fun encode(value: Result<MessageDraft>): String =
+      override fun encode(value: Result<VoiceDraftEntity>): String =
           value.fold(
               onSuccess = { defaultJson.encodeToString(it) },
               onFailure = { error("Encode must pass the actual value!") },

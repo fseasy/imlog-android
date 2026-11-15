@@ -36,7 +36,7 @@ enum class InternalStorageRootSource {
  * - in Domain level
  * - in db: avoid storage-media migration that happens in legacy android.
  *
- * @see top.fseasy.imlog.domain.usecase.StoragePathUseCase to know the storage choose reason
+ * @see top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase to know the storage choose reason
  * @see top.fseasy.imlog.data.mapper StoragePathModelMapper.kt
  */
 @Serializable

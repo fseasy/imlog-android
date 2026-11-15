@@ -20,7 +20,7 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 import javax.inject.Inject
 
 data class HomeTopicListUiState(

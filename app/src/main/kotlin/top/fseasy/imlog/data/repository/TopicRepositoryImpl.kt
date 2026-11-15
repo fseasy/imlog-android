@@ -11,6 +11,9 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import top.fseasy.imlog.data.model.VoiceDraftEntity
+import top.fseasy.imlog.data.model.toDomain
+import top.fseasy.imlog.data.model.toEntity
 import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
 import top.fseasy.imlog.domain.model.HomeTopic
 import top.fseasy.imlog.domain.model.MessageDraft
@@ -24,6 +27,7 @@ import top.fseasy.imlog.domain.model.TopicPreference
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VoiceDraft
 import top.fseasy.imlog.domain.repository.TopicRepository
+import top.fseasy.imlog.domain.usecase.pathpolicy.VoiceDraftPathUseCase
 import top.fseasy.imlog.sqldelight.GetCurrentUserHomeScreenTopics as HomeTopicEntity
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.Topic_members as TopicMemberEntity
@@ -36,6 +40,7 @@ class TopicRepositoryImpl
 @Inject
 constructor(
     private val database: SqlDelightDb,
+    private val draftPathUseCase: VoiceDraftPathUseCase,
     private val dispatcher: CoroutineDispatcher,
 ) : TopicRepository {
 
@@ -64,7 +69,7 @@ constructor(
         .getCurrentUserHomeScreenTopics(userId)
         .asFlow()
         .mapToList(dispatcher)
-        .map { rows -> rows.map { it.toDomain() } }
+        .map { rows -> rows.map { it.toDomain(userId) } }
   }
 
   /** @see top.fseasy.imlog.domain.usecase.WelcomeUseCase */
@@ -267,9 +272,10 @@ constructor(
                 .getMessageDraft(topicId = topicId, userId = userId)
                 .executeAsOneOrNull() ?: return@withContext null
         buildMessageDraft(
+            userId = userId,
             quotedMessageId = entity.draft_quoted_message_id,
-            textContent = entity.draft_text_content,
-            voiceContent = entity.draft_voice_content
+            text = entity.draft_text_content,
+            voiceEntityResult = entity.draft_voice_content,
         )
       }
 
@@ -297,7 +303,7 @@ constructor(
         val wrapperValue =
             when (draft) {
               null -> null
-              is VoiceDraft -> Result.success(draft)
+              is VoiceDraft -> Result.success(draft.toEntity())
             }
         database.topicUpdateQueries
             .updateTopicMessageDraftVoice(
@@ -365,7 +371,7 @@ constructor(
           background = background,
       )
 
-  private fun HomeTopicEntity.toDomain(): HomeTopic {
+  private fun HomeTopicEntity.toDomain(userId: UserId): HomeTopic {
     val lastMessagePreview =
         if (last_message_type != null && last_message_sender_id != null) {
           MessagePreview(
@@ -377,11 +383,13 @@ constructor(
         } else {
           null
         }
-    val messageDraft = buildMessageDraft(
-        quotedMessageId = draft_quoted_message_id,
-        textContent = draft_text_content,
-        voiceContent = draft_voice_content
-    )
+    val messageDraft =
+        buildMessageDraft(
+            userId = userId,
+            quotedMessageId = draft_quoted_message_id,
+            text = draft_text_content,
+            voiceEntityResult = draft_voice_content,
+        )
     return HomeTopic(
         id = id,
         name = name,
@@ -396,18 +404,20 @@ constructor(
   }
 
   private fun buildMessageDraft(
+      userId: UserId,
       quotedMessageId: MessageId?,
-      textContent: String?,
-      voiceContent: Result<VoiceDraft>?,
+      text: String?,
+      voiceEntityResult: Result<VoiceDraftEntity>?,
   ): MessageDraft? {
-    return if (textContent.isNullOrEmpty() && voiceContent == null && quotedMessageId == null) {
+    return if (text.isNullOrEmpty() && voiceEntityResult == null && quotedMessageId == null) {
       null
     } else {
+      val voiceDraft = voiceEntityResult?.getOrNull()?.toDomain(draftPathUseCase, userId = userId)
       MessageDraft(
           inputMode = null,
           quotedMessageId = quotedMessageId,
-          text = textContent,
-          voiceNote = voiceContent?.getOrNull(),
+          text = text,
+          voiceNote = voiceDraft,
       )
     }
   }

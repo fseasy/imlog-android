@@ -1,13 +1,15 @@
-package top.fseasy.imlog.domain.usecase.composer
+package top.fseasy.imlog.domain.usecase.pathpolicy
 
 import javax.inject.Inject
+import kotlin.time.Instant
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.usecase.composer.sendattachment.AttachmentPathUseCase
 
 /**
  * It must be lightweight enough as it will be used in VoiceDraft domain-data mapping logic. so we
- * extract it as a single usecase
+ * extract it as a single usecase.
+ *
+ * NOT singleton yet as it's relatively not-common.
  */
 class VoiceDraftPathUseCase
 @Inject
@@ -18,7 +20,7 @@ constructor(private val attachmentPathUseCase: AttachmentPathUseCase) {
    */
   fun newVoiceDraftPath(
       userId: UserId,
-      messageTimestamp: kotlin.time.Instant,
+      messageTimestamp: Instant,
       audioFileExtension: String,
   ): StoragePathModel.Internal {
     val filename =

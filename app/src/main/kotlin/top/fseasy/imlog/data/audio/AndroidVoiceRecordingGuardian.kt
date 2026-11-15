@@ -22,6 +22,11 @@ class AndroidRecordingGuardian(private val context: Context) : RecordingGuardian
 
     // 防御 Android 12+ 的 ForegroundServiceStartNotAllowedException 及权限异常
     runCatching {
+      // 不需要担心它阻塞主线程
+      // AMS 处理这次登记全是内存操作，正常耗时在微秒到亚毫秒级，和 startActivity()、bindService()、checkSelfPermission()
+      // 属于同一个量级，Android 官方和 StrictMode 都认可直接在主线程调用。
+      // 它不是磁盘或网络 IO，所以依然不需要用 withContext(Dispatchers.IO) 去包装它。只有当系统本身发生极其严重的全局锁卡死（system_server
+      // 卡顿）时它才会慢，但那种情况下全系统所有 Binder 调用都会一起卡，切线程也避不开。
       context.startForegroundService(intent)
     }
         .onFailure { e ->

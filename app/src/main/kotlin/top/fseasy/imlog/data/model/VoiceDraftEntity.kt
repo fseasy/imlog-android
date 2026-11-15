@@ -7,7 +7,7 @@ import top.fseasy.imlog.domain.audio.WaveformCodec5Bit
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VoiceDraft
 import top.fseasy.imlog.domain.model.VoiceDraftDetail
-import top.fseasy.imlog.domain.usecase.composer.VoiceDraftPathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.VoiceDraftPathUseCase
 
 @Serializable
 data class VoiceDraftDetailEntity(

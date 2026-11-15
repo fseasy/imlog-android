@@ -7,6 +7,7 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.ResourceProvider
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.StringResId
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -24,9 +25,9 @@ data class InitializeStorageResult(
 class InitializeUserStorageUseCase
 @Inject
 constructor(
-    private val resourceProvider: ResourceProvider,
-    private val storagePathUseCase: StoragePathUseCase,
-    private val storageRepository: StorageRepository,
+  private val resourceProvider: ResourceProvider,
+  private val storagePathUseCase: StoragePathUseCase,
+  private val storageRepository: StorageRepository,
 ) {
 
   suspend operator fun invoke(

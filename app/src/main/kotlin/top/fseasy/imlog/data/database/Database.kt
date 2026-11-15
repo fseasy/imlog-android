@@ -3,10 +3,10 @@ package top.fseasy.imlog.data.database
 import android.content.Context
 import androidx.sqlite.db.SupportSQLiteDatabase
 import app.cash.sqldelight.driver.android.AndroidSqliteDriver
-import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.App_init_data.Adapter as AppInitDataAdapter
 import top.fseasy.imlog.sqldelight.Message_attachment_processing_task_states.Adapter as AttachmentProcessingTaskStatesAdapter
 import top.fseasy.imlog.sqldelight.Messages.Adapter as MessageAdapter
+import top.fseasy.imlog.sqldelight.SqlDelightDb
 import top.fseasy.imlog.sqldelight.Topic_members.Adapter as TopicMembersAdapter
 import top.fseasy.imlog.sqldelight.Topic_message_state.Adapter as TopicMessageStateAdapter
 import top.fseasy.imlog.sqldelight.Topic_preference.Adapter as TopicPreferenceAdapter
@@ -45,10 +45,11 @@ fun createSqlDelightDb(context: Context): SqlDelightDb {
           ),
       topic_message_stateAdapter =
           TopicMessageStateAdapter(
-              draftAdapter = messageDraftAdapter,
               topic_idAdapter = topicIdAdapter,
               user_idAdapter = userIdAdapter,
-              last_read_message_idAdapter = messageIdAdapter
+              last_read_message_idAdapter = messageIdAdapter,
+              draft_quoted_message_idAdapter = messageIdAdapter,
+              draft_voice_contentAdapter = voiceDraftEntityAdapter,
           ),
       topic_membersAdapter =
           TopicMembersAdapter(

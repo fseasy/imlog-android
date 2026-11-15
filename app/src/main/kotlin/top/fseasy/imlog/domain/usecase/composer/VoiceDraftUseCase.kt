@@ -12,6 +12,7 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VoiceDraft
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
+import top.fseasy.imlog.domain.usecase.pathpolicy.VoiceDraftPathUseCase
 
 /** NOT auto-inject yet. we can uniform it under KMP */
 class VoiceDraftUseCase(
@@ -22,22 +23,37 @@ class VoiceDraftUseCase(
     private val audioWaveformExtractor: AudioWaveformExtractor,
 ) {
 
-  /** following Write Ahead Log rule: just recording the path to the draft */
+  /**
+   * following Write Ahead Log rule: just recording the path to the draft.
+   *
+   * No IO operations. No Exception will be thrown.
+   */
   fun newVoiceDraft(
       userId: UserId,
       now: Instant = Clock.System.now(),
-  ): VoiceDraft {
+  ): VoiceDraft.Uncommitted {
     val path =
         draftPathUseCase.newVoiceDraftPath(
             userId,
             messageTimestamp = now,
             audioFileExtension = outputAudioFileExtension,
         )
-    return VoiceDraft(base = null, pendingChunkFilePath = path)
+    return VoiceDraft.Uncommitted(path)
   }
 
-  private fun restoreDraftPath(userId: UserId, filename: String) =
-    draftPathUseCase.restoreDraftPath(userId = userId, filename = filename)
+  fun resumeVoiceDraft(
+      baseDraft: VoiceDraft.Committed,
+      userId: UserId,
+      now: Instant = Clock.System.now(),
+  ): VoiceDraft.Appending {
+    val path =
+        draftPathUseCase.newVoiceDraftPath(
+            userId,
+            messageTimestamp = now,
+            audioFileExtension = outputAudioFileExtension,
+        )
+    return VoiceDraft.Appending(base = baseDraft.detail, pendingChunkFilePath = path)
+  }
 
   /** Load, verify(check & fix if necessary) voice draft */
   suspend fun loadValidDraft(userId: UserId, topicId: TopicId): VoiceDraft? {

@@ -14,7 +14,7 @@ import timber.log.Timber
 import top.fseasy.imlog.R
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.usecase.SignInUpUseCase
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 import top.fseasy.imlog.ui.model.TaskExecuteState
 import top.fseasy.imlog.ui.model.UserAvatarUiModel
 import top.fseasy.imlog.ui.model.buildUserAvatarNioPath

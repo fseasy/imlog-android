@@ -208,12 +208,6 @@ class VoiceRecordingService : Service() {
     stopSelf()
   }
 
-  private fun formatDuration(seconds: Long): String {
-    val m = seconds / 60
-    val s = seconds % 60
-    return String.format(Locale.getDefault(), "%02d:%02d", m, s)
-  }
-
   override fun onDestroy() {
     super.onDestroy()
     releaseWakeLock()

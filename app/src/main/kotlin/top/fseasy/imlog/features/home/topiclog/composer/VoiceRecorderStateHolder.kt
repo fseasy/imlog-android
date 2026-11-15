@@ -15,7 +15,7 @@ import top.fseasy.imlog.data.util.VoiceRecorder
 import top.fseasy.imlog.data.util.VoiceRecorderState
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendVoiceMessageUseCase
 
 class VoiceRecordingUiState(

@@ -1,4 +1,5 @@
 import kotlin.Boolean;
+import top.fseasy.imlog.data.model.VoiceDraftEntity;
 import top.fseasy.imlog.domain.model.AvatarModel;
 import top.fseasy.imlog.domain.model.MessageDraft;
 import top.fseasy.imlog.domain.model.MessageId;
@@ -66,7 +67,7 @@ CREATE TABLE topic_message_state (
     draft_quoted_message_id TEXT AS MessageId,
     draft_text_content TEXT,
     -- Use Result to handle parsing error condition
-    draft_voice_content TEXT AS kotlin.Result<VoiceDraft>,
+    draft_voice_content TEXT AS kotlin.Result<VoiceDraftEntity>,
     PRIMARY KEY (topic_id, user_id)
 );
 

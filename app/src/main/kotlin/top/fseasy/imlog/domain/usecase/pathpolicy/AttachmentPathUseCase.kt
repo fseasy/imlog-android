@@ -1,11 +1,12 @@
-package top.fseasy.imlog.domain.usecase.composer.sendattachment
+package top.fseasy.imlog.domain.usecase.pathpolicy
 
 import javax.inject.Inject
 import kotlin.time.Instant
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import javax.inject.Singleton
 
+@Singleton
 class AttachmentPathUseCase
 @Inject
 constructor(private val storagePathUseCase: StoragePathUseCase) {

@@ -9,7 +9,7 @@ import top.fseasy.imlog.domain.model.MessagePreview
 import top.fseasy.imlog.domain.model.MessageType
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 import top.fseasy.imlog.ui.model.TopicAvatarUiModel
 import top.fseasy.imlog.ui.model.buildTopicAvatarNioPath
 import top.fseasy.imlog.ui.model.toUiModel

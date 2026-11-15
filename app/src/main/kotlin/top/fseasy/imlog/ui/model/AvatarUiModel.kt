@@ -17,7 +17,7 @@ import top.fseasy.imlog.domain.model.PresetAvatar
 import top.fseasy.imlog.domain.model.TopicPresetAvatar
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.UserPresetAvatar
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 import top.fseasy.imlog.domain.util.defaultJson
 import java.nio.file.Path
 import kotlin.io.path.name

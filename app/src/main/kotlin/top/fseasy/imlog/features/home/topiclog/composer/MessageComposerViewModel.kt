@@ -42,7 +42,7 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
 import top.fseasy.imlog.domain.usecase.composer.SendTextMessageUseCase
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.ResolveMetadataResult
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendUriUseCaseBase
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendUriUseCaseFactory

@@ -18,7 +18,7 @@ import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UriAttachmentSource
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.StorageRepository
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 import top.fseasy.imlog.ui.model.buildUserAvatarNioPath
 import top.fseasy.imlog.ui.model.toUiModel
 import top.fseasy.imlog.ui.util.ImTimeUtils

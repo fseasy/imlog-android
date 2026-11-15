@@ -31,7 +31,7 @@ import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.repository.UserRepository
-import top.fseasy.imlog.domain.usecase.StoragePathUseCase
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
 import top.fseasy.imlog.domain.util.runSuspendCatching
 import top.fseasy.imlog.ui.model.AvatarUiModel
 import top.fseasy.imlog.ui.model.TaskExecuteWithDefaultState
