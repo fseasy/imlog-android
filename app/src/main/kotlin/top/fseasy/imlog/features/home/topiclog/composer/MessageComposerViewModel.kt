@@ -48,7 +48,7 @@ import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendUriUseCaseBas
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendUriUseCaseFactory
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendVoiceMessageUseCase
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.fileMimeTypeToMessageType
-import top.fseasy.imlog.domain.util.runSuspendCatching
+import top.fseasy.imlog.common.runSuspendCatching
 import top.fseasy.imlog.navigation.MainScreen
 import javax.inject.Inject
 import kotlin.time.Clock

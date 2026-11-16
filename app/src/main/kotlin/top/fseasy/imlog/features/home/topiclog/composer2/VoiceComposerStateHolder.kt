@@ -3,6 +3,8 @@ package top.fseasy.imlog.features.home.topiclog.composer2
 import android.content.Context
 import androidx.compose.runtime.Immutable
 import java.io.File
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineDispatcher
@@ -14,6 +16,8 @@ import timber.log.Timber
 import top.fseasy.imlog.R
 import top.fseasy.imlog.common.TransitionDecision
 import top.fseasy.imlog.common.TransitionResult
+import top.fseasy.imlog.common.launchCatching
+import top.fseasy.imlog.common.runSuspendCatching
 import top.fseasy.imlog.common.tryTransition
 import top.fseasy.imlog.data.audio.AndroidAudioWaveformExtractor
 import top.fseasy.imlog.domain.audio.AudioRecordResult
@@ -35,7 +39,6 @@ import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.usecase.composer.VoiceDraftUseCase
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendVoiceMessageUseCase
 import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
-import top.fseasy.imlog.domain.util.runSuspendCatching
 import top.fseasy.imlog.domain.util.toAppMessageTimeFormat
 
 @Immutable
@@ -61,12 +64,28 @@ sealed interface VoiceComposerMode {
 
 @Immutable
 sealed interface VoiceDraftUiState {
-  val isUpdating: Boolean
 
-  @Immutable data class Idle(override val isUpdating: Boolean = false) : VoiceDraftUiState
+  @Immutable data object Idle : VoiceDraftUiState
 
   @Immutable
-  data class Active(override val isUpdating: Boolean, val draft: VoiceDraft) : VoiceDraftUiState
+  sealed interface ActiveRecording : VoiceDraftUiState {
+    val waitingCoordinator: Boolean
+    val draft: VoiceDraft.ActiveRecording
+
+    @Immutable
+    data class Holding(
+        override val waitingCoordinator: Boolean,
+        override val draft: VoiceDraft.ActiveRecording.Base,
+    ) : ActiveRecording
+
+    @Immutable
+    data class Locked(
+        override val waitingCoordinator: Boolean,
+        override val draft: VoiceDraft.ActiveRecording,
+    ) : ActiveRecording
+  }
+
+  @Immutable data class CommittedDraft(val draft: VoiceDraft.Committed) : VoiceDraftUiState
 }
 
 /**
@@ -89,6 +108,13 @@ class VoiceComposerStateHolder(
 ) {
 
   private val _draftState = MutableStateFlow<VoiceDraftUiState>(VoiceDraftUiState.Idle())
+
+  /**
+   * 快按快松竞态 PressReleaseRace 处理：
+   * - 用户按下后立刻松开（不论是 Cancel/Release） 此时 onHoldStart 内部的 recorder 还没启动，根本没有录音
+   * - 因为 State 的保护，不能走正常的 clean 流程，所以设置 Signal, 让 clean 在 holdStart 中做
+   */
+  @OptIn(ExperimentalAtomicApi::class) private var pendingHoldCancel: AtomicBoolean? = null
 
   val composerMode: StateFlow<VoiceComposerMode> =
       combine(coordinator.sessionState, _draftState) { session, draft ->
@@ -150,50 +176,29 @@ class VoiceComposerStateHolder(
   }
 
   fun onNewVoiceNote() {
+    // Idle -> Locked
     val userId = authState.value.authenticatedIdOrNull() ?: return
-    // State guard
-    val stateTransitResult = _draftState.tryTransition { current ->
-      val couldTransit = current is VoiceDraftUiState.Idle && !current.isUpdating
-      if (!couldTransit) {
-        return@tryTransition TransitionDecision.Skip
-      }
-      TransitionDecision.Next(VoiceDraftUiState.Idle(isUpdating = true))
-    }
-    if (stateTransitResult !is TransitionResult.Done) {
-      Timber.w("Invalid State: Call NewVoiceNote while it's not idle, or it's already in updating")
-      return
-    }
+    val draft = draftUseCase.newVoiceDraft(userId)
+    val nextState =
+        VoiceDraftUiState.ActiveRecording.Locked(waitingCoordinator = true, draft = draft)
+    val transition = tryAcquireIdleStartLock(nextState, "NewVoiceNote") ?: return
 
-    val newDraft = draftUseCase.newVoiceDraft(userId) // No exception here
-    viewModelScope.launch {
+    viewModelScope.launchCatching {
       try {
         coordinator
-            .onDirectLock(RecordingPrompt.Default, newDraft.path)
+            .onDirectLock(RecordingPrompt.Default, draft.recordingFilePath)
             .onFailure { e ->
-              _draftState.update { VoiceDraftUiState.Idle(false) }
-              // Delete file just in case
-              storageRepository.deleteFile(newDraft.path)
+              storageRepository.deleteFile(draft.recordingFilePath)
+              _draftState.update { transition.previous }
               onShowSnackbar(
                   "${context.getString(R.string.composer_voice_note_start_failed_tip)}: ${e.localizedMessage}"
               )
             }
             .onSuccess {
-              _draftState.update {
-                VoiceDraftUiState.Active(
-                    isUpdating = false,
-                    draft = newDraft,
-                )
-              }
+              _draftState.update { nextState.copy(waitingCoordinator = false) }
             }
       } finally {
-        // restore state if unexpected exceptions occur in previous `onFailure/onSuccess`.
-        _draftState.tryTransition { current ->
-          if (current is VoiceDraftUiState.Idle && current.isUpdating) {
-            TransitionDecision.Next(VoiceDraftUiState.Idle(isUpdating = false))
-          } else {
-            TransitionDecision.Skip
-          }
-        }
+        restoreStateIfTransitionFailed(transition)
       }
     }
   }
@@ -202,12 +207,12 @@ class VoiceComposerStateHolder(
     val userId = authState.value.authenticatedIdOrNull() ?: return
     // Guard
     val stateTransitionResult = _draftState.tryTransition { current ->
-      if (
-          !current.isUpdating &&
-              current is VoiceDraftUiState.Active &&
-              current.draft is VoiceDraft.Committed
-      ) {
-        TransitionDecision.Next(current.copy(isUpdating = true))
+      if (current is VoiceDraftUiState.CommittedDraft) {
+        // Just build object in Memory, no side effects
+        val resumeDraft = draftUseCase.appending(baseDraft = current.draft, userId = userId)
+        TransitionDecision.Next(
+            VoiceDraftUiState.ActiveRecording.Locked(waitingCoordinator = true, draft = resumeDraft)
+        )
       } else {
         TransitionDecision.Skip
       }
@@ -216,72 +221,219 @@ class VoiceComposerStateHolder(
       Timber.w("Invalid state: Call ResumeRecording while on state = ${_draftState.value}")
       return
     }
-    val lockingState = stateTransitionResult.current as VoiceDraftUiState.Active
-    val baseDraft = lockingState.draft as VoiceDraft.Committed
-    // Just create a memory object, no side effects
-    val resumeDraft = draftUseCase.resumeVoiceDraft(baseDraft = baseDraft, userId = userId)
-    val pendingPath = resumeDraft.pendingChunkFilePath
+    val currentState = stateTransitionResult.current as VoiceDraftUiState.ActiveRecording.Locked
+    val pendingPath = currentState.draft.recordingFilePath
 
-    viewModelScope.launch {
+    viewModelScope.launchCatching {
       val prompt = RecordingPrompt.Default
       try {
-        coordinator.onDirectLock(prompt, destinationPath = pendingPath).onFailure { e ->
-          // rollback state
-          _draftState.update { stateTransitionResult.previous }
-          storageRepository.deleteFile(pendingPath)
-          onShowSnackbar(
-              "${context.getString(R.string.composer_voice_note_start_failed_tip)}: ${e.localizedMessage}"
-          )
-        }.onSuccess {
-          _draftState.update { VoiceDraftUiState.Active(isUpdating = false, draft = resumeDraft) }
-        }
-      }
-      finally{
-        _draftState.tryTransition { state ->
-          // rollback if it's still in the guard entering state
-          if (state == lockingState) {
-            TransitionDecision.Next(stateTransitionResult.previous)
-          } else {
-            TransitionDecision.Skip
-          }
-        }
+        coordinator
+            .onDirectLock(prompt, destinationPath = pendingPath)
+            .onFailure { e ->
+              storageRepository.deleteFile(pendingPath)
+              // rollback state
+              _draftState.update { stateTransitionResult.previous }
+              onShowSnackbar(
+                  "${context.getString(R.string.composer_voice_note_start_failed_tip)}: ${e.localizedMessage}"
+              )
+            }
+            .onSuccess {
+              _draftState.update { currentState.copy(waitingCoordinator = false) }
+            }
+      } finally {
+        restoreStateIfTransitionFailed(stateTransitionResult)
       }
     }
   }
 
-  // --- 手势动作 ---
+  @OptIn(ExperimentalAtomicApi::class)
   fun onHoldStart() {
-    launchWithUserId { userId ->
-      val path = newVoiceDraftPath(userId)
-      coordinator.onHoldDown(path).onFailure { e ->
-        onShowSnackbar(
-            "${context.getString(R.string.composer_hold_to_record_failed_tip)}: ${e.localizedMessage}"
-        )
-        storageRepository.deleteFile(path)
+    val userId = authState.value.authenticatedIdOrNull() ?: return
+    val draft = draftUseCase.newVoiceDraft(userId)
+    val nextState =
+        VoiceDraftUiState.ActiveRecording.Holding(waitingCoordinator = true, draft = draft)
+    val transition = tryAcquireIdleStartLock(nextState, "HoldStart") ?: return
+    // 确保只有抢锁成功后，才绑定本次按住的取消信号
+    val cancelSignal = AtomicBoolean(false)
+    pendingHoldCancel = cancelSignal
+
+    viewModelScope.launchCatching {
+      try {
+        coordinator
+            .onHoldDown(draft.recordingFilePath)
+            .onFailure { e ->
+              storageRepository.deleteFile(draft.recordingFilePath)
+              _draftState.update { transition.previous }
+              // Show only when user hadn't canceled it.
+              if (!cancelSignal.load()) {
+                onShowSnackbar(
+                    "${context.getString(R.string.composer_hold_to_record_failed_tip)}: ${e.localizedMessage}"
+                )
+              }
+            }
+            .onSuccess {
+              // User already release hold. go cancel logic as lower level Recorder haven't
+              // recording anything.
+              if (cancelSignal.load()) {
+                coordinator.onHoldCancel()
+                storageRepository.deleteFile(draft.recordingFilePath)
+                _draftState.update { transition.previous }
+              } else {
+                // To new state.
+                // NOTE: consider the HoldToLock gesture action, our lock can't prevent its
+                // updating. I.e., _draftState can be changed to Locked when go back here.
+                val stateAfterCoordinatorDone = _draftState.value
+                val updatedState =
+                    if (stateAfterCoordinatorDone is VoiceDraftUiState.ActiveRecording.Locked) {
+                      stateAfterCoordinatorDone.copy(waitingCoordinator = false)
+                    } else {
+                      // It should be impossible. Let's assert it
+                      require(stateAfterCoordinatorDone == nextState) {
+                        val msg =
+                            "Unknow state: onHoldStart get unexpected draft state: " +
+                                "$stateAfterCoordinatorDone, have to hard reset"
+                        Timber.e(msg)
+                        msg
+                      }
+                      nextState.copy(waitingCoordinator = false)
+                    }
+                _draftState.update { updatedState }
+              }
+            }
+      } finally {
+        // Only reset when it haven't been changed in other parts (currently can't happen)
+        if (pendingHoldCancel == cancelSignal) {
+          pendingHoldCancel = null
+        }
+        restoreStateIfTransitionFailed(transition)
       }
     }
+  }
+
+  private fun tryAcquireIdleStartLock(
+      nextState: VoiceDraftUiState,
+      actionName: String,
+  ): TransitionResult.Done<VoiceDraftUiState>? {
+    val result = _draftState.tryTransition { current ->
+      if (current is VoiceDraftUiState.Idle) {
+        TransitionDecision.Next(nextState)
+      } else {
+        TransitionDecision.Skip
+      }
+    }
+    if (result !is TransitionResult.Done) {
+      Timber.w("Invalid state: call $actionName while state = ${_draftState.value}")
+      return null
+    }
+    return result
+  }
+
+  private fun restoreStateIfTransitionFailed(transition: TransitionResult.Done<VoiceDraftUiState>) {
+    _draftState.tryTransition { current ->
+      if (current == transition.current) {
+        TransitionDecision.Next(transition.previous)
+      } else {
+        TransitionDecision.Skip
+      }
+    }
+  }
+
+  /**
+   * 快按快松竞态 PressReleaseRace 时发送信号取消
+   *
+   * @return if signaled.
+   */
+  @OptIn(ExperimentalAtomicApi::class)
+  private inline fun <
+      reified T : VoiceDraftUiState.ActiveRecording
+  > signalCancelOnPressReleaseRace(): Boolean {
+    val currentState = _draftState.value
+    if (currentState is T && currentState.waitingCoordinator) {
+      pendingHoldCancel?.store(true)
+      return true
+    }
+    return false
   }
 
   fun onHoldToLockGesture() {
-    // NO io operation
-    viewModelScope.launch {
-      // NOTE! currently we have to delete the old one except implement multiple drafts!
-      clearDraftInternal(false)
-      if (!coordinator.onHoldToLockGesture(RecordingPrompt.Default)) {
-        onShowSnackbar(context.getString(R.string.composer_hold_to_record_lock_failed_tip))
+    val transitionResult = _draftState.tryTransition { current ->
+      // No mater if it's waiting for the coordinator initializing the recorder, draftState can
+      // always
+      // transfer to the Locked State.
+      // After transfer, the `onHoldCancel` and `onHoldRelease` will do nothing as state guard!
+      // It meets the requirement.
+      if (current is VoiceDraftUiState.ActiveRecording.Holding) {
+        val nextState =
+            VoiceDraftUiState.ActiveRecording.Locked(
+                waitingCoordinator = current.waitingCoordinator,
+                draft = current.draft,
+            )
+        TransitionDecision.Next(nextState)
+      } else {
+        TransitionDecision.Skip
       }
     }
+    if (transitionResult !is TransitionResult.Done) {
+      Timber.w("Invalid State: holdToLock on state = ${_draftState.value}")
+      return
+    }
+    // NOTE: it's a sync fun
+    coordinator.onHoldToLockGesture(RecordingPrompt.Default)
   }
 
+  @OptIn(ExperimentalAtomicApi::class)
   fun onHoldCancel() {
-    viewModelScope.launch(Dispatchers.IO) {
-      coordinator.onHoldCancel()?.let { storageRepository.deleteFile(it.filePath) }
+    if (signalCancelOnPressReleaseRace<VoiceDraftUiState.ActiveRecording.Holding>()) return
+    val transitionResult = _draftState.tryTransition { current ->
+      if (current is VoiceDraftUiState.ActiveRecording.Holding && !current.waitingCoordinator) {
+        TransitionDecision.Next(VoiceDraftUiState.Idle)
+      } else {
+        TransitionDecision.Skip
+      }
+    }
+    if (transitionResult !is TransitionResult.Done) {
+      Timber.w("Invalid state: call HoldCancel on state = ${_draftState.value}")
+      return
+    }
+    viewModelScope.launchCatching {
+      coordinator
+          .onHoldCancel()
+          .onFailure { e ->
+            Timber.w(e, "Failed to Cancel Hold")
+          }
+          .onSuccess { cancelResult ->
+            storageRepository.deleteFile(cancelResult.filePath)
+          }
     }
   }
 
   fun onHoldRelease() {
-    viewModelScope.launch(Dispatchers.IO) {
-      coordinator.onHoldRelease()?.let { sendRawChunkInternal(it) }
+    // Release too fast.
+    if (signalCancelOnPressReleaseRace<VoiceDraftUiState.ActiveRecording.Holding>()) {
+      onShowSnackbar(context.getString(R.string.composer_hold_to_record_voice_duration_too_short))
+      return
+    }
+    val transitionResult = _draftState.tryTransition { current ->
+      if (current is VoiceDraftUiState.ActiveRecording.Holding && !current.waitingCoordinator) {
+        TransitionDecision.Next(VoiceDraftUiState.Idle)
+      } else {
+        TransitionDecision.Skip
+      }
+    }
+    if (transitionResult !is TransitionResult.Done) {
+      Timber.w("Invalid state: call HoldCancel on state = ${_draftState.value}")
+      return
+    }
+    // Use AppScope to make sure result can be saved.
+    appScope.launchCatching {
+      coordinator
+          .onHoldRelease()
+          .onFailure { e -> Timber.w(e) }
+          .onSuccess { recordResult ->
+            val draft =
+                (transitionResult.previous as VoiceDraftUiState.ActiveRecording.Holding).draft
+            sendActiveRecordingDraft(draft, recordResult)
+          }
     }
   }
 
@@ -407,7 +559,7 @@ class VoiceComposerStateHolder(
     }
   }
 
-  private suspend fun sendRawChunkInternal(result: AudioRecordResult) {
+  private suspend fun sendActiveRecordingDraft(draft: VoiceDraft, result: AudioRecordResult) {
     val bars = WaveformCodec5Bit.calculateTargetBars(result.duration.inWholeSeconds)
     val compressed = WaveformCodec5Bit.encode(result.waveform, bars)
     sendVoiceMessageUseCase(result.filePath, result.duration, compressed, topicId, userId)

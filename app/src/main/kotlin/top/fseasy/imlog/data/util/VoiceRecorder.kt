@@ -15,7 +15,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import top.fseasy.imlog.domain.util.runSuspendCatching
+import top.fseasy.imlog.common.runSuspendCatching
 import java.io.File
 import kotlin.io.path.createParentDirectories
 import kotlin.time.Duration.Companion.milliseconds

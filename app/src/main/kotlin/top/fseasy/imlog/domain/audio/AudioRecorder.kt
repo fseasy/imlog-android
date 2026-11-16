@@ -52,6 +52,8 @@ sealed interface AudioRecordResult {
   data class Failure(override val filePath: StoragePathModel.Internal) : AudioRecordResult
 }
 
+data class AudioRecordCancelResult(val filePath: StoragePathModel.Internal)
+
 /**
  * 跨平台录音器通用接口 未来 iOS 可基于 AVAudioEngine / AVAudioRecorder 实现该接口
  *
@@ -60,12 +62,18 @@ sealed interface AudioRecordResult {
 interface AudioRecorder : AutoCloseable {
   val snapshot: StateFlow<RecordingSnapshot>
 
-  suspend fun start(destinationPath: StoragePathModel.Internal): Result<Unit>
+  suspend fun start(
+    destinationPath: StoragePathModel.Internal,
+    onRecordingFocusLost: (() -> Unit)? = null,
+  ): Result<Unit>
 
-  suspend fun stop(): AudioRecordResult?
+  /** NOTE: no matter success or not, we don't delete the result file! */
+  suspend fun stop(): Result<AudioRecordResult>
 
-  /** Return the failure with given `destinationPath` in [start] to let the business layer delete it. */
-  suspend fun cancel(): AudioRecordResult.Failure?
+  /**
+   * Return with the corresponding `destinationPath` in [start] to let the business layer delete it.
+   */
+  suspend fun cancel(): Result<AudioRecordCancelResult>
 
   /** 音频文件后缀（包含点号，如 ".m4a" 或 ".aac"） */
   val outputAudioFileExtension: String

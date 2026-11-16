@@ -31,28 +31,28 @@ class VoiceDraftUseCase(
   fun newVoiceDraft(
       userId: UserId,
       now: Instant = Clock.System.now(),
-  ): VoiceDraft.Uncommitted {
+  ): VoiceDraft.ActiveRecording.Base {
     val path =
         draftPathUseCase.newVoiceDraftPath(
             userId,
             messageTimestamp = now,
             audioFileExtension = outputAudioFileExtension,
         )
-    return VoiceDraft.Uncommitted(path)
+    return VoiceDraft.ActiveRecording.Base(path)
   }
 
-  fun resumeVoiceDraft(
+  fun appending(
       baseDraft: VoiceDraft.Committed,
       userId: UserId,
       now: Instant = Clock.System.now(),
-  ): VoiceDraft.Appending {
+  ): VoiceDraft.ActiveRecording.Appending {
     val path =
         draftPathUseCase.newVoiceDraftPath(
             userId,
             messageTimestamp = now,
             audioFileExtension = outputAudioFileExtension,
         )
-    return VoiceDraft.Appending(base = baseDraft.detail, pendingChunkFilePath = path)
+    return VoiceDraft.ActiveRecording.Appending(base = baseDraft.detail, recordingFilePath = path)
   }
 
   /** Load, verify(check & fix if necessary) voice draft */

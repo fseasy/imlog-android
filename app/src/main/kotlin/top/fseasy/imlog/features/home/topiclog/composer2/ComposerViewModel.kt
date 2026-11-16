@@ -61,7 +61,7 @@ import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendUriUseCaseBas
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendUriUseCaseFactory
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.SendVoiceMessageUseCase
 import top.fseasy.imlog.domain.usecase.composer.sendattachment.fileMimeTypeToMessageType
-import top.fseasy.imlog.domain.util.runSuspendCatching
+import top.fseasy.imlog.common.runSuspendCatching
 import top.fseasy.imlog.features.home.topiclog.composer.ComposerUiEffect
 import top.fseasy.imlog.features.home.topiclog.composer.MessageInputModeUi
 import top.fseasy.imlog.features.home.topiclog.composer.VoiceRecorderStateHolder

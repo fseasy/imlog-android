@@ -25,11 +25,12 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.data.mapper.toNioPath
-import top.fseasy.imlog.domain.model.StoragePathModel
+import top.fseasy.imlog.domain.audio.AudioRecordCancelResult
 import top.fseasy.imlog.domain.audio.AudioRecordResult
 import top.fseasy.imlog.domain.audio.AudioRecorder
 import top.fseasy.imlog.domain.audio.RecordingSnapshot
-import top.fseasy.imlog.domain.util.runSuspendCatching
+import top.fseasy.imlog.domain.model.StoragePathModel
+import top.fseasy.imlog.common.runSuspendCatching
 
 class AndroidAudioRecorder(
     private val application: Application,
@@ -44,63 +45,94 @@ class AndroidAudioRecorder(
   private val mutex = Mutex()
   // 所有易变状态均在 session 内部，activeSession != null 即代表正在录音
   private var activeSession: RecordingSession? = null
+  private val audioFocusHelper = AudioFocusHelper(application)
 
-  override suspend fun start(destinationPath: StoragePathModel.Internal): Result<Unit> =
-      runSuspendCatching {
-        mutex.withLock {
-          if (activeSession != null) return@runSuspendCatching
-          // update status immediately
-          _snapshot.value = RecordingSnapshot(status = RecordingSnapshot.Status.Recording)
-          // then start recording session
-          activeSession =
-              RecordingSession.start(
-                  context = application,
-                  scope = scope,
-                  destinationPath = destinationPath,
-                  sampleInterval = sampleInterval,
-                  timeSource = timeSource,
-                  onSnapshot = { duration, pulse ->
-                    _snapshot.update { s ->
-                      if (s.status == RecordingSnapshot.Status.Recording) {
-                        s.copy(duration = duration, currentPulse = pulse)
-                      } else {
-                        s
-                      }
-                    }
-                  },
-              )
-        }
-      }
+  /** Run IO operations in IO thread. */
+  override suspend fun start(
+      destinationPath: StoragePathModel.Internal,
+      onRecordingFocusLost: (() -> Unit)?,
+  ): Result<Unit> = runSuspendCatching {
+    val focusGranted =
+        audioFocusHelper.requestFocus(
+            onFocusLost = {
+              // 录音中途突然来电：通知外层
+              onRecordingFocusLost?.invoke()
+            }
+        )
+
+    if (!focusGranted) {
+      // 提示用户“麦克风或音频被占用，无法录音”，直接返回，省去创建 MediaRecorder 的开销
+      throw IllegalStateException("Can't get AudioRecording focus")
+    }
+    mutex.withLock {
+      if (activeSession != null)
+          throw IllegalStateException("Invalid state: start with active session")
+      // update status immediately
+      _snapshot.value = RecordingSnapshot(status = RecordingSnapshot.Status.Recording)
+      // then start recording session
+      activeSession =
+          RecordingSession.start(
+              context = application,
+              scope = scope,
+              destinationPath = destinationPath,
+              sampleInterval = sampleInterval,
+              timeSource = timeSource,
+              onSnapshot = { duration, pulse ->
+                _snapshot.update { s ->
+                  if (s.status == RecordingSnapshot.Status.Recording) {
+                    s.copy(duration = duration, currentPulse = pulse)
+                  } else {
+                    s
+                  }
+                }
+              },
+          )
+    }
+  }
       .onFailure {
         Timber.e(it, "Failed to start AudioRecorder")
         _snapshot.value = RecordingSnapshot(status = RecordingSnapshot.Status.Idle)
       }
 
-  override suspend fun stop(): AudioRecordResult? = mutex.withLock {
-    val session = activeSession ?: return null
-    activeSession = null // 移出会话引用，防止重入
+  override suspend fun stop(): Result<AudioRecordResult> = runSuspendCatching {
+    mutex.withLock {
+      val session =
+          activeSession
+              ?: throw IllegalStateException("Invalid State: call stop while activeSession = null")
+      activeSession = null // 移出会话引用，防止重入
 
-    val result = session.stop()
-    _snapshot.update { s ->
-      s.copy(
-          status = RecordingSnapshot.Status.Idle,
-          currentPulse = 0f, // 录音结束，振幅归零
-      )
+      val result =
+          try {
+            session.stop()
+          } finally {
+            audioFocusHelper.abandonFocus()
+            _snapshot.update { s ->
+              s.copy(
+                  status = RecordingSnapshot.Status.Idle,
+                  currentPulse = 0f, // 录音结束，振幅归零
+              )
+            }
+          }
+      result
     }
-    result
   }
 
-  /**
-   * Run in IO thread for necessary parts.
-   *
-   * No exception will be thrown
-   */
-  override suspend fun cancel(): AudioRecordResult.Failure? = mutex.withLock {
-    val session = activeSession ?: return null
-    activeSession = null
-    val result = session.cancel()
-    _snapshot.value = RecordingSnapshot(status = RecordingSnapshot.Status.Idle)
-    result
+  /** Run in IO thread for necessary parts. */
+  override suspend fun cancel(): Result<AudioRecordCancelResult> = runSuspendCatching {
+    mutex.withLock {
+      val session =
+          activeSession
+              ?: throw IllegalStateException("Invalid State: call Cancel while no active session")
+      activeSession = null
+      val result =
+          try {
+            session.cancel()
+          } finally {
+            audioFocusHelper.abandonFocus()
+            _snapshot.value = RecordingSnapshot(status = RecordingSnapshot.Status.Idle)
+          }
+      result
+    }
   }
 
   override fun close() {
@@ -108,6 +140,7 @@ class AndroidAudioRecorder(
     val currentSession = activeSession ?: return
     activeSession = null
     currentSession.syncRelease()
+    audioFocusHelper.abandonFocus()
   }
 
   override val outputAudioFileExtension: String = ".aac"
@@ -183,12 +216,12 @@ private constructor(
     }
   }
 
-  /** Run in IO thread for necessary parts. No lower-level exception will be thrown */
-  suspend fun cancel(): AudioRecordResult.Failure {
+  /** Run in IO thread for necessary parts. No exception will be thrown */
+  suspend fun cancel(): AudioRecordCancelResult {
     withContext(Dispatchers.IO) {
       syncRelease()
     }
-    return AudioRecordResult.Failure(outputPath.path)
+    return AudioRecordCancelResult(outputPath.path)
   }
 
   /** No exception */
@@ -264,8 +297,9 @@ private constructor(
               setAudioSource(MediaRecorder.AudioSource.MIC)
               setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS)
               setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-              setAudioSamplingRate(44100)
-              setAudioEncodingBitRate(96000)
+              setAudioChannels(1)
+              setAudioSamplingRate(44_100)
+              setAudioEncodingBitRate(64_000)
               setOutputFile(file.absolutePath)
             }
   }

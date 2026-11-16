@@ -170,4 +170,5 @@
     <string name="composer_voice_note_start_failed_tip">Start Voice Note Failed</string>
     <string name="composer_hold_to_record_failed_tip">Hold To Record Failed</string>
     <string name="composer_hold_to_record_lock_failed_tip">Hold To Record Lock Failed.</string>
+    <string name="composer_hold_to_record_voice_duration_too_short">Voice is too short</string>
 </resources>

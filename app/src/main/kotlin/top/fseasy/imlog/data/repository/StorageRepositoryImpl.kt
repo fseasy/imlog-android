@@ -49,7 +49,7 @@ import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VideoMetadata
 import top.fseasy.imlog.domain.repository.StorageRepository
-import top.fseasy.imlog.domain.util.runSuspendCatching
+import top.fseasy.imlog.common.runSuspendCatching
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 
 @Singleton
