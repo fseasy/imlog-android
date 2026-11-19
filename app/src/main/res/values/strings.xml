@@ -149,6 +149,23 @@
     <string name="composer_bar_btn_hold_to_record_label">Hold To Record</string>
     <string name="composer_voice_note_btn_resume">Resume</string>
     <string name="composer_voice_note_btn_pause">Pause</string>
+
+    <string name="composer_recording_event_focus_lost_cancel">Recording interrupted and canceled.</string>
+    <string name="composer_recording_event_os_native_error_cancel">Audio error. Recording canceled.</string>
+    <string name="composer_recording_event_storage_full_cancel">Storage full. Recording canceled.</string>
+    <!-- 打断后成功把已录内容存成一条笔记 -->
+    <string name="composer_recording_event_focus_lost_stop_success">Recording interrupted. Voice note saved.</string>
+    <string name="composer_recording_event_os_native_error_stop_success">Recording stopped due to an error. Voice note saved.</string>
+    <string name="composer_recording_event_storage_full_stop_success">Storage full. Voice note saved.</string>
+
+    <!-- 打断后未能保存 -->
+    <string name="composer_recording_event_focus_lost_stop_fail">Recording interrupted. Couldn\'t save voice note.</string>
+    <string name="composer_recording_event_os_native_error_stop_fail">Audio error. Couldn\'t save voice note.</string>
+    <string name="composer_recording_event_storage_full_stop_fail">Storage full. Couldn\'t save voice note.</string>
+
+    <!-- Hold 正常松手但失败（如过短或写入异常） -->
+    <string name="composer_hold_to_record_stop_fail">Couldn\'t save voice note. Please try again.</string>
+
     <!-- Notification Channel -->
     <string name="notification_channel_recording_name">Audio Recording</string>
     <string name="notification_channel_recording_desc">Displays the progress of the current audio recording</string>
@@ -171,4 +188,6 @@
     <string name="composer_hold_to_record_failed_tip">Hold To Record Failed</string>
     <string name="composer_hold_to_record_lock_failed_tip">Hold To Record Lock Failed.</string>
     <string name="composer_hold_to_record_voice_duration_too_short">Voice is too short</string>
+    <string name="composer_voice_note_voice_duration_too_short">Voice is too short</string>
+    <string name="composer_voice_note_stop_fail">Recording fail</string>
 </resources>

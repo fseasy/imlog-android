@@ -13,11 +13,14 @@ class VoiceRecordingCoordinator(
   val recordingSnapshot: StateFlow<RecordingSnapshot> = recorder.snapshot
 
   /** Safe to run in Main thread: run IO in io threads. */
-  suspend fun onHoldDown(destinationPath: StoragePathModel.Internal): Result<Unit> {
-    return recorder.start(destinationPath)
+  suspend fun onHoldStart(
+      destinationPath: StoragePathModel.Internal,
+      onOsEvent: (RecordingOsEvent) -> Unit,
+  ): Result<Unit> {
+    return recorder.start(destinationPath, onOsEvent = onOsEvent)
   }
 
-  suspend fun onHoldRelease(): Result<AudioRecordResult> {
+  suspend fun onHoldStop(): Result<AudioRecordResult> {
     return recorder.stop()
   }
 
@@ -30,7 +33,8 @@ class VoiceRecordingCoordinator(
     return recorder.cancel()
   }
 
-  fun onHoldToLockGesture(prompt: RecordingPrompt) {
+  /** Sync fun. No Exception. */
+  fun onTransformHoldToLock(prompt: RecordingPrompt) {
     return guardian.startGuarding(prompt)
   }
 
@@ -38,9 +42,10 @@ class VoiceRecordingCoordinator(
   suspend fun onDirectLock(
       prompt: RecordingPrompt,
       destinationPath: StoragePathModel.Internal,
+      onOsEvent: (RecordingOsEvent) -> Unit,
   ): Result<Unit> {
     guardian.startGuarding(prompt)
-    return recorder.start(destinationPath).onFailure {
+    return recorder.start(destinationPath, onOsEvent).onFailure {
       // 启动失败，必须关闭保活并回滚状态！
       guardian.stopGuarding()
     }

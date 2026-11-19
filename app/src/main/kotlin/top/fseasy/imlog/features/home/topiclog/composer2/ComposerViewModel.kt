@@ -68,6 +68,7 @@ import top.fseasy.imlog.features.home.topiclog.composer.VoiceRecorderStateHolder
 import top.fseasy.imlog.features.home.topiclog.composer.toDomain
 import top.fseasy.imlog.features.home.topiclog.composer.toUiState
 import top.fseasy.imlog.features.home.topiclog.composer2.classic.ClassicComposerUiStateHolder
+import top.fseasy.imlog.features.home.topiclog.composer2.voice.VoiceComposerStateHolder
 import top.fseasy.imlog.navigation.MainScreen
 
 // SQLite writing is single thread, so it is useless that set it higher
@@ -105,14 +106,14 @@ constructor(
           )
           .also(::addCloseable)
   val voiceComposerStateHolder =
-      VoiceComposerStateHolder(
-          viewModelScope = viewModelScope,
-          coordinator = (application as ImLogApplication).recordingCoordinator,
-          storagePathUseCase = storagePathUseCase,
-          topicId = topicId,
-          authState = authState,
-          context = context,
-      )
+    VoiceComposerStateHolder(
+      viewModelScope = viewModelScope,
+      coordinator = (application as ImLogApplication).recordingCoordinator,
+      storagePathUseCase = storagePathUseCase,
+      topicId = topicId,
+      authState = authState,
+      context = context,
+    )
 
   val textFieldState = TextFieldState(initialText = "")
   private val isTextNotEmpty: StateFlow<Boolean> = snapshotFlow {

@@ -12,7 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import javax.inject.Inject
 import timber.log.Timber
-import top.fseasy.imlog.data.audio.AndroidAudioRecorder
+import top.fseasy.imlog.data.audio.recorder.AndroidAudioRecorder
 import top.fseasy.imlog.data.audio.AndroidRecordingGuardian
 import top.fseasy.imlog.data.util.CrashReportingTree
 import top.fseasy.imlog.domain.audio.VoiceRecordingCoordinator

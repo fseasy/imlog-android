@@ -5,11 +5,13 @@ import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import top.fseasy.imlog.domain.audio.AudioRecordResult
 import top.fseasy.imlog.domain.audio.AudioWaveformExtractor
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VoiceDraft
+import top.fseasy.imlog.domain.model.commit
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.usecase.pathpolicy.VoiceDraftPathUseCase
@@ -53,6 +55,35 @@ class VoiceDraftUseCase(
             audioFileExtension = outputAudioFileExtension,
         )
     return VoiceDraft.ActiveRecording.Appending(base = baseDraft.detail, recordingFilePath = path)
+  }
+
+  /**
+   * safe for main-thread.
+   *
+   * No catchable exception. But it may throw some system level exception or CoroutineCancellationException
+   */
+  suspend fun commitWhenRecordingSuccess(
+      draft: VoiceDraft.ActiveRecording,
+      audioRecordResult: AudioRecordResult.Success,
+  ) =
+      draft.commit(
+          recordingResult = audioRecordResult,
+          fileContentAppendOperation = storageRepository::fileAppendContent,
+          fileDeleteOperation = storageRepository::deleteFile,
+      )
+
+  /** No exception will be thrown
+   *
+   * Safe for main-thread.
+   * */
+  suspend fun tryCommitWhenRecordingFailure(
+      draft: VoiceDraft.ActiveRecording
+  ): VoiceDraft.Committed? {
+    storageRepository.deleteFile(draft.recordingFilePath)
+    return when (draft) {
+      is VoiceDraft.ActiveRecording.Appending -> VoiceDraft.Committed(draft.base)
+      is VoiceDraft.ActiveRecording.Base -> null
+    }
   }
 
   /** Load, verify(check & fix if necessary) voice draft */

@@ -27,7 +27,10 @@ class Waveform(val bars: FloatArray) {
     return result
   }
 
-  /** 将新音频片段的原始采样追加到当前波形之后 全程直接在 FloatArray 上运算，零编解码消耗 */
+  /** 将新音频片段的原始采样追加到当前波形之后 全程直接在 FloatArray 上运算，零编解码消耗
+   *
+   * Return a new Waveform instance.
+   * */
   fun appendSegment(
       oldDurationSeconds: Long,
       newRawAmplitudes: FloatArray,
@@ -85,6 +88,9 @@ class Waveform(val bars: FloatArray) {
     fun fromRawAmplitudes(rawAmplitudes: FloatArray, targetBars: Int): Waveform {
       return Waveform(downsample(rawAmplitudes, targetBars))
     }
+
+    fun fromRawAmplitudes(rawAmplitudes: FloatArray, durationSeconds: Long) =
+        fromRawAmplitudes(rawAmplitudes, calculateTargetBars(durationSeconds))
 
     private fun downsample(rawAmplitudes: FloatArray, targetBars: Int): FloatArray {
       if (rawAmplitudes.isEmpty() || targetBars <= 0) return FloatArray(0)
