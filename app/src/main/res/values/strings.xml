@@ -150,20 +150,29 @@
     <string name="composer_voice_note_btn_resume">Resume</string>
     <string name="composer_voice_note_btn_pause">Pause</string>
 
-    <string name="composer_recording_event_focus_lost_cancel">Recording interrupted and canceled.</string>
-    <string name="composer_recording_event_os_native_error_cancel">Audio error. Recording canceled.</string>
-    <string name="composer_recording_event_storage_full_cancel">Storage full. Recording canceled.</string>
+    <string name="composer_recording_error_focus_lost_cancel">Recording interrupted and canceled.</string>
+    <string name="composer_recording_error_os_native_error_cancel">Audio error. Recording canceled.</string>
+    <string name="composer_recording_error_storage_full_cancel">Storage full. Recording canceled.</string>
     <!-- 打断后成功把已录内容存成一条笔记 -->
-    <string name="composer_recording_event_focus_lost_stop_success">Recording interrupted. Voice note saved.</string>
-    <string name="composer_recording_event_os_native_error_stop_success">Recording stopped due to an error. Voice note saved.</string>
-    <string name="composer_recording_event_storage_full_stop_success">Storage full. Voice note saved.</string>
+    <string name="composer_recording_error_focus_lost_stop_success">Recording interrupted. Voice note saved.</string>
+    <string name="composer_recording_error_os_native_error_stop_success">Recording stopped due to an error. Voice note saved.</string>
+    <string name="composer_recording_error_storage_full_stop_success">Storage full. Voice note saved.</string>
 
-    <!-- 打断后未能保存 -->
-    <string name="composer_recording_event_focus_lost_stop_fail">Recording interrupted. Couldn\'t save voice note.</string>
-    <string name="composer_recording_event_os_native_error_stop_fail">Audio error. Couldn\'t save voice note.</string>
-    <string name="composer_recording_event_storage_full_stop_fail">Storage full. Couldn\'t save voice note.</string>
+    <!-- STOP 后失败：原因前缀模板（%1$s = 结果后缀） -->
+    <string name="composer_recording_stop_fail_reason_focus_lost">Recording interrupted. %1$s</string>
+    <string name="composer_recording_stop_fail_reason_microphone_busy">Microphone busy. %1$s</string>
+    <string name="composer_recording_stop_fail_reason_internal_error">Internal error. %1$s</string>
+    <string name="composer_recording_stop_fail_reason_os_native_error">System error. %1$s</string>
+    <string name="composer_recording_stop_fail_reason_storage_full">Storage full. %1$s</string>
+    <string name="composer_recording_stop_fail_reason_file_io">Audio write failed. %1$s</string>
+    <string name="composer_recording_stop_fail_reason_permission_denied">Permission denied. %1$s</string>
+    <string name="composer_recording_stop_fail_reason_too_short">Voice is too short. %1$s</string>
 
-    <!-- Hold 正常松手但失败（如过短或写入异常） -->
+    <!-- STOP 后失败：结果后缀 -->
+    <string name="composer_recording_stop_fail_result_cannot_save">Couldn\'t save.</string>
+    <string name="composer_recording_stop_fail_result_rollback">Rollback to last draft.</string>
+
+    <!-- 过短或写入异常，未能保存 -->
     <string name="composer_hold_to_record_stop_fail">Couldn\'t save voice note. Please try again.</string>
 
     <!-- Notification Channel -->
@@ -187,7 +196,5 @@
     <string name="composer_voice_note_start_failed_tip">Start Voice Note Failed</string>
     <string name="composer_hold_to_record_failed_tip">Hold To Record Failed</string>
     <string name="composer_hold_to_record_lock_failed_tip">Hold To Record Lock Failed.</string>
-    <string name="composer_hold_to_record_voice_duration_too_short">Voice is too short</string>
-    <string name="composer_voice_note_voice_duration_too_short">Voice is too short</string>
     <string name="composer_voice_note_stop_fail">Recording fail</string>
 </resources>

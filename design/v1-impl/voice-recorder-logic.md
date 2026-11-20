@@ -53,5 +53,63 @@ Web标准	WebRTC 强制必选	非必须
    用户知情：为了防止应用在后台偷偷消耗电量或侵犯隐私，系统规定前台服务必须在系统的通知栏显示一个常驻的（不可滑动删除的）通知。用户一眼就能看到“这个应用正在后台运行”。
    权限声明：在 Android 11 (API 30) 及以上版本，如果前台服务需要使用麦克风，必须显式声明其类型为 microphone。
 
-## Voice Composer 逻辑设计
+## Voice Composer 状态转移
 
+### 从 UI 行为的角度
+
+#### 在 committedDraft 状态
+
+> committedDraft status, ui resume-action
+
+
+> committedDraft status, ui send-action
+
+action: send
+
+then based on the send result:
+
+| ui action result | action                | final state |
+| ---------------- | --------------------- | ----------- |
+| success          | -                     | idle        |
+| fail             | - (can't do anything) | idle        |
+
+
+### 从 Recorder Action 的角度
+
+#### STOP recorder action 
+
+> hold status, stop from send-action [done]
+
+| stop status | action                      | final state |
+| ----------- | --------------------------- | ----------- |
+| success     | commit-draft(success), send | idle        |
+| fail        | commit-draft(fail), tips    | idle        |
+
+> locked-base status, send-action
+
+| stop status | action                      | final state |
+| ----------- | --------------------------- | ----------- |
+| success     | commit-draft(success), send | idle        |
+| fail        | commit-draft(fail), tips    | idle        |
+
+> locked-base status, pause-action
+
+| stop status | action                   | final state    |
+| ----------- | ------------------------ | -------------- |
+| success     | commit-draft(success)    | committedDraft |
+| fail        | commit-draft(fail), tips | idle           |
+
+
+> locked-appending status, send-action
+
+| stop status | action                      | final state    |
+| ----------- | --------------------------- | -------------- |
+| success     | commit-draft(success), send | idle           |
+| fail        | commit-draft(fail), tips    | committedDraft |
+
+> locked-appending status, pause-action
+
+| stop status | action                   | final state    |
+| ----------- | ------------------------ | -------------- |
+| success     | commit-draft(success)    | committedDraft |
+| fail        | commit-draft(fail), tips | committedDraft |

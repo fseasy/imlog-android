@@ -4,6 +4,7 @@ import android.content.Context
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -72,7 +73,7 @@ class VoiceComposerStateHolder(
                           waveform = draft.base.waveform,
                           playbackProgress = 0f,
                           isPlaying = false,
-                      )
+                      ),
                   )
               else -> VoiceComposerMode.Idle
             }
@@ -162,10 +163,10 @@ class VoiceComposerStateHolder(
     if (pendingCancelRecordingIfWaitingCoordinator(osEventTrigger)) {
       val tipsResId =
           when (osEventTrigger?.event) {
-            RecordingOsEvent.FocusLost -> R.string.composer_recording_event_focus_lost_cancel
+            RecordingOsEvent.FocusLost -> R.string.composer_recording_error_focus_lost_cancel
             RecordingOsEvent.OsNativeError ->
-                R.string.composer_recording_event_os_native_error_cancel
-            RecordingOsEvent.StorageFull -> R.string.composer_recording_event_storage_full_cancel
+                R.string.composer_recording_error_os_native_error_cancel
+            RecordingOsEvent.StorageFull -> R.string.composer_recording_error_storage_full_cancel
             null -> null
           }
       if (tipsResId != null) onShowSnackbar(context.getString(tipsResId))
@@ -222,21 +223,21 @@ class VoiceComposerStateHolder(
                   if (isRecordingSuccess) {
                     when (osEventTrigger?.event) {
                       RecordingOsEvent.FocusLost ->
-                          R.string.composer_recording_event_focus_lost_stop_success
+                          R.string.composer_recording_error_focus_lost_stop_success
                       RecordingOsEvent.OsNativeError ->
-                          R.string.composer_recording_event_os_native_error_stop_success
+                          R.string.composer_recording_error_os_native_error_stop_success
                       RecordingOsEvent.StorageFull ->
-                          R.string.composer_recording_event_storage_full_stop_success
+                          R.string.composer_recording_error_storage_full_stop_success
                       null -> null
                     }
                   } else {
                     when (osEventTrigger?.event) {
                       RecordingOsEvent.FocusLost ->
-                          R.string.composer_recording_event_focus_lost_stop_fail
+                          R.string.composer_recording_error_focus_lost_stop_fail
                       RecordingOsEvent.OsNativeError ->
-                          R.string.composer_recording_event_os_native_error_stop_fail
+                          R.string.composer_recording_error_os_native_error_stop_fail
                       RecordingOsEvent.StorageFull ->
-                          R.string.composer_recording_event_storage_full_stop_fail
+                          R.string.composer_recording_error_storage_full_stop_fail
                       null -> R.string.composer_voice_note_stop_fail
                     }
                   }
@@ -273,28 +274,47 @@ class VoiceComposerStateHolder(
 
   /** Locked 面板下，点击【发送】（无论是正在录音中点发送，还是在草稿态点发送） */
   fun onSendLocked() {
-    // Race condition handling
-    if (pendingCancelRecordingIfWaitingCoordinator(null)) {
-      onShowSnackbar(context.getString(R.string.composer_voice_note_voice_duration_too_short))
-      return
-    }
-    val transitionResult = _draftState.tryTransition { current ->
-      // [!current.waitingCoordinator] should always be true as we have handled the race-condition
-      // previously.
-      // put here just in case.
-      val isActiveRecording =
-          current is VoiceDraftUiState.ActiveRecording.Locked && !current.waitingCoordinator
-      val isCommitted = current is VoiceDraftUiState.CommittedDraft
-      if (isActiveRecording || isCommitted) {
-        TransitionDecision.Next(VoiceDraftUiState.CleanUp)
-      } else {
-        TransitionDecision.Skip
+    fun ifInCommittedDraftState() {
+      val transitionResult = _draftState.tryTransition { current ->
+        if (current is VoiceDraftUiState.CommittedDraft)
+            TransitionDecision.Next(VoiceDraftUiState.Idle)
+        else TransitionDecision.Skip
       }
+      if (transitionResult !is TransitionResult.Done) {
+        return
+      }
+      val recordingState = transitionResult.previous as VoiceDraftUiState.CommittedDraft
+      appScope.launchCatching { sendCommittedDraft(recordingState.draft) }
     }
-    if (transitionResult !is TransitionResult.Done) {
-      Timber.w("Invalid State: call SendLocked while state = ${_draftState.value}")
-      return
-    }
+
+    val currentActiveRecordingState =
+        tryTransitStop(
+            osEventTrigger = null,
+        ) {
+          onShowSnackbar(
+              context.getString(R.string.composer_recording_error_voice_duration_too_short),
+          )
+        } ?: return ifInCommittedDraftState()
+    // do stop
+    launchStopRecording(
+        currentState = currentActiveRecordingState,
+        onFailureNextStateProvider = { committedDraft ->
+          if (committedDraft != null) {
+            // CurrentState is in Appending Mode. rollback to committedDraft
+            VoiceDraftUiState.CommittedDraft(committedDraft)
+          } else VoiceDraftUiState.Idle
+        },
+        onStopFailure = { committedDraft, recordError ->
+          val couldRollback = committedDraft != null
+          showTipsWhenStopError(
+              recordError = recordError,
+              osEventTrigger = null,
+              couldRollback = couldRollback,
+          )
+        },
+        onSuccessNextStateProvider = { VoiceDraftUiState.Idle },
+        onStopSuccess = { committedDraft -> sendCommittedDraft(committedDraft) },
+    )
     appScope.launchCatching {
       try {
         when (val recordingState = transitionResult.previous) {
@@ -607,12 +627,22 @@ class VoiceComposerStateHolder(
 
   fun onHoldStop() = onHoldStop(null)
 
-  /** Once entering this, we assume the `_draftState` can't be updated anymore due to Guarding! */
+  /**
+   * Once entering this, we assume the `_draftState` can't be updated anymore due to Guarding! So no
+   * more check and directly update!
+   *
+   * Split action & state-provider in param to force caller providing the next state!
+   */
   private fun launchStopRecording(
       currentState: VoiceDraftUiState.ActiveRecording,
+      onFailureNextStateProvider: (committedDraft: VoiceDraft.Committed?) -> VoiceDraftUiState,
       onStopFailure:
-          suspend (committedDraft: VoiceDraft.Committed?, recordError: AudioRecordError) -> Unit,
-      onStopSuccess: suspend (committedDraft: VoiceDraft.Committed) -> Unit,
+          (suspend (
+              committedDraft: VoiceDraft.Committed?,
+              recordError: AudioRecordError?,
+          ) -> Unit)?,
+      onSuccessNextStateProvider: (committedDraft: VoiceDraft.Committed) -> VoiceDraftUiState,
+      onStopSuccess: (suspend (committedDraft: VoiceDraft.Committed) -> Unit)?,
   ) = appScope.launchCatching {
     val draft = currentState.draft
     val stopResult =
@@ -630,13 +660,17 @@ class VoiceComposerStateHolder(
             // It can only happen when internal audioRecorder state invalid. use InternalError
             // Duration-Too-Short error won't report here, it'll return a normal
             // AudioRecordResult.Failure!
-            onStopFailure(committedDraft, AudioRecordError.RecorderInternal)
+            onStopFailure?.invoke(committedDraft, null)
+            val nextState = onFailureNextStateProvider(committedDraft)
+            _draftState.update { nextState }
           }
           .onSuccess { audioRecordResult ->
             when (audioRecordResult) {
               is AudioRecordResult.Failure -> {
                 val committedDraft = draftUseCase.tryCommitWhenRecordingFailure(draft = draft)
-                onStopFailure(committedDraft, audioRecordResult.error)
+                onStopFailure?.invoke(committedDraft, audioRecordResult.error)
+                val nextState = onFailureNextStateProvider(committedDraft)
+                _draftState.update { nextState }
               }
               is AudioRecordResult.Success -> {
                 val committedDraft =
@@ -644,15 +678,20 @@ class VoiceComposerStateHolder(
                         draft = draft,
                         audioRecordResult = audioRecordResult,
                     )
-                onStopSuccess(committedDraft)
+                onStopSuccess?.invoke(committedDraft)
+                val nextState = onSuccessNextStateProvider(committedDraft)
+                _draftState.update { nextState }
               }
             }
           }
     } catch (e: Throwable) {
       // [draftUseCase.tryCommitWhenRecordingFailure] won't throw any exception
       val committedDraft = draftUseCase.tryCommitWhenRecordingFailure(draft)
-      onStopFailure(committedDraft, AudioRecordError.RecorderInternal)
-      throw e
+      onStopFailure?.invoke(committedDraft, null)
+      val nextState = onFailureNextStateProvider(committedDraft)
+      _draftState.update { nextState }
+      // do transite before throw e
+      if (e is CancellationException) throw e
     }
   }
 
@@ -661,63 +700,72 @@ class VoiceComposerStateHolder(
         tryTransitStop(osEventTrigger) {
           val tipResId =
               when (osEventTrigger?.event) {
-                RecordingOsEvent.FocusLost -> R.string.composer_recording_event_focus_lost_cancel
+                RecordingOsEvent.FocusLost -> R.string.composer_recording_error_focus_lost_cancel
                 RecordingOsEvent.OsNativeError ->
-                    R.string.composer_recording_event_os_native_error_cancel
+                    R.string.composer_recording_error_os_native_error_cancel
                 RecordingOsEvent.StorageFull ->
-                    R.string.composer_recording_event_storage_full_cancel
-                null -> R.string.composer_hold_to_record_voice_duration_too_short
+                    R.string.composer_recording_error_storage_full_cancel
+                null -> R.string.composer_recording_error_voice_duration_too_short
               }
           onShowSnackbar(context.getString(tipResId))
         } ?: return
-    // Use AppScope to make sure result can be saved.
-    appScope.launchCatching {
-      try {
-        coordinator
-            .onHoldStop()
-            .onFailure { e ->
-              Timber.w(e)
-              onShowSnackbar(context.getString(R.string.internal_error_head))
-            }
-            .onSuccess { recordResult ->
-              val draft =
-                  (transitionResult.current as VoiceDraftUiState.ActiveRecording.Holding).draft
-              when (recordResult) {
-                is AudioRecordResult.Success -> {
-                  sendActiveRecordingDraft(draft, recordResult)
-                  val tipsResId =
-                      when (osEventTrigger?.event) {
-                        RecordingOsEvent.FocusLost ->
-                            R.string.composer_recording_event_focus_lost_stop_success
-                        RecordingOsEvent.OsNativeError ->
-                            R.string.composer_recording_event_os_native_error_stop_success
-                        RecordingOsEvent.StorageFull ->
-                            R.string.composer_recording_event_storage_full_stop_success
-                        null -> null
-                      }
-                  if (tipsResId != null) onShowSnackbar(context.getString(tipsResId))
-                }
-                is AudioRecordResult.Failure -> {
-                  storageRepository.deleteFile(recordResult.filePath)
-                  val tipsResId =
-                      when (osEventTrigger?.event) {
-                        RecordingOsEvent.FocusLost ->
-                            R.string.composer_recording_event_focus_lost_stop_fail
-                        RecordingOsEvent.OsNativeError ->
-                            R.string.composer_recording_event_os_native_error_stop_fail
-                        RecordingOsEvent.StorageFull ->
-                            R.string.composer_recording_event_storage_full_stop_fail
-                        null -> R.string.composer_hold_to_record_stop_fail
-                      }
-                  onShowSnackbar(context.getString(tipsResId))
-                }
+    launchStopRecording(
+        currentState = currentState,
+        onFailureNextStateProvider = { VoiceDraftUiState.Idle },
+        onStopFailure = { _, recordError ->
+          showTipsWhenStopError(recordError, osEventTrigger, couldRollback = false)
+        },
+        onSuccessNextStateProvider = { VoiceDraftUiState.Idle },
+        onStopSuccess = { committedDraft ->
+          sendCommittedDraft(committedDraft)
+          val tipsResId =
+              when (osEventTrigger?.event) {
+                RecordingOsEvent.FocusLost ->
+                    R.string.composer_recording_error_focus_lost_stop_success
+                RecordingOsEvent.OsNativeError ->
+                    R.string.composer_recording_error_os_native_error_stop_success
+                RecordingOsEvent.StorageFull ->
+                    R.string.composer_recording_error_storage_full_stop_success
+                null -> null
               }
-            }
-      } finally {
-        // Always set to Idle
-        _draftState.update { VoiceDraftUiState.Idle }
-      }
-    }
+          if (tipsResId != null) onShowSnackbar(context.getString(tipsResId))
+        },
+    )
+  }
+
+  /** We trust [recordError] more as it's summarized on all knowledge */
+  private fun showTipsWhenStopError(
+      recordError: AudioRecordError?,
+      osEventTrigger: RecordingOsEventSession?,
+      couldRollback: Boolean,
+  ) {
+    val reasonResId =
+        when (recordError) {
+          AudioRecordError.FileIo -> R.string.composer_recording_stop_fail_reason_file_io
+          AudioRecordError.MicrophoneBusy ->
+              R.string.composer_recording_stop_fail_reason_microphone_busy
+          AudioRecordError.PermissionDenied ->
+              R.string.composer_recording_stop_fail_reason_permission_denied
+          AudioRecordError.StorageFull -> R.string.composer_recording_stop_fail_reason_storage_full
+          AudioRecordError.TooShort -> R.string.composer_recording_stop_fail_reason_too_short
+          AudioRecordError.RecorderInternal,
+          null ->
+              when (osEventTrigger?.event) {
+                RecordingOsEvent.FocusLost ->
+                    R.string.composer_recording_stop_fail_reason_focus_lost
+                RecordingOsEvent.OsNativeError ->
+                    R.string.composer_recording_stop_fail_reason_os_native_error
+                RecordingOsEvent.StorageFull ->
+                    R.string.composer_recording_stop_fail_reason_storage_full
+                null -> R.string.composer_recording_stop_fail_reason_internal_error
+              }
+        }
+    val resultResId =
+        if (couldRollback) R.string.composer_recording_stop_fail_result_rollback
+        else R.string.composer_recording_stop_fail_result_cannot_save
+    val result = context.getString(resultResId)
+    val message = context.getString(reasonResId, result)
+    onShowSnackbar(message)
   }
 
   suspend fun teardownWhenExit(): VoiceDraft? {
@@ -788,7 +836,7 @@ class VoiceComposerStateHolder(
           if (!isSuccess) {
             Timber.w(
                 "Failed to append new audio recording chunking to base. " +
-                    "${recordingChunkResult.filePath} -> $baseFilePath"
+                    "${recordingChunkResult.filePath} -> $baseFilePath",
             )
           }
           storageRepository.deleteFile(recordingChunkResult.filePath)
@@ -817,5 +865,9 @@ class VoiceComposerStateHolder(
     sendVoiceMessageUseCase(result.filePath, result.duration, compressed, topicId, userId)
   }
 
+  /** NO exception will be thrown!
+   *
+   * Main-thread safe
+   * */
   private suspend fun sendCommittedDraft(draft: VoiceDraft.Committed) {}
 }
