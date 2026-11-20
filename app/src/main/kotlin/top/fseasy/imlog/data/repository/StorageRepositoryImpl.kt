@@ -14,6 +14,7 @@ import kotlin.io.path.fileSize
 import kotlin.io.path.writeBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.data.mapper.ensureDirectorUri
@@ -437,34 +438,34 @@ constructor(
   /**
    * Run in IO thread for io parts.
    *
-   * Swallow all the exceptions.
+   * Swallow all the exceptions except CancellationException
    */
   override suspend fun deleteFile(
       filePath: StoragePathModel,
-  ): FileDeleteResult {
+  ): FileDeleteResult = withContext(Dispatchers.IO){
 
     val absolutePaths =
         try {
           resolveStoragePathToAbsolutePathsWithoutCreating(filePath)
         } catch (e: FileNotFoundException) {
           Timber.d(e, "deleteFile: Failed to locate file on shared-storage: $filePath")
-          return FileDeleteResult.FileNotExist
+          return@withContext FileDeleteResult.FileNotExist
         } catch (e: CancellationException) {
           throw e
         } catch (e: Exception) {
           Timber.d(e, "deleteFile: error on locating file on shared-storage: $filePath")
-          return FileDeleteResult.Error(e)
+          return@withContext FileDeleteResult.Error(e)
         }
     for (path in absolutePaths) {
       when (val deleteResult = deleteFile(path)) {
         is FileDeleteResult.FileNotExist,
         is FileDeleteResult.Error,
-        -> return deleteResult
+        -> return@withContext deleteResult
 
         else -> Unit
       }
     }
-    return FileDeleteResult.Success
+    return@withContext FileDeleteResult.Success
   }
 
   /** A helper function for internal transforming */

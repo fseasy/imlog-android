@@ -187,7 +187,7 @@ interface StorageRepository {
       filePath: AbsolutePathModel,
   ): FileDeleteResult
 
-  /** Run in IO thread in io parts. Swallow all the exceptions. */
+  /** Run in IO thread in io parts. Swallow all the exceptions except CancellationException */
   suspend fun deleteFile(
       filePath: StoragePathModel,
   ): FileDeleteResult

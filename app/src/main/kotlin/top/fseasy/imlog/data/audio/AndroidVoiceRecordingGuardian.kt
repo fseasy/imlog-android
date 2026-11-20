@@ -2,54 +2,62 @@ package top.fseasy.imlog.data.audio
 
 import android.content.Context
 import android.content.Intent
+import java.util.concurrent.atomic.AtomicBoolean
 import timber.log.Timber
 import top.fseasy.imlog.domain.audio.RecordingGuardian
 import top.fseasy.imlog.domain.audio.RecordingPrompt
 
-class AndroidRecordingGuardian(private val context: Context) : RecordingGuardian {
+class AndroidRecordingGuardian(context: Context) : RecordingGuardian {
+
+  private val appContext = context.applicationContext
+  private val isGuarding = AtomicBoolean(false)
+
   override fun startGuarding(prompt: RecordingPrompt) {
     val intent =
-        Intent(context, VoiceRecordingService::class.java).apply {
-          action = VoiceRecordingService.ACTION_GUARD
-          when (prompt) {
-            is RecordingPrompt.ResBased ->
-                putExtra(VoiceRecordingService.EXTRA_TITLE_RES_ID, prompt.titleResId)
-            is RecordingPrompt.CustomText ->
-                putExtra(VoiceRecordingService.EXTRA_CUSTOM_TITLE, prompt.title)
-            RecordingPrompt.Default -> {}
-          }
+      Intent(appContext, VoiceRecordingService::class.java).apply {
+        action = VoiceRecordingService.ACTION_GUARD
+        when (prompt) {
+          is RecordingPrompt.ResBased ->
+            putExtra(VoiceRecordingService.EXTRA_TITLE_RES_ID, prompt.titleResId)
+          is RecordingPrompt.CustomText ->
+            putExtra(VoiceRecordingService.EXTRA_CUSTOM_TITLE, prompt.title)
+          RecordingPrompt.Default -> Unit
         }
+      }
 
     // 防御 Android 12+ 的 ForegroundServiceStartNotAllowedException 及权限异常
     runCatching {
-      // 不需要担心它阻塞主线程
-      // AMS 处理这次登记全是内存操作，正常耗时在微秒到亚毫秒级，和 startActivity()、bindService()、checkSelfPermission()
-      // 属于同一个量级，Android 官方和 StrictMode 都认可直接在主线程调用。
-      // 它不是磁盘或网络 IO，所以依然不需要用 withContext(Dispatchers.IO) 去包装它。只有当系统本身发生极其严重的全局锁卡死（system_server
-      // 卡顿）时它才会慢，但那种情况下全系统所有 Binder 调用都会一起卡，切线程也避不开。
-      context.startForegroundService(intent)
+      // AMS 处理这次登记全是内存操作，正常耗时在微秒到亚毫秒级，官方认可直接在主线程调用
+      appContext.startForegroundService(intent)
     }
-        .onFailure { e ->
-          Timber.e(e, "Failed to start VoiceRecordingService as foreground service")
-        }
+      .onSuccess {
+        isGuarding.set(true)
+      }
+      .onFailure { e ->
+        Timber.e(e, "Failed to start VoiceRecordingService as foreground service")
+      }
   }
 
+  /** 幂等且低开销：若当前未处于守护状态（或已经停止过），直接 O(1) 返回，不会拉起空 Service */
   override fun stopGuarding() {
-    val intent =
-        Intent(context, VoiceRecordingService::class.java).apply {
-          action = VoiceRecordingService.ACTION_DISMISS
-        }
+    if (!isGuarding.compareAndSet(true, false)) return
 
-    // 防御后台调用 startService 导致的 IllegalStateException
+    // 仍采用 ACTION_DISMISS 而非 stopService()，避免紧邻 startGuarding() 调用时触发
+    // ForegroundServiceDidNotStartInTimeException
+    val intent =
+      Intent(appContext, VoiceRecordingService::class.java).apply {
+        action = VoiceRecordingService.ACTION_DISMISS
+      }
+
     runCatching {
-      context.startService(intent)
+      appContext.startService(intent)
     }
-        .onFailure { e ->
-          // 此处安全：即使因处于后台未能送达 DISMISS 指令，Service 也会在 Flow 监听到 Idle 后自动退出
-          Timber.w(
-              e,
-              "Failed to send ACTION_DISMISS to VoiceRecordingService (app likely in background)",
-          )
-        }
+      .onFailure { e ->
+        // 若此时处于后台导致 startService 失败，Service 内部会通过 Flow 监听及看门狗自动退出
+        Timber.w(
+          e,
+          "Failed to send ACTION_DISMISS to VoiceRecordingService (app likely in background)",
+        )
+      }
   }
 }

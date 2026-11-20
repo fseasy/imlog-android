@@ -55,14 +55,105 @@ Web标准	WebRTC 强制必选	非必须
 
 ## Voice Composer 状态转移
 
+
+### 从 Recorder Action 的角度
+
+对应 start, stop, cancel.
+
+#### Start recorder action
+
+> idle status, start from start-holding action
+
+| start status | action       | final state              |
+| ------------ | ------------ | ------------------------ |
+| success      | start native | holding-active-recording |
+| fail         | tips         | idle                     |
+
+> idle status, start from start-direct-locked action
+
+| start status | action       | final state             |
+| ------------ | ------------ | ----------------------- |
+| success      | start native | locked-active-recording |
+| fail         | tips         | idle                    |
+
+> committedDraft status, start from resume-locked action
+
+| start status | action       | final state             |
+| ------------ | ------------ | ----------------------- |
+| success      | start native | locked-active-recording |
+| fail         | tips         | committedDraft          |
+
+特别注意：
+
+在 success/fail 内，用户/callback 可能已经调了 stop/cancel, 状态被设置为 *-on-race, 需要检查当前状态并调用对应行为。
+
+#### STOP recorder action 
+
+> hold status, stop from send-action [done]
+
+| stop status | action                      | final state |
+| ----------- | --------------------------- | ----------- |
+| on-rase     | commit-draft(fail), tips    | idle        |
+| success     | commit-draft(success), send | idle        |
+| fail        | commit-draft(fail), tips    | idle        |
+
+`on-race` 的行为其实和 `fail` 完全一样，区别只在：
+
+1. 把执行的时机，从 instant, 变为了 once start-done.
+2. 错误原因上，可以固定写「时间太短」 
+ 
+=> 实现上，我们底层直接调用 Cancel, 并指定对应的的 final state
+
+> locked-base status, stop from send-action [done]
+
+除了调用的 coordinator 行为不同，状态转移和 `hold status, stop from send-action` 完全一致（因为 voice-draft 都是 base 一样）
+
+see `hold status, stop from send-action`.
+
+> locked-base status, stop from pause-action/callback [done]
+
+| stop status | action                   | final state    |
+| ----------- | ------------------------ | -------------- |
+| on-rase     | commit-draft(fail), tips | idle           |
+| success     | commit-draft(success)    | committedDraft |
+| fail        | commit-draft(fail), tips | idle           |
+
+
+> locked-appending status, stop from send-action [done]
+
+| stop status | action                      | final state    |
+| ----------- | --------------------------- | -------------- |
+| on-race     | commit-draft(fail), tips    | committedDraft |
+| success     | commit-draft(success), send | idle           |
+| fail        | commit-draft(fail), tips    | committedDraft |
+
+> locked-appending status, stop from pause-action/callback [done]
+
+| stop status | action                   | final state    |
+| ----------- | ------------------------ | -------------- |
+| on-race     | commit-draft(fail), tips | committedDraft |
+| success     | commit-draft(success)    | committedDraft |
+| fail        | commit-draft(fail), tips | committedDraft |
+
+> hold -> hold-to-locked, stop from send-action/pause-action/callback
+
+在 stop 时刻必然是 `locked-base status`, 所以 see `locked-base status` 对应内容
+
+
 ### 从 UI 行为的角度
+
+行为角度看对应的状态流转，覆盖上述 recorder 角度看不到的状态。前面覆盖的状态不再重复。
 
 #### 在 committedDraft 状态
 
-> committedDraft status, ui resume-action
+> committedDraft status, ui resume-action [done]
+
+action: resume
+
+then: start.
 
 
-> committedDraft status, ui send-action
+> committedDraft status, ui send-action [done]
 
 action: send
 
@@ -72,44 +163,3 @@ then based on the send result:
 | ---------------- | --------------------- | ----------- |
 | success          | -                     | idle        |
 | fail             | - (can't do anything) | idle        |
-
-
-### 从 Recorder Action 的角度
-
-#### STOP recorder action 
-
-> hold status, stop from send-action [done]
-
-| stop status | action                      | final state |
-| ----------- | --------------------------- | ----------- |
-| success     | commit-draft(success), send | idle        |
-| fail        | commit-draft(fail), tips    | idle        |
-
-> locked-base status, send-action
-
-| stop status | action                      | final state |
-| ----------- | --------------------------- | ----------- |
-| success     | commit-draft(success), send | idle        |
-| fail        | commit-draft(fail), tips    | idle        |
-
-> locked-base status, pause-action
-
-| stop status | action                   | final state    |
-| ----------- | ------------------------ | -------------- |
-| success     | commit-draft(success)    | committedDraft |
-| fail        | commit-draft(fail), tips | idle           |
-
-
-> locked-appending status, send-action
-
-| stop status | action                      | final state    |
-| ----------- | --------------------------- | -------------- |
-| success     | commit-draft(success), send | idle           |
-| fail        | commit-draft(fail), tips    | committedDraft |
-
-> locked-appending status, pause-action
-
-| stop status | action                   | final state    |
-| ----------- | ------------------------ | -------------- |
-| success     | commit-draft(success)    | committedDraft |
-| fail        | commit-draft(fail), tips | committedDraft |

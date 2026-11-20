@@ -20,7 +20,10 @@ interface RecordingGuardian {
   /** No Exception. sync fun */
   fun startGuarding(prompt: RecordingPrompt)
 
-  /** No Exception. Sync fun */
+  /** No Exception. Sync fun.
+   *
+   * implementation requirement: 必须保证 stopGuarding 幂等，且在未启动 Guarding 时调用代价几乎为 0
+   * */
   fun stopGuarding()
 
   // 默认空实现，方便测试或桌面端/Web端

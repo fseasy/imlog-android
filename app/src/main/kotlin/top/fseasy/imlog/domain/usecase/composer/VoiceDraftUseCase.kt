@@ -3,6 +3,7 @@ package top.fseasy.imlog.domain.usecase.composer
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.domain.audio.AudioRecordResult
@@ -60,7 +61,8 @@ class VoiceDraftUseCase(
   /**
    * safe for main-thread.
    *
-   * No catchable exception. But it may throw some system level exception or CoroutineCancellationException
+   * No catchable exception. But it may throw some system level exception or
+   * CoroutineCancellationException
    */
   suspend fun commitWhenRecordingSuccess(
       draft: VoiceDraft.ActiveRecording,
@@ -72,12 +74,18 @@ class VoiceDraftUseCase(
           fileDeleteOperation = storageRepository::deleteFile,
       )
 
-  /** No exception will be thrown
+  /**
+   * Always discard the recordingFilePath, then
+   *
+   * 1. if it's Base => Null
+   * 2. If it's appending, put the base back to committed.
+   *
+   * No exception will be thrown.
    *
    * Safe for main-thread.
-   * */
+   */
   suspend fun tryCommitWhenRecordingFailure(
-      draft: VoiceDraft.ActiveRecording
+      draft: VoiceDraft.ActiveRecording,
   ): VoiceDraft.Committed? {
     storageRepository.deleteFile(draft.recordingFilePath)
     return when (draft) {
@@ -85,6 +93,20 @@ class VoiceDraftUseCase(
       is VoiceDraft.ActiveRecording.Base -> null
     }
   }
+
+  /** delete all possible files. */
+  suspend fun deleteDraftFiles(draft: VoiceDraft) =
+      withContext(Dispatchers.IO + NonCancellable) {
+        when (draft) {
+          is VoiceDraft.ActiveRecording.Appending -> {
+            storageRepository.deleteFile(draft.recordingFilePath)
+            storageRepository.deleteFile(draft.base.filePath)
+          }
+          is VoiceDraft.ActiveRecording.Base ->
+              storageRepository.deleteFile(draft.recordingFilePath)
+          is VoiceDraft.Committed -> storageRepository.deleteFile(draft.detail.filePath)
+        }
+      }
 
   /** Load, verify(check & fix if necessary) voice draft */
   suspend fun loadValidDraft(userId: UserId, topicId: TopicId): VoiceDraft? {
@@ -132,7 +154,7 @@ class VoiceDraftUseCase(
               (storageRepository.fileSizeOrNull(baseFilePath) ?: 0) <= 0
       ) {
         Timber.w(
-            "Restore draft get invalid base audio: ${rawDraft.baseFilename}, not exists or empty. Discard"
+            "Restore draft get invalid base audio: ${rawDraft.baseFilename}, not exists or empty. Discard",
         )
         return null
       }

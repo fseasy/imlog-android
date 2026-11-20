@@ -1,9 +1,12 @@
 package top.fseasy.imlog.features.home.topiclog.composer2.voice
 
 import androidx.compose.runtime.Immutable
+import kotlin.contracts.ExperimentalContracts
+import kotlin.contracts.contract
 import top.fseasy.imlog.domain.audio.RecordingOsEvent
 import top.fseasy.imlog.domain.audio.Waveform
 import top.fseasy.imlog.domain.model.VoiceDraft
+import top.fseasy.imlog.domain.usecase.composer.VoiceDraftUseCase
 
 @Immutable
 data class VoicePlayerUiState(
@@ -26,18 +29,30 @@ sealed interface VoiceComposerMode {
   data class Draft(val playerUiState: VoicePlayerUiState) : VoiceComposerMode
 }
 
-internal enum class RecordingMethod {
-  Holding,
-  Locked,
-}
-
-enum class ActiveRecordingPendingAction {
+enum class ActiveRecordingAction {
   StartOsNative,
+  Recording,
   CancelOnRace,
+  CancelOnStartFailure,
   Cancel,
   Stop,
-  StopOnRace
+  StopOnRace,
+  StopOnStartFailure,
+  RollbackOnStartFailure,
 }
+
+fun ActiveRecordingAction.isOsNativeStartedSuccess() =
+    when (this) {
+      ActiveRecordingAction.Cancel,
+      ActiveRecordingAction.Stop,
+      ActiveRecordingAction.Recording -> true
+      ActiveRecordingAction.StartOsNative,
+      ActiveRecordingAction.CancelOnRace,
+      ActiveRecordingAction.CancelOnStartFailure,
+      ActiveRecordingAction.StopOnRace,
+      ActiveRecordingAction.StopOnStartFailure,
+      ActiveRecordingAction.RollbackOnStartFailure -> false
+    }
 
 /**
  * State rolling:
@@ -49,8 +64,6 @@ internal sealed interface VoiceDraftUiState {
 
   @Immutable data object Idle : VoiceDraftUiState
 
-  @Immutable data object CleanUp : VoiceDraftUiState
-
   @Immutable
   sealed interface ActiveRecording : VoiceDraftUiState {
 
@@ -59,25 +72,32 @@ internal sealed interface VoiceDraftUiState {
     /** To distinguish the recording session on onOsEvent callback condition */
     val sessionToken: Any
 
-    val pendingAction: ActiveRecordingPendingAction?
+    val action: ActiveRecordingAction
 
     // Keep 2 subtypes to explicit the `draft` type.
     @Immutable
     data class Holding(
         override val draft: VoiceDraft.ActiveRecording.Base,
         override val sessionToken: Any,
-        override val pendingAction: ActiveRecordingPendingAction?,
+        override val action: ActiveRecordingAction,
     ) : ActiveRecording
 
     @Immutable
     data class Locked(
         override val draft: VoiceDraft.ActiveRecording,
         override val sessionToken: Any,
-        override val pendingAction: ActiveRecordingPendingAction?,
+        override val action: ActiveRecordingAction,
     ) : ActiveRecording
   }
 
   @Immutable data class CommittedDraft(val draft: VoiceDraft.Committed) : VoiceDraftUiState
+}
+
+internal enum class RecordingCancelPolicy {
+  /** 彻底丢弃：删除当前片段 + 历史底稿（如果有），最终必回 Idle */
+  DiscardAll,
+  /** 仅回滚本次续录：只删当前片段；若存在历史底稿则恢复为 CommittedDraft，否则回 Idle */
+  RollbackCurrentSegment,
 }
 
 /**
@@ -86,26 +106,87 @@ internal sealed interface VoiceDraftUiState {
  */
 internal fun VoiceDraftUiState.ActiveRecording.withMeta(
     sessionToken: Any = this.sessionToken,
-    pendingAction: ActiveRecordingPendingAction? = this.pendingAction,
+    action: ActiveRecordingAction = this.action,
 ): VoiceDraftUiState.ActiveRecording =
     when (this) {
       is VoiceDraftUiState.ActiveRecording.Holding ->
           copy(
               sessionToken = sessionToken,
-              pendingAction = pendingAction,
+              action = action,
           )
       is VoiceDraftUiState.ActiveRecording.Locked ->
           copy(
               sessionToken = sessionToken,
-              pendingAction = pendingAction,
+              action = action,
           )
     }
 
-internal fun VoiceDraftUiState.ActiveRecording.method() =
-    when (this) {
-      is VoiceDraftUiState.ActiveRecording.Holding -> RecordingMethod.Holding
-      is VoiceDraftUiState.ActiveRecording.Locked -> RecordingMethod.Locked
-    }
+@OptIn(ExperimentalContracts::class)
+internal fun VoiceDraftUiState.isOnCancelRace(): Boolean {
+  contract {
+    returns(true) implies (this@isOnCancelRace is VoiceDraftUiState.ActiveRecording)
+  }
+  return (this as? VoiceDraftUiState.ActiveRecording)?.action == ActiveRecordingAction.CancelOnRace
+}
+
+@OptIn(ExperimentalContracts::class)
+internal fun VoiceDraftUiState.isOnStopRace(): Boolean {
+  contract {
+    returns(true) implies (this@isOnStopRace is VoiceDraftUiState.ActiveRecording)
+  }
+  return (this as? VoiceDraftUiState.ActiveRecording)?.action == ActiveRecordingAction.StopOnRace
+}
+
+internal fun VoiceDraftUiState.isActiveRecordingLockedAppending() =
+    (this as? VoiceDraftUiState.ActiveRecording.Locked)?.draft is
+        VoiceDraft.ActiveRecording.Appending
+
+/**
+ * After OsNative Recorder started, decide the next state on [fromState] and [recorderStartedSuccess]
+ * @return if null, can't transit to a valid state.
+ *
+ * Safe for main-thread. No exception except CancellationException */
+internal fun VoiceDraftUiState.ActiveRecording.nextStateAfterStartedRecorder(
+  recorderStartedSuccess: Boolean,
+  fromState: VoiceDraftUiState,
+): VoiceDraftUiState.ActiveRecording? {
+  val possiblePendingAction =
+      if (isOnStopRace()) {
+        if (recorderStartedSuccess) ActiveRecordingAction.Stop else ActiveRecordingAction.StopOnStartFailure
+      } else if (isOnCancelRace()) {
+        if (recorderStartedSuccess) ActiveRecordingAction.Cancel
+        else ActiveRecordingAction.CancelOnStartFailure
+      } else if (this == fromState) {
+        // NOTE: just in case, we use `===` instead of `==`, and we need cast again
+        if (recorderStartedSuccess) ActiveRecordingAction.Recording
+        else ActiveRecordingAction.RollbackOnStartFailure
+      } else null
+  return if (possiblePendingAction == null) null
+  else {
+    this.withMeta(action = possiblePendingAction)
+  }
+}
+
+/** Safe for main-thread. No exception except CancellationException */
+internal suspend fun VoiceDraftUiState.ActiveRecording.rollbackOnFailure(
+    draftUseCase: VoiceDraftUseCase,
+): VoiceDraftUiState {
+  val committedDraft = draftUseCase.tryCommitWhenRecordingFailure(this.draft)
+  return if (committedDraft != null) VoiceDraftUiState.CommittedDraft(committedDraft)
+  else VoiceDraftUiState.Idle
+}
+
+/** Safe for main-thread. No exception except CancellationException */
+internal suspend fun VoiceDraftUiState.discardAll(
+    draftUseCase: VoiceDraftUseCase,
+): VoiceDraftUiState.Idle {
+  when (this) {
+    is VoiceDraftUiState.ActiveRecording -> draftUseCase.deleteDraftFiles(this.draft)
+    is VoiceDraftUiState.CommittedDraft -> draftUseCase.deleteDraftFiles(this.draft)
+    VoiceDraftUiState.Idle -> Unit
+  }
+  return VoiceDraftUiState.Idle
+}
 
 internal data class RecordingOsEventSession(
     val event: RecordingOsEvent,
