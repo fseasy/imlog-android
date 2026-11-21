@@ -274,41 +274,67 @@ class VoiceComposerStateHolder(
         Timber.e(msg)
         throw IllegalStateException(msg)
       }
+      val startResult = startRecordingExecutor(recordingFilePath, sessionToken)
+      val startedSuccess = startResult.isSuccess
+      val resultTransitionResult = _draftState.tryTransition { current ->
+        if (
+            current is VoiceDraftUiState.ActiveRecording
+            // Generally, we don't need to verify the sessionToken as we can't start a new session
+            // before native started.
+            && current.sessionToken == triggerStartingState.sessionToken
+        ) {
+          val nextState =
+              current.nextOnceOsNativeStarted(startedSuccess)
+                  ?: return@tryTransition TransitionDecision.Skip
+          return@tryTransition TransitionDecision.Next(nextState)
+        }
+        TransitionDecision.Skip
+      }
+
+      if (resultTransitionResult !is TransitionResult.Done) {
+        onIllegalState(
+            "decide transition result after os-native started (success=$startedSuccess)",
+        )
+      }
+      val resultState = resultTransitionResult.current as VoiceDraftUiState.ActiveRecording
+      // TODO: fill this table!
+      suspend fun rollbackState() {
+        launchCancelRecording(resultState, policy = RecordingCancelPolicy.RollbackCurrentSegment)
+          .join()
+      }
+
+      suspend fun discardAll() {
+        launchCancelRecording(resultState, policy = RecordingCancelPolicy.DiscardAll).join()
+      }
+
+      when (resultState.action) {
+        BeforeOsNativeStartedAction.CancelOnceStarted,
+        BeforeOsNativeStartedAction.StartOsNative,
+        BeforeOsNativeStartedAction.StopOnceStarted -> onIllegalState("transit action done")
+        OsNativeStartedAction.Recording -> Unit // the best result. do nothing
+        OsNativeStartFailedAction.RollbackOnStartFailed -> {
+          // Show Tips when start failed
+          startResult.onFailure { e -> onShowSnackbar(startFailureTipsProvider(e)) }
+          launchCancelRecording(resultState, policy = RecordingCancelPolicy.RollbackCurrentSegment)
+              .join()
+        }
+        OsNativeStartFailedAction.CancelOnStartFailed,
+        OsNativeStartedAction.Cancel -> {
+          launchCancelRecording(resultState, policy = RecordingCancelPolicy.DiscardAll).join()
+        }
+        OsNativeStartFailedAction.StopOnStartFailed,
+        OsNativeStartedAction.Stop -> {
+          // even it's stop, logically we know the audio must be broken.
+          // But in case it success if we call `Stop`, here we call Cancel directly.
+          // Then we have to provides the next state because of the unmatches
+          // Tips have to be shown at state-set point, as here we can't get osEventSession
+          // info.
+          launchCancelRecording(resultState, policy = RecordingCancelPolicy.RollbackCurrentSegment)
+              .join()
+        }
+      }
       try {
         val startedSuccess = startRecordingExecutor(recordingFilePath, sessionToken).isSuccess
-
-        val resultTransitionResult = _draftState.tryTransition { current ->
-          (current as? VoiceDraftUiState.ActiveRecording)
-              ?.nextStateAfterStartedRecorder(
-                  startedSuccess,
-                  triggerStartingState,
-              )
-              ?.let {
-                TransitionDecision.Next(it)
-              } ?: TransitionDecision.Skip
-        }
-
-        if (resultTransitionResult !is TransitionResult.Done) {
-          onIllegalState(
-              "decide transition result after os-native started (success=$startedSuccess)",
-          )
-        }
-        val resultState = resultTransitionResult.current as VoiceDraftUiState.ActiveRecording
-        // TODO: fill this table!
-        when (resultState.action) {
-          ActiveRecordingAction.CancelOnRace -> {
-            launchCancelRecording(resultState, policy = RecordingCancelPolicy.DiscardAll).join()
-          }
-          ActiveRecordingAction.CancelOnStartFailure -> {}
-
-          ActiveRecordingAction.Stop -> TODO()
-          ActiveRecordingAction.StopOnRace -> TODO()
-          ActiveRecordingAction.StopOnStartFailure -> TODO()
-          ActiveRecordingAction.RollbackOnStartFailure,
-          ActiveRecordingAction.StartOsNative,
-          ActiveRecordingAction.Cancel,
-          ActiveRecordingAction.Recording -> {}
-        }
 
         startRecordingExecutor(recordingFilePath, sessionToken)
             .onFailure { e ->
@@ -447,8 +473,8 @@ class VoiceComposerStateHolder(
   ): VoiceDraftUiState.ActiveRecording? {
     val (raceAction, action) =
         when (isCancel) {
-          true -> ActiveRecordingAction.CancelOnRace to ActiveRecordingAction.Cancel
-          false -> ActiveRecordingAction.StopOnRace to ActiveRecordingAction.Stop
+          true -> ActiveRecordingAction.CancelOnceStarted to ActiveRecordingAction.Cancel
+          false -> ActiveRecordingAction.StopOnceStarted to ActiveRecordingAction.Stop
         }
     val transitionResult = _draftState.tryTransition { current ->
       if (
@@ -492,10 +518,10 @@ class VoiceComposerStateHolder(
             when (current.action) {
               ActiveRecordingAction.StartOsNative,
               null -> true
-              ActiveRecordingAction.CancelOnRace,
+              ActiveRecordingAction.CancelOnceStarted,
               ActiveRecordingAction.Cancel,
               ActiveRecordingAction.Stop,
-              ActiveRecordingAction.StopOnRace -> false
+              ActiveRecordingAction.StopOnceStarted -> false
             }
         if (couldTransit) {
           val nextState =
@@ -532,11 +558,11 @@ class VoiceComposerStateHolder(
       val onFailure =
           when (state.action) {
             ActiveRecordingAction.StartOsNative -> TODO()
-            ActiveRecordingAction.CancelOnRace -> TODO()
+            ActiveRecordingAction.CancelOnceStarted -> TODO()
             ActiveRecordingAction.CancelOnStartFailure -> TODO()
             ActiveRecordingAction.Cancel -> TODO()
             ActiveRecordingAction.Stop -> TODO()
-            ActiveRecordingAction.StopOnRace -> TODO()
+            ActiveRecordingAction.StopOnceStarted -> TODO()
             ActiveRecordingAction.StopOnStartFailure -> TODO()
             ActiveRecordingAction.RollbackOnStartFailure -> TODO()
             null -> TODO()

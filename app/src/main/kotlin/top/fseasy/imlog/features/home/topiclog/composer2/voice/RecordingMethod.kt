@@ -29,30 +29,48 @@ sealed interface VoiceComposerMode {
   data class Draft(val playerUiState: VoicePlayerUiState) : VoiceComposerMode
 }
 
-enum class ActiveRecordingAction {
-  StartOsNative,
-  Recording,
-  CancelOnRace,
-  CancelOnStartFailure,
-  Cancel,
-  Stop,
-  StopOnRace,
-  StopOnStartFailure,
-  RollbackOnStartFailure,
+sealed interface ActiveRecordingAction
+
+sealed interface BeforeOsNativeStartedAction : ActiveRecordingAction {
+  data object StartOsNative : BeforeOsNativeStartedAction
+
+  data object CancelOnceStarted : BeforeOsNativeStartedAction
+
+  data object StopOnceStarted : BeforeOsNativeStartedAction
 }
 
-fun ActiveRecordingAction.isOsNativeStartedSuccess() =
+sealed interface OsNativeStartedAction : ActiveRecordingAction {
+  data object Recording : OsNativeStartedAction
+
+  data object Cancel : OsNativeStartedAction
+
+  data object Stop : OsNativeStartedAction
+}
+
+sealed interface OsNativeStartFailedAction : ActiveRecordingAction {
+  data object CancelOnStartFailed : OsNativeStartFailedAction
+
+  data object StopOnStartFailed : OsNativeStartFailedAction
+
+  data object RollbackOnStartFailed : OsNativeStartFailedAction
+}
+
+fun BeforeOsNativeStartedAction.nextOnStartSuccess(): OsNativeStartedAction =
     when (this) {
-      ActiveRecordingAction.Cancel,
-      ActiveRecordingAction.Stop,
-      ActiveRecordingAction.Recording -> true
-      ActiveRecordingAction.StartOsNative,
-      ActiveRecordingAction.CancelOnRace,
-      ActiveRecordingAction.CancelOnStartFailure,
-      ActiveRecordingAction.StopOnRace,
-      ActiveRecordingAction.StopOnStartFailure,
-      ActiveRecordingAction.RollbackOnStartFailure -> false
+      BeforeOsNativeStartedAction.StartOsNative -> OsNativeStartedAction.Recording
+      BeforeOsNativeStartedAction.CancelOnceStarted -> OsNativeStartedAction.Cancel
+      BeforeOsNativeStartedAction.StopOnceStarted -> OsNativeStartedAction.Stop
     }
+
+fun BeforeOsNativeStartedAction.nextOnStartFailure(): OsNativeStartFailedAction =
+    when (this) {
+      BeforeOsNativeStartedAction.StartOsNative -> OsNativeStartFailedAction.RollbackOnStartFailed
+      BeforeOsNativeStartedAction.CancelOnceStarted -> OsNativeStartFailedAction.CancelOnStartFailed
+      BeforeOsNativeStartedAction.StopOnceStarted -> OsNativeStartFailedAction.StopOnStartFailed
+    }
+
+fun BeforeOsNativeStartedAction.next(startedSuccess: Boolean): ActiveRecordingAction =
+    if (startedSuccess) nextOnStartSuccess() else nextOnStartFailure()
 
 /**
  * State rolling:
@@ -126,7 +144,8 @@ internal fun VoiceDraftUiState.isOnCancelRace(): Boolean {
   contract {
     returns(true) implies (this@isOnCancelRace is VoiceDraftUiState.ActiveRecording)
   }
-  return (this as? VoiceDraftUiState.ActiveRecording)?.action == ActiveRecordingAction.CancelOnRace
+  return (this as? VoiceDraftUiState.ActiveRecording)?.action is
+      BeforeOsNativeStartedAction.CancelOnceStarted
 }
 
 @OptIn(ExperimentalContracts::class)
@@ -134,7 +153,8 @@ internal fun VoiceDraftUiState.isOnStopRace(): Boolean {
   contract {
     returns(true) implies (this@isOnStopRace is VoiceDraftUiState.ActiveRecording)
   }
-  return (this as? VoiceDraftUiState.ActiveRecording)?.action == ActiveRecordingAction.StopOnRace
+  return (this as? VoiceDraftUiState.ActiveRecording)?.action ==
+      BeforeOsNativeStartedAction.StopOnceStarted
 }
 
 internal fun VoiceDraftUiState.isActiveRecordingLockedAppending() =
@@ -142,29 +162,18 @@ internal fun VoiceDraftUiState.isActiveRecordingLockedAppending() =
         VoiceDraft.ActiveRecording.Appending
 
 /**
- * After OsNative Recorder started, decide the next state on [fromState] and [recorderStartedSuccess]
- * @return if null, can't transit to a valid state.
+ * Once OsNative Recorder started, decide the next state on [fromState] and [startedSuccess]
  *
- * Safe for main-thread. No exception except CancellationException */
-internal fun VoiceDraftUiState.ActiveRecording.nextStateAfterStartedRecorder(
-  recorderStartedSuccess: Boolean,
-  fromState: VoiceDraftUiState,
+ * @return if null, from state is invalid and can't transit.
+ *
+ * Safe for main-thread. No exception except CancellationException
+ */
+internal fun VoiceDraftUiState.ActiveRecording.nextOnceOsNativeStarted(
+    startedSuccess: Boolean,
 ): VoiceDraftUiState.ActiveRecording? {
-  val possiblePendingAction =
-      if (isOnStopRace()) {
-        if (recorderStartedSuccess) ActiveRecordingAction.Stop else ActiveRecordingAction.StopOnStartFailure
-      } else if (isOnCancelRace()) {
-        if (recorderStartedSuccess) ActiveRecordingAction.Cancel
-        else ActiveRecordingAction.CancelOnStartFailure
-      } else if (this == fromState) {
-        // NOTE: just in case, we use `===` instead of `==`, and we need cast again
-        if (recorderStartedSuccess) ActiveRecordingAction.Recording
-        else ActiveRecordingAction.RollbackOnStartFailure
-      } else null
-  return if (possiblePendingAction == null) null
-  else {
-    this.withMeta(action = possiblePendingAction)
-  }
+  val validBaseAction = this.action as? BeforeOsNativeStartedAction ?: return null
+  val nextAction = validBaseAction.next(startedSuccess)
+  return this.withMeta(action = nextAction)
 }
 
 /** Safe for main-thread. No exception except CancellationException */
