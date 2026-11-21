@@ -3,6 +3,7 @@ package top.fseasy.imlog.domain.audio
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlinx.coroutines.flow.StateFlow
+import top.fseasy.imlog.common.runSuspendCatching
 import top.fseasy.imlog.domain.model.StoragePathModel
 
 @OptIn(ExperimentalAtomicApi::class)
@@ -32,9 +33,7 @@ class VoiceRecordingCoordinator(
   suspend fun start(
       destinationPath: StoragePathModel.Internal,
       onOsEvent: (RecordingOsEvent) -> Unit,
-  ): Result<Unit> {
-    return recorder.start(destinationPath, onOsEvent = onOsEvent)
-  }
+  ): Result<Unit> = runSuspendCatching { recorder.start(destinationPath, onOsEvent = onOsEvent) }
 
   /**
    * Sync fun. 幂等，调用多次只有第一次实际调用
@@ -83,7 +82,7 @@ class VoiceRecordingCoordinator(
   /** @throws kotlin.coroutines.cancellation.CancellationException */
   suspend fun stop(): Result<AudioRecordResult> {
     try {
-      return recorder.stop()
+      return runSuspendCatching { recorder.stop() }
     } finally {
       stopGuarding()
     }
@@ -96,7 +95,7 @@ class VoiceRecordingCoordinator(
    */
   suspend fun cancel(): Result<AudioRecordCancelResult> {
     try {
-      return recorder.cancel()
+      return runSuspendCatching { recorder.cancel() }
     } finally {
       stopGuarding()
     }

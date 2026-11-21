@@ -44,7 +44,16 @@ class AudioRecordException(
     val error: AudioRecordError,
     message: String? = null,
     cause: Throwable? = null,
-) : Exception(message ?: error.toString(), cause)
+) : Exception(message ?: error.toString(), cause) {
+  companion object {
+    fun fromIllegalStateException(message: String) =
+        AudioRecordException(
+            error = AudioRecordError.RecorderInternal,
+            message = message,
+            cause = IllegalStateException(message),
+        )
+  }
+}
 
 sealed interface AudioRecordResult {
   val filePath: StoragePathModel.Internal
@@ -104,20 +113,30 @@ interface AudioRecorder : AutoCloseable {
 
   /**
    * @param onOsEvent callback when recorder get os native event. callback 处理时注意竞态，因为底层事件触发可能连续出现
-   *  如磁盘满时，可能连续触发 [RecordingOsEvent.StorageFull] & [RecordingOsEvent.OsNativeError]
+   *   如磁盘满时，可能连续触发 [RecordingOsEvent.StorageFull] & [RecordingOsEvent.OsNativeError]
+   * @throws kotlinx.coroutines.CancellationException
+   * @throws AudioRecordException
    */
   suspend fun start(
-    destinationPath: StoragePathModel.Internal,
-    onOsEvent: (RecordingOsEvent) -> Unit,
-  ): Result<Unit>
+      destinationPath: StoragePathModel.Internal,
+      onOsEvent: (RecordingOsEvent) -> Unit,
+  )
 
-  /** NOTE: no matter success or not, we don't delete the result file! */
-  suspend fun stop(): Result<AudioRecordResult>
+  /**
+   * NOTE: no matter success or not, we don't delete the result file!
+   *
+   * @throws kotlinx.coroutines.CancellationException
+   * @throws AudioRecordException
+   */
+  suspend fun stop(): AudioRecordResult
 
   /**
    * Return with the corresponding `destinationPath` in [start] to let the business layer delete it.
+   *
+   * @throws kotlinx.coroutines.CancellationException
+   * @throws AudioRecordException
    */
-  suspend fun cancel(): Result<AudioRecordCancelResult>
+  suspend fun cancel(): AudioRecordCancelResult
 
   /** 音频文件后缀（包含点号，如 ".m4a" 或 ".aac"） */
   val outputAudioFileExtension: String

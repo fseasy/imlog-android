@@ -7,19 +7,20 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import top.fseasy.imlog.R
 import top.fseasy.imlog.common.TransitionDecision
 import top.fseasy.imlog.common.TransitionResult
 import top.fseasy.imlog.common.launchCatching
+import top.fseasy.imlog.common.runSuspendCatching
 import top.fseasy.imlog.common.tryTransition
 import top.fseasy.imlog.data.audio.AndroidAudioWaveformExtractor
 import top.fseasy.imlog.domain.audio.AudioRecordError
+import top.fseasy.imlog.domain.audio.AudioRecordException
 import top.fseasy.imlog.domain.audio.AudioRecordResult
-import top.fseasy.imlog.domain.audio.RecordingOsEvent
 import top.fseasy.imlog.domain.audio.RecordingPrompt
 import top.fseasy.imlog.domain.audio.RecordingSessionState
 import top.fseasy.imlog.domain.audio.VoiceRecordingCoordinator
@@ -120,17 +121,6 @@ class VoiceComposerStateHolder(
     viewModelScope.launchUntilAuth(authState, Dispatchers.IO) {}
   }
 
-  private suspend fun executeDirectLockRecording(
-      destinationPath: StoragePathModel.Internal,
-      sessionToken: Any,
-  ) =
-      coordinator.startAndGuarding(
-          prompt = RecordingPrompt.Default,
-          destinationPath = destinationPath,
-          onOsEvent = { event ->
-            onPauseLockedRecording(RecordingOsEventSession(event, sessionToken))
-          },
-      )
 
   fun onStartDirectLock() {
     startActiveRecordingOrRollback(
@@ -141,45 +131,55 @@ class VoiceComposerStateHolder(
           VoiceDraftUiState.ActiveRecording.Locked(
               draft = draft,
               sessionToken = Any(),
-              action = ActiveRecordingAction.StartOsNative,
+              action = BeforeOsNativeStartedAction.StartOsNative,
           )
         },
         startRecordingExecutor = ::executeDirectLockRecording,
-        startFailureTipsProvider = { e ->
-          "${context.getString(R.string.composer_voice_note_start_failed_tip)}: ${e.localizedMessage}"
+        startFailureTipsProvider = { recordError ->
+          generateTipsForStartFailure(
+              context = context,
+              recordError = recordError,
+              isAppending = false,
+          )
         },
     )
   }
 
-  fun onPauseLockedRecording() = onPauseLockedRecording(null)
+  fun onPauseLocked() = onPauseLocked(null)
 
   /** when pause action, stop recording, commit draft if it has. */
-  private fun onPauseLockedRecording(osEventTrigger: RecordingOsEventSession?) {
+  private fun onPauseLocked(osEventTrigger: RecordingOsEventSession?) {
 
     val currentState =
         tryTransitStop(
             osEventTrigger = osEventTrigger,
         ) ?: return
 
-    launchStopRecording(
+    launchStopActiveRecording(
         currentState = currentState,
         onFailureNextStateProvider = { committedDraft ->
           if (committedDraft != null) VoiceDraftUiState.CommittedDraft(committedDraft)
           else VoiceDraftUiState.Idle
         },
         onStopFailure = { committedDraft, recordError ->
-          showTipsWhenStopError(recordError, osEventTrigger, couldRollback = committedDraft != null)
+          showTipsWhenStopFailure(
+              recordError,
+              osEventTrigger,
+              couldRollback = committedDraft != null,
+          )
         },
         onSuccessNextStateProvider = { committedDraft ->
           VoiceDraftUiState.CommittedDraft(committedDraft)
         },
-        onStopSuccess = null,
+        onStopSuccess = {
+          generateTipsForOsEventCausedStopSuccess(context, osEventTrigger)?.let(onShowSnackbar)
+        },
     )
   }
 
-  fun onResumeLockedRecording() {
+  fun onResumeLocked() {
     startActiveRecordingOrRollback(
-        sourceActionName = "ResumeLockedRecording",
+        sourceActionName = "ResumeLocked",
         canStartRecordingFrom = { current -> current is VoiceDraftUiState.CommittedDraft },
         nextStateProvider = { userId, currentState ->
           // Just build object in Memory, no side effects
@@ -188,38 +188,44 @@ class VoiceComposerStateHolder(
           VoiceDraftUiState.ActiveRecording.Locked(
               draft = resumeDraft,
               sessionToken = Any(),
-              action = ActiveRecordingAction.StartOsNative,
+              action = BeforeOsNativeStartedAction.StartOsNative,
           )
         },
         startRecordingExecutor = ::executeDirectLockRecording,
-        startFailureTipsProvider = { e ->
-          "${context.getString(R.string.composer_voice_note_start_failed_tip)}: ${e.localizedMessage}"
+        startFailureTipsProvider = { recordError ->
+          generateTipsForStartFailure(
+              context = context,
+              recordError = recordError,
+              isAppending = true,
+          )
         },
     )
   }
 
   /** Locked 面板下，点击【发送】（无论是正在录音中点发送，还是在草稿态点发送） */
   fun onSendLocked() {
-    fun ifInCommittedDraftState() {
+    // 2 condition: 1. in committed state 2. in ActiveRecording state.
+    // Generally, we should transit in one [tryTransition], but to resue the tryStop, let's check it
+    // in sequential.
+    // It should be ok.
+
+    fun transitIfInCommittedDraftState(): Boolean {
       val transitionResult = _draftState.tryTransition { current ->
         if (current is VoiceDraftUiState.CommittedDraft)
             TransitionDecision.Next(VoiceDraftUiState.Idle)
         else TransitionDecision.Skip
       }
       if (transitionResult !is TransitionResult.Done) {
-        return
+        return false
       }
       val recordingState = transitionResult.previous as VoiceDraftUiState.CommittedDraft
       appScope.launchCatching { sendCommittedDraft(recordingState.draft) }
+      return true
     }
-
-    // If stopOnRace, don't show tips here
-    val currentActiveRecordingState =
-        tryTransitStop(
-            osEventTrigger = null,
-        ) ?: return ifInCommittedDraftState()
+    if (transitIfInCommittedDraftState()) return
+    val currentActiveRecordingState = tryTransitStop(osEventTrigger = null) ?: return
     // do stop
-    launchStopRecording(
+    launchStopActiveRecording(
         currentState = currentActiveRecordingState,
         onFailureNextStateProvider = { committedDraft ->
           if (committedDraft != null) {
@@ -229,7 +235,7 @@ class VoiceComposerStateHolder(
         },
         onStopFailure = { committedDraft, recordError ->
           val couldRollback = committedDraft != null
-          showTipsWhenStopError(
+          showTipsWhenStopFailure(
               recordError = recordError,
               osEventTrigger = null,
               couldRollback = couldRollback,
@@ -240,15 +246,141 @@ class VoiceComposerStateHolder(
     )
   }
 
+  fun onCancelLocked() {
+    /**
+     * SAME as [onSendLocked], 2 condition: 1. in committed state 2. in ActiveRecording state.
+     *
+     * We still reuse the [launchCancelActiveRecording]
+     */
+    fun transitIfInCommittedDraftState(): Boolean {
+      val transitionResult = _draftState.tryTransition { current ->
+        if (current is VoiceDraftUiState.CommittedDraft)
+            TransitionDecision.Next(VoiceDraftUiState.Idle)
+        else TransitionDecision.Skip
+      }
+      if (transitionResult !is TransitionResult.Done) {
+        return false
+      }
+      val recordingState = transitionResult.previous as VoiceDraftUiState.CommittedDraft
+      appScope.launchCatching { recordingState.discardAll(draftUseCase) }
+      return true
+    }
+    if (transitIfInCommittedDraftState()) return
+    val currentState = tryTransitCancel() ?: return
+    launchCancelActiveRecording(currentState)
+  }
+
+  @OptIn(ExperimentalAtomicApi::class)
+  fun onStartHolding() {
+    startActiveRecordingOrRollback(
+        "hold",
+        canStartRecordingFrom = { current -> current is VoiceDraftUiState.Idle },
+        nextStateProvider = { userId, _ ->
+          val draft = draftUseCase.newVoiceDraft(userId)
+          VoiceDraftUiState.ActiveRecording.Holding(
+              draft = draft,
+              sessionToken = Any(),
+              action = BeforeOsNativeStartedAction.StartOsNative,
+          )
+        },
+        startRecordingExecutor = { destinationPath, sessionToken ->
+          coordinator.start(
+              destinationPath = destinationPath,
+              onOsEvent = { event ->
+                val osEventTrigger = RecordingOsEventSession(event, sessionToken)
+                // When callback, hold may have changed to Locked.
+                when (val currentState = _draftState.value) {
+                  is VoiceDraftUiState.ActiveRecording.Holding -> {
+                    onStopHolding(osEventTrigger)
+                  }
+                  is VoiceDraftUiState.ActiveRecording.Locked -> {
+                    onPauseLocked(osEventTrigger)
+                  }
+                  is VoiceDraftUiState.CommittedDraft,
+                  VoiceDraftUiState.Idle -> {
+                    Timber.d(
+                        "When OsEvent [$osEventTrigger] occurs, dratState already changed to: $currentState",
+                    )
+                  }
+                }
+              },
+          )
+        },
+        startFailureTipsProvider = { recordError ->
+          generateTipsForStartFailure(
+              context = context,
+              recordError = recordError,
+              isAppending = false,
+          )
+        },
+    )
+  }
+
+  /** Holding -> Locked */
+  fun onLockHolding() {
+    val transitionResult = _draftState.tryTransition { current ->
+      if (current is VoiceDraftUiState.ActiveRecording.Holding) {
+        val nextState = current.toLockedIfPossible() ?: return@tryTransition TransitionDecision.Skip
+        return@tryTransition TransitionDecision.Next(nextState)
+      }
+      return@tryTransition TransitionDecision.Skip
+    }
+    if (transitionResult !is TransitionResult.Done) {
+      Timber.d("holdToLock was blocked on state = ${_draftState.value}")
+      return
+    }
+    // NOTE: it's a sync fun
+    coordinator.guarding(RecordingPrompt.Default)
+  }
+
+  fun onCancelHolding() {
+    val currentState = tryTransitCancel() ?: return
+    launchCancelActiveRecording(currentState)
+  }
+
+  fun onStopHolding() = onStopHolding(null)
+
+  private fun onStopHolding(osEventTrigger: RecordingOsEventSession?) {
+    val currentState = tryTransitStop(osEventTrigger) ?: return
+    launchStopActiveRecording(
+      currentState = currentState,
+      onFailureNextStateProvider = { VoiceDraftUiState.Idle },
+      onStopFailure = { _, recordError ->
+        showTipsWhenStopFailure(recordError, osEventTrigger, couldRollback = false)
+      },
+      onSuccessNextStateProvider = { VoiceDraftUiState.Idle },
+      onStopSuccess = { committedDraft ->
+        sendCommittedDraft(committedDraft)
+        generateTipsForOsEventCausedStopSuccess(
+          context = context,
+          osEventTrigger = osEventTrigger,
+        )
+          ?.let(onShowSnackbar)
+      },
+    )
+  }
+
+  private suspend fun executeDirectLockRecording(
+    destinationPath: StoragePathModel.Internal,
+    sessionToken: Any,
+  ) =
+    coordinator.startAndGuarding(
+      prompt = RecordingPrompt.Default,
+      destinationPath = destinationPath,
+      onOsEvent = { event ->
+        onPauseLocked(RecordingOsEventSession(event, sessionToken))
+      },
+    )
+
   /** @param nextStateProvider param `currentState` is a state that meets [canStartRecordingFrom] */
   private fun startActiveRecordingOrRollback(
-      sourceActionName: String,
-      canStartRecordingFrom: (VoiceDraftUiState) -> Boolean,
-      nextStateProvider:
-          (userId: UserId, currentState: VoiceDraftUiState) -> VoiceDraftUiState.ActiveRecording,
-      startRecordingExecutor:
-          suspend (destinationPath: StoragePathModel.Internal, sessionToken: Any) -> Result<Unit>,
-      startFailureTipsProvider: (Throwable) -> String,
+    sourceActionName: String,
+    canStartRecordingFrom: (VoiceDraftUiState) -> Boolean,
+    nextStateProvider:
+      (userId: UserId, currentState: VoiceDraftUiState) -> VoiceDraftUiState.ActiveRecording,
+    startRecordingExecutor:
+    suspend (destinationPath: StoragePathModel.Internal, sessionToken: Any) -> Result<Unit>,
+    startFailureTipsProvider: (AudioRecordError?) -> String,
   ) {
     val userId = authState.value.authenticatedIdOrNull() ?: return
     val transition = _draftState.tryTransition { current ->
@@ -274,274 +406,129 @@ class VoiceComposerStateHolder(
         Timber.e(msg)
         throw IllegalStateException(msg)
       }
-      val startResult = startRecordingExecutor(recordingFilePath, sessionToken)
-      val startedSuccess = startResult.isSuccess
-      val resultTransitionResult = _draftState.tryTransition { current ->
-        if (
-            current is VoiceDraftUiState.ActiveRecording
-            // Generally, we don't need to verify the sessionToken as we can't start a new session
-            // before native started.
-            && current.sessionToken == triggerStartingState.sessionToken
-        ) {
-          val nextState =
-              current.nextOnceOsNativeStarted(startedSuccess)
-                  ?: return@tryTransition TransitionDecision.Skip
-          return@tryTransition TransitionDecision.Next(nextState)
-        }
-        TransitionDecision.Skip
-      }
-
-      if (resultTransitionResult !is TransitionResult.Done) {
-        onIllegalState(
-            "decide transition result after os-native started (success=$startedSuccess)",
-        )
-      }
-      val resultState = resultTransitionResult.current as VoiceDraftUiState.ActiveRecording
-      // TODO: fill this table!
-      suspend fun rollbackState() {
-        launchCancelRecording(resultState, policy = RecordingCancelPolicy.RollbackCurrentSegment)
-          .join()
-      }
-
-      suspend fun discardAll() {
-        launchCancelRecording(resultState, policy = RecordingCancelPolicy.DiscardAll).join()
-      }
-
-      when (resultState.action) {
-        BeforeOsNativeStartedAction.CancelOnceStarted,
-        BeforeOsNativeStartedAction.StartOsNative,
-        BeforeOsNativeStartedAction.StopOnceStarted -> onIllegalState("transit action done")
-        OsNativeStartedAction.Recording -> Unit // the best result. do nothing
-        OsNativeStartFailedAction.RollbackOnStartFailed -> {
-          // Show Tips when start failed
-          startResult.onFailure { e -> onShowSnackbar(startFailureTipsProvider(e)) }
-          launchCancelRecording(resultState, policy = RecordingCancelPolicy.RollbackCurrentSegment)
-              .join()
-        }
-        OsNativeStartFailedAction.CancelOnStartFailed,
-        OsNativeStartedAction.Cancel -> {
-          launchCancelRecording(resultState, policy = RecordingCancelPolicy.DiscardAll).join()
-        }
-        OsNativeStartFailedAction.StopOnStartFailed,
-        OsNativeStartedAction.Stop -> {
-          // even it's stop, logically we know the audio must be broken.
-          // But in case it success if we call `Stop`, here we call Cancel directly.
-          // Then we have to provides the next state because of the unmatches
-          // Tips have to be shown at state-set point, as here we can't get osEventSession
-          // info.
-          launchCancelRecording(resultState, policy = RecordingCancelPolicy.RollbackCurrentSegment)
-              .join()
-        }
-      }
       try {
-        val startedSuccess = startRecordingExecutor(recordingFilePath, sessionToken).isSuccess
+        val startResult = startRecordingExecutor(recordingFilePath, sessionToken)
+        val startedSuccess = startResult.isSuccess
+        val resultTransitionResult = _draftState.tryTransition { current ->
+          if (
+            current is VoiceDraftUiState.ActiveRecording &&
+            // Generally, we don't need to verify the sessionToken as we can't start a new
+            // session
+            // before native started.
+            current.sessionToken == triggerStartingState.sessionToken
+          ) {
+            val nextState =
+              current.nextOnceOsNativeStarted(startedSuccess)
+                ?: return@tryTransition TransitionDecision.Skip
+            return@tryTransition TransitionDecision.Next(nextState)
+          }
+          TransitionDecision.Skip
+        }
 
-        startRecordingExecutor(recordingFilePath, sessionToken)
-            .onFailure { e ->
-              // rollback
-              val currentState = _draftState.value
-              if (currentState.isOnStopRace()) {
-                // only rollback the last segment
-                val nextState = currentState.rollbackOnFailure(draftUseCase)
-                _draftState.update { nextState }
-              } else if (currentState.isOnCancelRace()) {
-                // NOTE: when in cancel race, we should discard all and always back to Idle.
-                val nextState = currentState.discardAll(draftUseCase)
-                _draftState.update { nextState }
-              } else if (currentState is VoiceDraftUiState.ActiveRecording) {
-                // Normal
-                val nextState = currentState.rollbackOnFailure(draftUseCase)
-                _draftState.update { nextState }
-                onShowSnackbar(startFailureTipsProvider(e))
-              } else {
-                onIllegalState("rollback on os-native start fail")
-              }
+        if (resultTransitionResult !is TransitionResult.Done) {
+          onIllegalState(
+            "decide transition result after os-native started (success=$startedSuccess)",
+          )
+        }
+        val resultState = resultTransitionResult.current as VoiceDraftUiState.ActiveRecording
+
+        when (resultState.action) {
+          BeforeOsNativeStartedAction.CancelOnceStarted,
+          BeforeOsNativeStartedAction.StartOsNative,
+          BeforeOsNativeStartedAction.StopOnceStarted -> onIllegalState("transit action done")
+          OsNativeStartedAction.Recording -> Unit // the best result. do nothing
+          // From [CancelUntileStarted] to [Cancel]
+          OsNativeStartedAction.Cancel,
+            // From [StopUntileStarted] to [Stop]
+            // even it's stop, logically we know the audio must be countless as recorder will be
+            // stopped
+            // immediately.
+            // But in case it success if we call `Stop`, here we call Cancel directly.
+            // Then we have to provides the next state because of the unmatches
+            // Tips have to be shown at state-set point, as here we can't get osEventSession
+            // info.
+          OsNativeStartedAction.Stop -> launchCancelActiveRecording(resultState)
+          OsNativeStartFailedAction.RollbackOnStartFailed -> {
+            // Show Tips when start failed
+            startResult.onFailure { e ->
+              val recordingError = (e as? AudioRecordException)?.error
+              onShowSnackbar(startFailureTipsProvider(recordingError))
             }
-            .onSuccess {
-              val stateAfterStarted = _draftState.value
-              if (stateAfterStarted.isOnStopRace()) {
-                // even it's stop, logically we know the audio must be broken.
-                // But in case it success if we call `Stop`, here we call Cancel directly.
-                // Then we have to provides the next state because of the unmatches
-                // Tips have to be shown at state-set point, as here we can't get osEventSession
-                // info.
-                launchCancelRecording(
-                        stateAfterStarted,
-                        policy = RecordingCancelPolicy.RollbackCurrentSegment,
-                    )
-                    .join()
-              } else if (stateAfterStarted.isOnCancelRace()) {
-                launchCancelRecording(
-                        stateAfterStarted,
-                        policy = RecordingCancelPolicy.DiscardAll,
-                    )
-                    .join()
-              } else {
-                // no cancel/stop race anymore, let's do normal process
-                // osNative start success, Set [pendingAction] to null
-                // Why use `tryTransition instead of directly update?
-                // -- HoldToLock action can change the draft state from Holding to Locked!
-                // -- Even we are still in the starting duration.
-                // -- And it's intended.
-                // -- Here use tryTransition can adapt to the condition.
-                val onSuccessTransitionResult = _draftState.tryTransition { current ->
-                  when (current) {
-                    is VoiceDraftUiState.ActiveRecording -> {
-                      TransitionDecision.Next(current.withMeta(action = null))
-                    }
-                    else -> TransitionDecision.Skip
-                  }
-                }
-                if (onSuccessTransitionResult !is TransitionResult.Done) {
-                  onIllegalState("clean pendingAction after os-native started")
-                }
-              }
-            }
+            launchCancelActiveRecording(resultState)
+          }
+          OsNativeStartFailedAction.CancelOnStartFailed,
+          OsNativeStartFailedAction.StopOnStartFailed -> launchCancelActiveRecording(resultState)
+        }
       } catch (e: Throwable) {
-        Timber.w(e, "Failed when process coordinator started result, rollback")
-        // NOTE: it can only be [Idle] / [CommittedDraft]. So no matter whether holding-to-locked
-        // occurred,
-        // set the rollbackState as trnasition.previous is safe.
-        _draftState.update { transition.previous }
+        // reason1: CancellationException
+        // reason2: IllegalStateException
+        Timber.w(e, "Failed when process coordinator started result, rollback if possible")
+        (_draftState.value as? VoiceDraftUiState.ActiveRecording)?.let {
+          launchCancelActiveRecording(it)
+        } // Else, it's Idle/CommittedDraft (should be impossible!!), no need to rollback though.
         throw e
       }
     }
   }
 
-  @OptIn(ExperimentalAtomicApi::class)
-  fun onStartHolding() {
 
-    startActiveRecordingOrRollback(
-        "hold",
-        canStartRecordingFrom = { current -> current is VoiceDraftUiState.Idle },
-        nextStateProvider = { userId, _ ->
-          val draft = draftUseCase.newVoiceDraft(userId)
-          VoiceDraftUiState.ActiveRecording.Holding(
-              draft = draft,
-              sessionToken = Any(),
-              action = ActiveRecordingAction.StartOsNative,
-          )
-        },
-        startRecordingExecutor = { destinationPath, sessionToken ->
-          coordinator.start(
-              destinationPath = destinationPath,
-              onOsEvent = { event ->
-                val osEventTrigger = RecordingOsEventSession(event, sessionToken)
-                // When callback, hold may have changed to Locked.
-                when (val currentState = _draftState.value) {
-                  is VoiceDraftUiState.ActiveRecording.Holding -> {
-                    onHoldStop(osEventTrigger)
-                  }
-                  is VoiceDraftUiState.ActiveRecording.Locked -> {
-                    onPauseLockedRecording(osEventTrigger)
-                  }
-                  is VoiceDraftUiState.CommittedDraft,
-                  VoiceDraftUiState.Idle -> {
-                    Timber.w(
-                        "When OsEvent [$osEventTrigger] occurs, dratState is invalid: $currentState",
-                    )
-                  }
-                }
-              },
-          )
-        },
-        startFailureTipsProvider = { e ->
-          "${context.getString(R.string.composer_hold_to_record_failed_tip)}: ${e.localizedMessage}"
-        },
+  private fun tryTransitCancel() =
+    tryTransitCancelOrStop(
+      null,
+      true,
     )
-  }
-
-  private fun tryTransitCancel(
-      osEventTrigger: RecordingOsEventSession?,
-      onTransitedRaceAction: ((currentState: VoiceDraftUiState.ActiveRecording) -> Unit)? = null,
-  ) = tryTransitCancelOrStop(osEventTrigger, true, onTransitedRaceAction = onTransitedRaceAction)
 
   private fun tryTransitStop(
-      osEventTrigger: RecordingOsEventSession?,
-      onTransitedRaceAction: ((currentState: VoiceDraftUiState.ActiveRecording) -> Unit)? = null,
+    osEventTrigger: RecordingOsEventSession?,
   ) =
-      tryTransitCancelOrStop(
-          osEventTrigger,
-          false,
-          onTransitedRaceAction = onTransitedRaceAction,
-      )
+    tryTransitCancelOrStop(
+      osEventTrigger,
+      false,
+    )
 
   private fun tryTransitCancelOrStop(
-      osEventTrigger: RecordingOsEventSession?,
-      isCancel: Boolean,
-      onTransitedRaceAction: ((currentState: VoiceDraftUiState.ActiveRecording) -> Unit)? = null,
+    osEventTrigger: RecordingOsEventSession?,
+    isCancel: Boolean,
   ): VoiceDraftUiState.ActiveRecording? {
-    val (raceAction, action) =
-        when (isCancel) {
-          true -> ActiveRecordingAction.CancelOnceStarted to ActiveRecordingAction.Cancel
-          false -> ActiveRecordingAction.StopOnceStarted to ActiveRecordingAction.Stop
-        }
     val transitionResult = _draftState.tryTransition { current ->
       if (
-          // 没有必要再具体区分子类是 ActiveRecording.Hold or Locked. 因为
-          // 1. UI 入口同一时刻只可能有 1 种 active recording mode
-          // 2. 回调入口后面有 sessionToken 区分
-          current is VoiceDraftUiState.ActiveRecording &&
-              // 避免串台
-              (osEventTrigger == null || osEventTrigger.sessionToken === current.sessionToken)
+      // 没有必要再具体区分子类是 ActiveRecording.Hold or Locked. 因为
+      // 1. UI 入口同一时刻只可能有 1 种 active recording mode
+      // 2. 回调入口后面有 sessionToken 区分
+        current is VoiceDraftUiState.ActiveRecording &&
+        // 避免串台
+        (osEventTrigger == null || osEventTrigger.sessionToken === current.sessionToken)
       ) {
-        // Race condition: 底层没启动
-        if (current.action == ActiveRecordingAction.StartOsNative) {
-          return@tryTransition TransitionDecision.Next(current.withMeta(action = raceAction))
-        } else if (current.action == null) {
-          return@tryTransition TransitionDecision.Next(current.withMeta(action = action))
-        }
+        val nextState = if (isCancel) current.nextOnCancel() else current.nextOnStop()
+        return@tryTransition if (nextState == null) TransitionDecision.Skip
+        else TransitionDecision.Next(nextState)
       }
       return@tryTransition TransitionDecision.Skip
     }
     if (transitionResult !is TransitionResult.Done) {
-      Timber.d("Failed to transit to neither $raceAction nor $action ")
+      val target = if (isCancel) "Cancel" else "Stop"
+      Timber.d("Transit to $target was blocked, state = ${_draftState.value}")
       return null
     }
     val currentState = transitionResult.current as VoiceDraftUiState.ActiveRecording
-    if (currentState.action == raceAction) {
-      onTransitedRaceAction?.invoke(currentState)
+    if (currentState.action is BeforeOsNativeStartedAction) {
+      // OnRace ==> action is BeforeOsNativeStartedAction (use this we don't need to eval the
+      // actual action)
+      if (!isCancel) {
+        // Only tips when STOP.
+        generateTipsForStopFailure(
+          context = context,
+          recordError = AudioRecordError.TooShort, // We explicitly set the too-short error
+          osEventTrigger = osEventTrigger,
+          couldRollback = currentState.isActiveRecordingLockedAppending(),
+        )
+          .let(onShowSnackbar)
+      }
       return null
     }
     return currentState
   }
 
-  fun onHoldToLockGesture() {
-    val transitionResult = _draftState.tryTransition { current ->
-      // No mater if it's waiting for the coordinator initializing the recorder, draftState can
-      // always
-      // transfer to the Locked State.
-      // After transfer, the `onHoldCancel` and `onHoldRelease` will do nothing as state guard!
-      // It meets the requirement.
-      if (current is VoiceDraftUiState.ActiveRecording.Holding) {
-        val couldTransit =
-            when (current.action) {
-              ActiveRecordingAction.StartOsNative,
-              null -> true
-              ActiveRecordingAction.CancelOnceStarted,
-              ActiveRecordingAction.Cancel,
-              ActiveRecordingAction.Stop,
-              ActiveRecordingAction.StopOnceStarted -> false
-            }
-        if (couldTransit) {
-          val nextState =
-              VoiceDraftUiState.ActiveRecording.Locked(
-                  action = current.action,
-                  draft = current.draft,
-                  sessionToken = current.sessionToken,
-              )
-          return@tryTransition TransitionDecision.Next(nextState)
-        }
-      }
-      return@tryTransition TransitionDecision.Skip
-    }
-    if (transitionResult !is TransitionResult.Done) {
-      Timber.d("holdToLock was blocked on state = ${_draftState.value}")
-      return
-    }
-    // NOTE: it's a sync fun
-    coordinator.guarding(RecordingPrompt.Default)
-  }
 
   /**
    * Use [appScope] to make sure it can always be canceled.
@@ -549,29 +536,20 @@ class VoiceComposerStateHolder(
    * When entering this Cancel step, we assume _draftState will be frozen so we'll directly update
    * the state.
    */
-  private fun launchCancelRecording(
+  private fun launchCancelActiveRecording(
       state: VoiceDraftUiState.ActiveRecording,
-      policy: RecordingCancelPolicy,
   ) = appScope.launchCatching {
     // `Try` to handle CancellationException.
     try {
-      val onFailure =
-          when (state.action) {
-            ActiveRecordingAction.StartOsNative -> TODO()
-            ActiveRecordingAction.CancelOnceStarted -> TODO()
-            ActiveRecordingAction.CancelOnStartFailure -> TODO()
-            ActiveRecordingAction.Cancel -> TODO()
-            ActiveRecordingAction.Stop -> TODO()
-            ActiveRecordingAction.StopOnceStarted -> TODO()
-            ActiveRecordingAction.StopOnStartFailure -> TODO()
-            ActiveRecordingAction.RollbackOnStartFailure -> TODO()
-            null -> TODO()
-          }.onFailure { e ->
-            Timber.w(e, "Failed to cancel coordinator on state = $state")
-          }
+      if (state.action is OsNativeStartedAction) {
+        coordinator.cancel()
+      } else {
+        coordinator.stopGuarding()
+      }
     } finally {
       // 用 NonCancellable 确保即使协程被取消，文件清理和状态复位也不会漏掉
       withContext(NonCancellable) {
+        val policy = state.action.cancelPolicy
         val nextState =
             when (policy) {
               RecordingCancelPolicy.DiscardAll -> state.discardAll(draftUseCase)
@@ -582,20 +560,16 @@ class VoiceComposerStateHolder(
     }
   }
 
-  fun onHoldCancel() {
-    val currentState = tryTransitCancel(null) ?: return
-    launchCancelRecording(currentState, policy = RecordingCancelPolicy.DiscardAll)
-  }
 
   /**
-   * A general stop function supports Stop both Locked and Hold
+   * A general stop function for active-recording
    *
    * Once entering this, we assume the `_draftState` can't be updated anymore due to Guarding! So no
    * more check and directly update!
    *
    * Split action & state-provider in param to force caller providing the next state!
    */
-  private fun launchStopRecording(
+  private fun launchStopActiveRecording(
       currentState: VoiceDraftUiState.ActiveRecording,
       onFailureNextStateProvider: (committedDraft: VoiceDraft.Committed?) -> VoiceDraftUiState,
       onStopFailure:
@@ -605,133 +579,89 @@ class VoiceComposerStateHolder(
           ) -> Unit)?,
       onSuccessNextStateProvider: (committedDraft: VoiceDraft.Committed) -> VoiceDraftUiState,
       onStopSuccess: (suspend (committedDraft: VoiceDraft.Committed) -> Unit)?,
-  ) = appScope.launchCatching {
-    val draft = currentState.draft
-    try {
-      if (currentState is VoiceDraftUiState.ActiveRecording.Locked) {
-            coordinator.onStopLocked()
-          } else {
+  ): Job {
+    val action = currentState.action
+    if (action !is OsNativeStartedAction) {
+      // recorder not started, stop is countless. route to Cancel with rollback
+      return launchCancelActiveRecording(currentState)
+    }
+    return appScope.launchCatching {
+      val draft = currentState.draft
+
+      suspend fun executeOnFailure(recordError: AudioRecordError?) {
+        withContext(NonCancellable) {
+          // tryCommitWhenRecordingFailure will delete file!
+          val committedDraft = draftUseCase.tryCommitWhenRecordingFailure(draft)
+          // transit first
+          val nextState = onFailureNextStateProvider(committedDraft)
+          _draftState.update { nextState }
+          runSuspendCatching { onStopFailure?.invoke(committedDraft, recordError) }
+        }
+      }
+
+      val stopResult =
+          try {
             coordinator.stop()
+          } catch (e: CancellationException) {
+            // Have to rollback
+            executeOnFailure(null)
+            throw e
           }
+      // Following Step should be safe for sate-transition and resource releasing without any
+      // try-catch
+      stopResult
           .onFailure { e ->
             Timber.w(e, "StopRecording failed, possibly AudioRecorder internal got Invalid State")
-            // tryCommitWhenRecordingFailure will delete file!
-            val committedDraft = draftUseCase.tryCommitWhenRecordingFailure(draft)
-            // It can only happen when internal audioRecorder state invalid. use InternalError
-            // Duration-Too-Short error won't report here, it'll return a normal
-            // AudioRecordResult.Failure!
-            onStopFailure?.invoke(committedDraft, null)
-            val nextState = onFailureNextStateProvider(committedDraft)
-            _draftState.update { nextState }
+            executeOnFailure(null)
           }
           .onSuccess { audioRecordResult ->
             when (audioRecordResult) {
               is AudioRecordResult.Failure -> {
-                val committedDraft = draftUseCase.tryCommitWhenRecordingFailure(draft = draft)
-                onStopFailure?.invoke(committedDraft, audioRecordResult.error)
-                val nextState = onFailureNextStateProvider(committedDraft)
-                _draftState.update { nextState }
+                executeOnFailure(audioRecordResult.error)
               }
               is AudioRecordResult.Success -> {
-                val committedDraft =
+                withContext(NonCancellable) {
+                  runSuspendCatching {
                     draftUseCase.commitWhenRecordingSuccess(
                         draft = draft,
                         audioRecordResult = audioRecordResult,
                     )
-                onStopSuccess?.invoke(committedDraft)
-                val nextState = onSuccessNextStateProvider(committedDraft)
-                _draftState.update { nextState }
+                  }
+                      .onSuccess { committedDraft ->
+                        val nextState = onSuccessNextStateProvider(committedDraft)
+                        _draftState.update { nextState }
+                        runSuspendCatching { onStopSuccess?.invoke(committedDraft) }
+                            .onFailure { e ->
+                              Timber.e(e, "Failed to run onStopSuccess action when stop success")
+                            }
+                      }
+                      .onFailure { e ->
+                        Timber.e(e, "Failed to commit recording success")
+                        executeOnFailure(null)
+                      }
+                }
               }
             }
           }
-    } catch (e: Throwable) {
-      // [draftUseCase.tryCommitWhenRecordingFailure] won't throw any exception
-      val committedDraft = draftUseCase.tryCommitWhenRecordingFailure(draft)
-      onStopFailure?.invoke(committedDraft, null)
-      val nextState = onFailureNextStateProvider(committedDraft)
-      _draftState.update { nextState }
-      // do transite before throw e
-      if (e is CancellationException) throw e
     }
   }
 
-  fun onHoldStop() = onHoldStop(null)
 
-  private fun onHoldStop(osEventTrigger: RecordingOsEventSession?) {
-    val currentState =
-        tryTransitStop(osEventTrigger) { state ->
-          // here we must show tips as there are no tips when actual-stop(cancel)
-          val couldRollback = state.isActiveRecordingLockedAppending()
-          showTipsWhenStopError(
-              recordError = AudioRecordError.TooShort, // We explicitly set the too-short error
-              osEventTrigger = osEventTrigger,
-              couldRollback = couldRollback,
-          )
-        } ?: return
-    launchStopRecording(
-        currentState = currentState,
-        onFailureNextStateProvider = { VoiceDraftUiState.Idle },
-        onStopFailure = { _, recordError ->
-          showTipsWhenStopError(recordError, osEventTrigger, couldRollback = false)
-        },
-        onSuccessNextStateProvider = { VoiceDraftUiState.Idle },
-        onStopSuccess = { committedDraft ->
-          sendCommittedDraft(committedDraft)
-          val tipsResId =
-              when (osEventTrigger?.event) {
-                RecordingOsEvent.FocusLost ->
-                    R.string.composer_recording_error_focus_lost_stop_success
-                RecordingOsEvent.OsNativeError ->
-                    R.string.composer_recording_error_os_native_error_stop_success
-                RecordingOsEvent.StorageFull ->
-                    R.string.composer_recording_error_storage_full_stop_success
-                null -> null
-              }
-          if (tipsResId != null) onShowSnackbar(context.getString(tipsResId))
-        },
-    )
-  }
-
-  private fun showTipsWhenStopError(
+  private fun showTipsWhenStopFailure(
       recordError: AudioRecordError?,
       osEventTrigger: RecordingOsEventSession?,
       couldRollback: Boolean,
   ) {
-    /** We trust [recordError] more as it's summarized on all knowledge */
-    // we should first show osEventTrigger reason as it's from non-user intention.
-
-    val storageFullResId = R.string.composer_recording_stop_fail_reason_storage_full
-    val reasonResId =
-        when (osEventTrigger?.event) {
-          RecordingOsEvent.FocusLost -> R.string.composer_recording_stop_fail_reason_focus_lost
-          RecordingOsEvent.OsNativeError -> {
-            // But as we know, `RecordingOsEvent.OsNativeError` maybe not accurate enough
-            // -- it can be StorageFull, so in this condition, we make an extra double-check
-            if (recordError is AudioRecordError.StorageFull) storageFullResId
-            else R.string.composer_recording_stop_fail_reason_os_native_error
-          }
-          RecordingOsEvent.StorageFull -> storageFullResId
-          null ->
-              when (recordError) {
-                AudioRecordError.FileIo -> R.string.composer_recording_stop_fail_reason_file_io
-                AudioRecordError.MicrophoneBusy ->
-                    R.string.composer_recording_stop_fail_reason_microphone_busy
-                AudioRecordError.PermissionDenied ->
-                    R.string.composer_recording_stop_fail_reason_permission_denied
-                AudioRecordError.StorageFull -> storageFullResId
-                AudioRecordError.TooShort -> R.string.composer_recording_stop_fail_reason_too_short
-                AudioRecordError.RecorderInternal,
-                null -> R.string.composer_recording_stop_fail_reason_internal_error
-              }
-        }
-
-    val resultResId =
-        if (couldRollback) R.string.composer_recording_stop_fail_result_rollback
-        else R.string.composer_recording_stop_fail_result_cannot_save
-    val result = context.getString(resultResId)
-    val message = context.getString(reasonResId, result)
-    onShowSnackbar(message)
+    val tips =
+        generateTipsForStopFailure(
+            context = context,
+            recordError = recordError,
+            osEventTrigger = osEventTrigger,
+            couldRollback = couldRollback,
+        )
+    onShowSnackbar(tips)
   }
+
 
   suspend fun teardownWhenExit(): VoiceDraft? {
     val currentMode = composerMode.value
