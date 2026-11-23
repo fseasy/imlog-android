@@ -1,22 +1,20 @@
-// androidMain/src/AndroidAudioWaveformExtractor.kt
 package top.fseasy.imlog.data.audio
 
 import android.content.Context
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
-import java.io.File
 import java.nio.ByteOrder
-import kotlin.time.DurationUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import timber.log.Timber
+import top.fseasy.imlog.data.commonmain.audio.WaveformStreamingAccumulator
 import top.fseasy.imlog.data.mapper.toUriOrThrow
-import top.fseasy.imlog.data.util.MediaDurationUtils
 import top.fseasy.imlog.domain.audio.AudioWaveformExtractor
 import top.fseasy.imlog.domain.audio.AudioWaveformResult
-import top.fseasy.imlog.domain.audio.WaveformStreamingAccumulator
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.repository.StorageRepository
 
@@ -25,24 +23,21 @@ class AndroidAudioWaveformExtractor(
     private val storageRepository: StorageRepository,
 ) : AudioWaveformExtractor {
 
-  override suspend fun extract5BitEncodedWaveformOrNull(
+  /**
+   * Safe for main-thread.
+   *
+   * @throws CancellationException, any other exceptions will lead to null result.
+   */
+  override suspend fun extractOrNull(
       path: StoragePathModel,
-      knownDurationMs: Long?,
+      knownDuration: kotlin.time.Duration?,
   ): AudioWaveformResult? =
       withContext(Dispatchers.IO) {
         if (path is StoragePathModel.Dual) {
-          return@withContext extract5BitEncodedWaveformOrNull(path.toInternal(), knownDurationMs)
+          return@withContext extractOrNull(path.toInternal(), knownDuration)
         }
-
-        // 1. 获取预估时长并初始化累加器
-        val estimatedDurationUs: Long =
-            if (knownDurationMs != null && knownDurationMs > 0) {
-              knownDurationMs * 1000L
-            } else {
-              detectDurationUs(path)
-            }
         // 实例化 commonMain 的累加器
-        val accumulator = WaveformStreamingAccumulator(estimatedDurationUs)
+        val accumulator = WaveformStreamingAccumulator(knownDuration)
 
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
@@ -84,21 +79,18 @@ class AndroidAudioWaveformExtractor(
           activeCodec.configure(format, null, null, 0)
           activeCodec.start()
 
-          var channelCount =
-              if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
-                format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-              } else 1
-          var sampleRate =
-              if (format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
-                format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-              } else 44100
+          var channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT, 1).coerceAtLeast(1)
+          var sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE, 44100).coerceAtLeast(8000)
 
           val bufferInfo = MediaCodec.BufferInfo()
           var isInputEOS = false
           var isOutputEOS = false
           var consecutiveTimeouts = 0
-          val maxConsecutiveTimeouts = 50
+          val maxConsecutiveTimeouts = 200
+
           val shortBuffer = ShortArray(4096) // 复用的小缓冲数组
+          // channelCount 在 INFO_OUTPUT_FORMAT_CHANGED 会更新，需要对应重新计算
+          var alignedBatchSize = (shortBuffer.size / channelCount) * channelCount
 
           while (!isOutputEOS) {
             currentCoroutineContext().ensureActive()
@@ -143,6 +135,7 @@ class AndroidAudioWaveformExtractor(
                     newFormat
                         .getInteger(MediaFormat.KEY_SAMPLE_RATE, sampleRate)
                         .coerceAtLeast(8000)
+                alignedBatchSize = (shortBuffer.size / channelCount) * channelCount
               }
               MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED -> Unit
               else -> {
@@ -163,7 +156,8 @@ class AndroidAudioWaveformExtractor(
 
                     // 流式喂给 accumulator
                     while (readOffset < totalShorts) {
-                      val chunkShortCount = minOf(shortBuffer.size, totalShorts - readOffset)
+                      val chunkShortCount = minOf(alignedBatchSize, totalShorts - readOffset)
+
                       shortView.get(shortBuffer, 0, chunkShortCount)
 
                       // 计算当前批次的起始微秒偏移
@@ -191,38 +185,17 @@ class AndroidAudioWaveformExtractor(
             }
           }
 
-          // 3. 【重点】：直接委托 accumulator 打包并输出结果
+          // 委托 accumulator 打包并输出结果
           accumulator.finish()
+        } catch (e: CancellationException) {
+          throw e
         } catch (e: Exception) {
+          Timber.w(e, "Failed to extract waveform for $path")
           null
         } finally {
-          try {
-            codec?.stop()
-          } catch (_: Throwable) {}
-          try {
-            codec?.release()
-          } catch (_: Throwable) {}
-          try {
-            extractor.release()
-          } catch (_: Throwable) {}
+          runCatching { codec?.stop() }
+          runCatching { codec?.release() }
+          runCatching { extractor.release() }
         }
       }
-
-  private suspend fun detectDurationUs(path: StoragePathModel): Long {
-    val duration =
-        when (path) {
-          is StoragePathModel.Dual -> null
-          is StoragePathModel.Internal -> {
-            val internalPath =
-                storageRepository.resolveInternalStoragePathToAbsolutePathWithoutCreating(path)
-            MediaDurationUtils.getDurationOrNull(File(internalPath.value.value))
-          }
-          is StoragePathModel.Shared -> {
-            val sharedPath =
-                storageRepository.resolveSharedStoragePathToAbsolutePathWithoutCreating(path)
-            MediaDurationUtils.getDurationOrNull(context, sharedPath.value.toUriOrThrow())
-          }
-        }
-    return duration?.toLong(DurationUnit.MICROSECONDS) ?: 0L
-  }
 }

@@ -88,6 +88,7 @@ import top.fseasy.imlog.domain.util.splitNameAndExtension
  *         │   └── $avatar_filename
  *         └── user/
  *             └── $avatar_filename
+ *     └── quarantine/$quarantine_filename
  * ```
  */
 @Singleton
@@ -127,6 +128,13 @@ constructor(
    * = `$user.id`
    */
   fun getUserRootDirName(userId: UserId): String = userId.value
+
+  fun buildQuarantinePath(signInUserId: UserId, filename: String): StoragePathModel.Shared {
+    return StoragePathModel.Shared(
+        buildResourceRootRelativePath(signInUserId, ResourceName.Quarantine) + listOf(filename),
+        root = SharedStorageRootSource.LookupByUser(signInUserId),
+    )
+  }
 
   /** = `$user / avatar / user / $filename` */
   fun buildUserAvatarStoragePath(
@@ -181,7 +189,6 @@ constructor(
    *  time_prefix = ${timestamp.toEpochMilliseconds()}-${Random.nextInt(1000)}
    *  name =  $time_prefix + $truncated_original_name + $suffix
    *  ```
-   *
    */
   fun buildTimestampedFilename(timestamp: Instant, originalFilename: String): String {
     val prefix = "${timestamp.toEpochMilliseconds()}-${Random.nextInt(1000)}"
@@ -201,7 +208,7 @@ constructor(
   /**
    * Build draft file (like message draft of a topic).
    *
-   * rule: `$user_root_name / draft / $filename (no more hierarchy as  its num is limited')`
+   * rule: `$user_root_name / draft / $filename (no more hierarchy as its num is limited')`
    *
    * Location: internal persistent
    */
@@ -369,6 +376,7 @@ private enum class ResourceName(val value: String) {
   MessageThumbnail("thumbnail"),
   TemporaryCache("temp_cache"),
   Draft(value = "draft"),
+  Quarantine(value = "quarantine"),
 }
 
 private enum class AvatarTargetName(val value: String) {

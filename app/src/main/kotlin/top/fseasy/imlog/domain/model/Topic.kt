@@ -1,6 +1,8 @@
 package top.fseasy.imlog.domain.model
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -33,6 +35,21 @@ data class Topic(
     val archived: Boolean,
 )
 
+/** For topic message snippet */
+data class MessagePreview(
+  val type: MessageType,
+  val text: String?,
+  val senderId: UserId,
+  val senderName: String?,
+)
+
+/** For topic message snippet */
+data class MessageDraftPreview(
+  val quotedMessageId: MessageId? = null,
+  val text: String? = null,
+  val voiceDuration: kotlin.time.Duration? = null
+)
+
 /** Element to show in Home screen topic lists. */
 data class HomeTopic(
     val id: TopicId,
@@ -42,7 +59,7 @@ data class HomeTopic(
     val hasUnread: Boolean,
     val messageUpdatedAt: Instant,
     val lastMessagePreview: MessagePreview?,
-    val draft: MessageDraft?,
+    val draft: MessageDraftPreview?,
     val description: String?,
 )
 
@@ -78,4 +95,26 @@ data class TopicPreference(
     val isArchived: Boolean = false,
     val isPinned: Boolean = false,
     val background: String? = null,
+)
+
+
+@Serializable
+enum class MessageInputMode(val value: String) {
+  Text("text"),
+  @OptIn(ExperimentalSerializationApi::class) @JsonNames("Voice") HoldToRecord("hold-to-record"),
+  VoiceNote("voice-note"),
+  Attachment("attachment"),
+  Camera("camera"),
+}
+
+/**
+ * For composer draft
+ *
+ * only contains basic parts: for voice draft, we extract it to an independent part.
+ */
+@Serializable
+data class MessageBasicDraft(
+    val inputMode: MessageInputMode? = null,
+    val quotedMessageId: MessageId? = null,
+    val text: String? = null,
 )

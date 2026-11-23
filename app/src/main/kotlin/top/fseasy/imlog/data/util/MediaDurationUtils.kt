@@ -15,85 +15,64 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import top.fseasy.imlog.data.commonmain.audio.AdtsFrameParser
 
 object MediaDurationUtils {
 
-  private const val DEFAULT_DURATION = 0
-
-  // 标准 ADTS 规范的采样率查找表
-  private val AAC_SAMPLE_RATES =
-      intArrayOf(
-          96000,
-          88200,
-          64000,
-          48000,
-          44100,
-          32000,
-          24000,
-          22050,
-          16000,
-          12000,
-          11025,
-          8000,
-          7350,
-      )
+  private const val DEFAULT_DURATION_MS = 0L
 
   // ==========================================
   // File APIs
   // ==========================================
 
   suspend fun getDuration(file: File): Duration {
-    return getDurationOrNull(file) ?: DEFAULT_DURATION.milliseconds
+    return getDurationOrNull(file) ?: DEFAULT_DURATION_MS.milliseconds
   }
 
   suspend fun getDurationOrNull(file: File): Duration? =
-      withContext(Dispatchers.IO) {
-        if (!file.exists() || file.isDirectory) return@withContext null
+    withContext(Dispatchers.IO) {
+      if (!file.exists() || !file.isFile) return@withContext null
 
-        // 1. Primary: MediaMetadataRetriever
-        syncGetDurationFromRetriever { retriever ->
-          retriever.setDataSource(file.absolutePath)
-        }
-            // 2. Secondary Fallback: MediaExtractor
-            ?: syncGetDurationFromExtractor { extractor ->
-              extractor.setDataSource(file.absolutePath)
-            }
-            // 3. Final Fallback: 针对无头 ADTS 文件的极速跳帧扫描（使用 .use 确保绝对安全关闭）
-            ?: file.inputStream().use { stream ->
-              syncGetDurationFromAdtsStream(stream)
-            }
+      // 1. Primary: MediaMetadataRetriever
+      syncGetDurationFromRetriever { retriever ->
+        retriever.setDataSource(file.absolutePath)
       }
+      // 2. Secondary Fallback: MediaExtractor
+        ?: syncGetDurationFromExtractor { extractor ->
+          extractor.setDataSource(file.absolutePath)
+        }
+        // 3. Final Fallback: 针对无头 ADTS 文件的极速跳帧扫描
+        ?: file.inputStream().use { stream ->
+          syncGetDurationFromAdtsStream(stream)
+        }
+    }
 
   // ==========================================
   // Uri APIs
   // ==========================================
 
   suspend fun getDuration(context: Context, uri: Uri): Duration {
-    return getDurationOrNull(context, uri) ?: DEFAULT_DURATION.milliseconds
+    return getDurationOrNull(context, uri) ?: DEFAULT_DURATION_MS.milliseconds
   }
 
   suspend fun getDurationOrNull(context: Context, uri: Uri): Duration? {
-    // Fast Path - Query the ContentResolver database (Zero file parsing, instant)
     return withContext(Dispatchers.IO) {
       syncGetDurationFromContentResolver(context, uri)
     } ?: getDurationWithReadingFileOrNull(context, uri)
   }
 
   suspend fun getDurationWithReadingFileOrNull(context: Context, uri: Uri): Duration? =
-      withContext(Dispatchers.IO) {
-        // 1. Standard Path - Use MediaMetadataRetriever
-        syncGetDurationFromRetriever { retriever ->
-          retriever.setDataSource(context, uri)
-        }
-            // 2. Deep Path - Use MediaExtractor
-            ?: syncGetDurationFromExtractor { extractor ->
-              extractor.setDataSource(context, uri, null)
-            }
-            // 3. Final Fallback: 针对 SAF 流进行纯字节跳帧扫描（使用 .use 杜绝 FD 泄漏）
-            ?: context.contentResolver.openInputStream(uri)?.use { stream ->
-              syncGetDurationFromAdtsStream(stream)
-            }
+    withContext(Dispatchers.IO) {
+      syncGetDurationFromRetriever { retriever ->
+        retriever.setDataSource(context, uri)
       }
+        ?: syncGetDurationFromExtractor { extractor ->
+          extractor.setDataSource(context, uri, null)
+        }
+        ?: context.contentResolver.openInputStream(uri)?.use { stream ->
+          syncGetDurationFromAdtsStream(stream)
+        }
+    }
 
   // ==========================================
   // Shared Internal Helpers
@@ -108,8 +87,7 @@ object MediaDurationUtils {
         if (cursor.moveToFirst()) {
           val index = cursor.getColumnIndex(MediaStore.MediaColumns.DURATION)
           if (index != -1) {
-            val durationStr = cursor.getString(index)
-            durationStr?.toLongOrNull()?.milliseconds
+            cursor.getString(index)?.toLongOrNull()?.takeIf { it > 0L }?.milliseconds
           } else null
         } else null
       }
@@ -120,13 +98,13 @@ object MediaDurationUtils {
   }
 
   private fun syncGetDurationFromRetriever(
-      setDataSource: (MediaMetadataRetriever) -> Unit
+    setDataSource: (MediaMetadataRetriever) -> Unit
   ): Duration? {
     val retriever = MediaMetadataRetriever()
     return try {
       setDataSource(retriever)
       val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-      durationStr?.toLongOrNull()?.milliseconds
+      durationStr?.toLongOrNull()?.takeIf { it > 0L }?.milliseconds
     } catch (e: Exception) {
       Timber.w(e, "failed to get duration from retriever")
       null
@@ -146,7 +124,9 @@ object MediaDurationUtils {
         val format = extractor.getTrackFormat(i)
         if (format.containsKey(MediaFormat.KEY_DURATION)) {
           val durationUs = format.getLong(MediaFormat.KEY_DURATION)
-          return durationUs.microseconds
+          if (durationUs > 0L) {
+            return durationUs.microseconds
+          }
         }
       }
       null
@@ -160,59 +140,48 @@ object MediaDurationUtils {
     }
   }
 
-  /** 兜底第三防线：纯字节快速跳帧解析（只读头，不走解码器） 耗时仅数毫秒，专门解决 ADTS 纯裸流无头信息的问题
-   * 注意：生命周期由调用方的 .use 统一管理 */
+  /**
+   * 兜底第三防线：纯字节快速跳帧解析（只读头，不走解码器）
+   * 严格确保末尾不完整残帧不计入总时长。
+   */
   private fun syncGetDurationFromAdtsStream(inputStream: InputStream): Duration? {
     return try {
       val bufferedStream = inputStream.buffered(8192)
       var totalFrames = 0L
-      var sampleRate = 0
-      val header = ByteArray(7)
+      var totalSamples = 0L
+      var baseSampleRate = 0
+      val headerBytes = ByteArray(AdtsFrameParser.MIN_HEADER_SIZE)
 
       while (true) {
-        bufferedStream.mark(7)
-        val read = bufferedStream.read(header, 0, 7)
-        if (read < 7) break
+        bufferedStream.mark(AdtsFrameParser.MIN_HEADER_SIZE)
+        val read = readFully(bufferedStream, headerBytes, AdtsFrameParser.MIN_HEADER_SIZE)
+        if (read < AdtsFrameParser.MIN_HEADER_SIZE) break
 
-        val byte0 = header[0].toInt() and 0xFF
-        val byte1 = header[1].toInt() and 0xFF
-        // 校验 12-bit 同步字 0xFFF
-        if (byte0 != 0xFF || (byte1 and 0xF0) != 0xF0) {
+        val frame = AdtsFrameParser.parseHeader(headerBytes) ?: if (totalFrames == 0L) {
+          // 尚未进入有效帧流：向后滑动 1 字节寻找同步字（跳过文件头杂质）
           bufferedStream.reset()
-          // 滑动 1 字节寻找同步字（过滤文件头杂质）
-          if (bufferedStream.skip(1) <= 0) break
+          if (bufferedStream.read() == -1) break
           continue
+        } else {
+          // 已经在正常帧流中却失去同步：说明到达损坏尾部，立即终止
+          break
         }
 
-        // 解析采样率索引 (第 18~21 位)
-        val sampleRateIdx = (header[2].toInt() and 0x3C) shr 2
-        if (sampleRate == 0 && sampleRateIdx < AAC_SAMPLE_RATES.size) {
-          sampleRate = AAC_SAMPLE_RATES[sampleRateIdx]
+        val payloadToSkip = (frame.frameLength - AdtsFrameParser.MIN_HEADER_SIZE).toLong()
+        if (!skipExact(bufferedStream, payloadToSkip)) {
+          // 负载未写满即遇到 EOF（末尾残帧），丢弃该帧
+          break
         }
 
-        // 解析 13-bit 帧长度 (第 30~42 位)
-        val byte3 = header[3].toInt() and 0xFF
-        val byte4 = header[4].toInt() and 0xFF
-        val byte5 = header[5].toInt() and 0xFF
-        val frameLength = ((byte3 and 0x03) shl 11) or (byte4 shl 3) or ((byte5 and 0xE0) shr 5)
-
-        if (frameLength < 7) break
-
-        // 跳过音频数据负载，直达下一帧（零 CPU 消耗）
-        val payloadToSkip = (frameLength - 7).toLong()
-        var skipped = 0L
-        while (skipped < payloadToSkip) {
-          val s = bufferedStream.skip(payloadToSkip - skipped)
-          if (s <= 0) break
-          skipped += s
+        if (baseSampleRate == 0) {
+          baseSampleRate = frame.config.sampleRateHz
         }
-
         totalFrames++
+        totalSamples += frame.rawDataBlocks * 1024L
       }
 
-      if (totalFrames > 0 && sampleRate > 0) {
-        val totalSamples = totalFrames * 1024L // AAC-LC 每帧固定 1024 采样
-        val durationUs = (totalSamples * 1_000_000L) / sampleRate
+      if (totalFrames > 0L && baseSampleRate > 0) {
+        val durationUs = (totalSamples * 1_000_000L) / baseSampleRate
         durationUs.microseconds
       } else {
         null
@@ -221,5 +190,34 @@ object MediaDurationUtils {
       Timber.w(e, "failed to parse ADTS stream")
       null
     }
+  }
+
+  private fun readFully(stream: InputStream, buffer: ByteArray, length: Int): Int {
+    var totalRead = 0
+    while (totalRead < length) {
+      val read = stream.read(buffer, totalRead, length - totalRead)
+      if (read == -1) break
+      totalRead += read
+    }
+    return totalRead
+  }
+
+  /**
+   * 精确跳过 [bytesToSkip] 个字节。
+   * 通过读取最后一个字节，规避 FileInputStream.skip() 底层 lseek 越过 EOF 仍返回正数的问题。
+   */
+  private fun skipExact(stream: InputStream, bytesToSkip: Long): Boolean {
+    if (bytesToSkip <= 0L) return true
+    var remaining = bytesToSkip
+    while (remaining > 1L) {
+      val skipped = stream.skip(remaining - 1L)
+      if (skipped > 0L) {
+        remaining -= skipped
+      } else {
+        if (stream.read() == -1) return false
+        remaining -= 1L
+      }
+    }
+    return stream.read() != -1
   }
 }

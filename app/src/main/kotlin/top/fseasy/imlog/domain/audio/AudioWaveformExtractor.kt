@@ -4,14 +4,14 @@ import kotlin.time.Duration
 import top.fseasy.imlog.domain.model.StoragePathModel
 
 data class AudioWaveformResult(
-  val waveform: Waveform,
-  val duration: Duration
+    val waveform: Waveform,
+    val duration: Duration,
 )
 
 interface AudioWaveformExtractor {
-  /** use [WaveformCodec5Bit] and [WaveformStreamingAccumulator] to do streaming extraction. */
-  suspend fun extract5BitEncodedWaveformOrNull(
+  /** use [top.fseasy.imlog.data.commonmain.audio.WaveformCodec5Bit] and [top.fseasy.imlog.data.commonmain.audio.WaveformStreamingAccumulator] to do streaming extraction. */
+  suspend fun extractOrNull(
       path: StoragePathModel,
-      knownDurationMs: Long? = null,
+      knownDuration: Duration? = null,
   ): AudioWaveformResult?
 }

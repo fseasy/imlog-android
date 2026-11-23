@@ -151,7 +151,7 @@ constructor(
       val inputMode = draft.inputMode?.toUiState()
       updateInputMode(inputMode)
       updateComposerStage(inputMode.decideComposerStage())
-      draft.voiceNote?.let { voiceDraft ->
+      draft.voice?.let { voiceDraft ->
         voiceComposerStateHolder.restoreDraft(voiceDraft)
       }
     }
@@ -431,10 +431,10 @@ private object MessageDraftUtil {
       voiceDraft: VoiceDraft?,
   ) =
       MessageDraft(
-          inputMode = inputMode?.toDomain(),
-          quotedMessageId = null, // TODO: add quoteMessage impl
-          text = inputText,
-          voiceNote = voiceDraft,
+        inputMode = inputMode?.toDomain(),
+        quotedMessageId = null, // TODO: add quoteMessage impl
+        text = inputText,
+        voice = voiceDraft,
       )
 
   /** Run in IO in blocking way. */

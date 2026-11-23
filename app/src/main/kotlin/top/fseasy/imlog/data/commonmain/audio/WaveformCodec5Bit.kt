@@ -1,6 +1,7 @@
 // domain/audio/WaveformCodec5Bit.kt 或 data/codec/WaveformCodec5Bit.kt
-package top.fseasy.imlog.domain.audio
+package top.fseasy.imlog.data.commonmain.audio
 
+import top.fseasy.imlog.domain.audio.Waveform
 import kotlin.math.roundToInt
 
 object WaveformCodec5Bit {
@@ -37,7 +38,11 @@ object WaveformCodec5Bit {
     return output
   }
 
-  /** 仅在读库/反序列化时调用：5-bit ByteArray -> Waveform */
+  /**
+   * 仅在读库/反序列化时调用：5-bit ByteArray -> Waveform
+   *
+   * No exception.
+   */
   fun unpack(bytes: ByteArray?): Waveform {
     if (bytes == null || bytes.isEmpty()) return Waveform.EMPTY
 
@@ -56,14 +61,15 @@ object WaveformCodec5Bit {
         byteIndex++
       }
 
-      val value = if (bitsInBuffer >= 5) {
-        val v = (bitBuffer shr (bitsInBuffer - 5)) and 0x1F
-        bitsInBuffer -= 5
-        v
-      } else {
-        bitsInBuffer = 0
-        0
-      }
+      val value =
+          if (bitsInBuffer >= 5) {
+            val v = (bitBuffer shr (bitsInBuffer - 5)) and 0x1F
+            bitsInBuffer -= 5
+            v
+          } else {
+            bitsInBuffer = 0
+            0
+          }
       result[i] = (value / 31f).coerceIn(0.05f, 1.0f)
     }
 

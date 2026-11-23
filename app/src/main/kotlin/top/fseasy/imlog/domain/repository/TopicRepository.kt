@@ -4,7 +4,8 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import top.fseasy.imlog.domain.model.HomeTopic
-import top.fseasy.imlog.domain.model.MessageDraft
+import top.fseasy.imlog.domain.model.LoadedVoiceDraft
+import top.fseasy.imlog.domain.model.MessageBasicDraft
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.Topic
 import top.fseasy.imlog.domain.model.TopicAvatarModel
@@ -78,7 +79,9 @@ interface TopicRepository {
   // =======
   // | Message Drafts
   // =======
-  suspend fun getMessageDraft(userId: UserId, topicId: TopicId): MessageDraft?
+  suspend fun getMessageBasicDraft(userId: UserId, topicId: TopicId): MessageBasicDraft?
+
+  suspend fun getMessageVoiceDraft(userId: UserId, topicId: TopicId): LoadedVoiceDraft
 
   /** Run in IO thread. */
   suspend fun setMessageDraftQuotedMessageId(

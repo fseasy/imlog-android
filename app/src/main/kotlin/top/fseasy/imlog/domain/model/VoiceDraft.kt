@@ -39,10 +39,10 @@ sealed interface VoiceDraft {
  * Safe for main-thread.
  */
 suspend fun VoiceDraft.ActiveRecording.commit(
-  recordingResult: AudioRecordResult.Success,
-  fileContentAppendOperation:
+    recordingResult: AudioRecordResult.Success,
+    fileContentAppendOperation:
         suspend (base: StoragePathModel.Internal, newSegment: StoragePathModel.Internal) -> Unit,
-  fileDeleteOperation: suspend (StoragePathModel.Internal) -> Unit,
+    fileDeleteOperation: suspend (StoragePathModel.Internal) -> Unit,
 ) =
     when (this) {
       is VoiceDraft.ActiveRecording.Appending ->
@@ -65,7 +65,7 @@ suspend fun VoiceDraft.ActiveRecording.commit(
     }
 
 fun VoiceDraft.ActiveRecording.Base.commit(
-    recordingResult: AudioRecordResult.Success
+    recordingResult: AudioRecordResult.Success,
 ): VoiceDraft.Committed {
   return VoiceDraft.Committed(
       detail =
@@ -77,6 +77,24 @@ fun VoiceDraft.ActiveRecording.Base.commit(
                       recordingResult.amplitudes,
                       recordingResult.duration.inWholeSeconds,
                   ),
-          )
+          ),
   )
+}
+
+/** Data -> Domain 边界：忠实反映数据库与反序列化的真实状态 */
+sealed interface LoadedVoiceDraft {
+  data object None : LoadedVoiceDraft
+
+  data class Valid(val draft: VoiceDraft) : LoadedVoiceDraft
+
+  sealed interface Corrupted : LoadedVoiceDraft {
+    data object Json : Corrupted
+
+    // waveform unpack only occurs when base exists
+    data class WaveformUnpack(
+        val baseFilePath: StoragePathModel.Internal,
+        val baseDuration: kotlin.time.Duration,
+        val recordingFilePath: StoragePathModel.Internal?,
+    ) : Corrupted
+  }
 }

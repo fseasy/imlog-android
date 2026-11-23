@@ -1,34 +1,11 @@
 
 ### 录音编码选择
 
-Opus vs. AAC：核心特性对比
+录音期间：ADTS-LC, 每帧都有时间同步头，抗崩溃，方便 append segment
 
-特性	Opus	AAC
-设计目标	实时通信 (VoIP, 视频会议)	文件存储与分发 (本地音乐, 流媒体)
-码率范围	6 kbps - 510 kbps (动态范围极宽)	8 kbps - 529 kbps
-典型延迟	26.5 ms (最低可至 5 ms)	> 100 ms
-抗丢包	内置强大 (FEC, PLC 等)	依赖外部实现，表现较弱
-网络适应性	卓越 (可根据网络质量无缝、动态调整)	一般
-专利授权	无，完全免费	有，专利池复杂，商业使用需授权
-Web标准	WebRTC 强制必选	非必须
+发送期间：转为 .m4a 容器，无需编码流，只是换封装格式；通用性极好
 
-📝 作为 Android 开发者，该如何选择？
-
-- 如果你的 App 核心功能是实时语音/视频通话，或是面向全球用户的语音消息应用，那么 Opus 是唯一的最优解。
-
-  挑战：实现复杂。需要在 native 层集成 libopus 库，编写 JNI 代码进行编解码处理。
-
-  收益：提供顶级、稳定的跨区域通话体验，这是顶尖应用的基石。
-
-- 如果你的 App 主要是一个简单的、不涉及实时聊天的本地录音功能，比如发送一条语音反馈、备忘录录音等。
-
-  结论：那么 MediaRecorder 直接录制 AAC (M4A) 的方案依然是最高效、最简单的选择。
-
-  理由：开发成本极低，原生支持稳定可靠，兼容性没有死角。文件体积和质量也能满足绝大多数非极端场景的需求。
-
-所以，对于通用场景，AAC 是务实之选；而要在 IM 通信领域追求极致，转向 Opus 是必经之路。
-
-
+ogg? 如果录音时没选 opus，就不建议用; 因为 ADTS -> ogg，会解码又编码，其实带来了损失；同时这个过程也比较慢。
 
 ## VoiceRecorder 在哪里创建？
 
@@ -163,3 +140,58 @@ then based on the send result:
 | ---------------- | --------------------- | ----------- |
 | success          | -                     | idle        |
 | fail             | - (can't do anything) | idle        |
+
+
+## Voice Draft 的数据库读取、校验以及 UI 层面提示
+
+### Write Flow
+
+VoiceComposerStateHolder: call save
+
+
+domain(TopicRepository): call save
+
+data-layer: 
+- domain model to data entity model
+  - 涉及到 waveform pack to 5bit
+
+db-layer: 
+- entity to json
+- write json-str to table column
+
+### Load Flow
+
+db-layer: 
+- read out json str
+- json to entity 
+  - 容错：json 解析出错
+  - 返回 Result<EntityData>
+
+data-layer: 
+  - parse entity to domain-model
+    - 容错：unpack 5bit to waveform 出错
+    - 返回 LoadedVoiceDraft
+      - None
+      - JsonDeserializeError
+      - WaveformUnpackError
+      - Success
+
+domain(TopicRepository): return
+
+usecase:
+- 校验 LoadedVoiceDraft
+  - None -> Pass
+  - JsonDeserializeError -> Tips: invalid data
+  - WaveformUnpackError -> then same as Success (leaves loaded waveform = null)
+  - Success ->
+    - base audio verify (quick) [if has]
+    - pending audio scan (remove unfinished rear part) [if has]
+    - build CommittedDraft
+      - rebuild Waveform (base waveform is optional)
+      - update duration
+
+VoiceComposerStateHolder: load.
+
+1. 发现 audio broken 后，会把 audio 放到 quarantine 文件夹内，文件名和 draft 文件名相同
+2. 合并文件的时候，并非直接 append，而是写到 temp 文件，再建立新的 CommittedDrat, 最后移除旧文件
+

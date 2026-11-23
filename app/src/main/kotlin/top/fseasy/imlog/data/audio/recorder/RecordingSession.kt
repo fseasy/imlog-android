@@ -307,10 +307,10 @@ fun syncPrepareMediaRecorder(
       .apply {
         setAudioSource(MediaRecorder.AudioSource.MIC)
         setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS)
-        setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+        setAudioEncoder(MediaRecorder.AudioEncoder.AAC) // 务必保持 AAC-LC，见下方说明
         setAudioChannels(1)
-        setAudioSamplingRate(44_100)
-        setAudioEncodingBitRate(64_000)
+        setAudioSamplingRate(24_000)    // 44_100 -> 24_000（或 32_000）
+        setAudioEncodingBitRate(40_000) // 64_000 -> 32_000 ~ 48_000 之间按需取舍
         setOutputFile(file.absolutePath)
 
         setMaxFileSize(maxFileSize)

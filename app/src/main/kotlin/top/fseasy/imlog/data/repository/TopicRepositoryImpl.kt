@@ -6,17 +6,21 @@ import app.cash.sqldelight.coroutines.mapToOneOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import top.fseasy.imlog.data.model.VoiceDraftEntity
-import top.fseasy.imlog.data.model.toDomain
 import top.fseasy.imlog.data.model.toEntity
+import top.fseasy.imlog.data.model.toLoadedVoiceDraft
 import top.fseasy.imlog.data.util.retrySQLiteOnKeyConflict
 import top.fseasy.imlog.domain.model.HomeTopic
-import top.fseasy.imlog.domain.model.MessageDraft
+import top.fseasy.imlog.domain.model.LoadedVoiceDraft
+import top.fseasy.imlog.domain.model.MessageBasicDraft
+import top.fseasy.imlog.domain.model.MessageDraftPreview
 import top.fseasy.imlog.domain.model.MessageId
 import top.fseasy.imlog.domain.model.MessagePreview
 import top.fseasy.imlog.domain.model.Topic
@@ -105,7 +109,7 @@ constructor(
             created_at = createdAtMs,
             attributes_updated_at = createdAtMs,
             archived = false,
-        )
+        ),
     )
     database.topicQueries.insertPersonalPreference(
         TopicPreferenceEntity(
@@ -114,7 +118,7 @@ constructor(
             pinned = false,
             background = null,
             attributes_updated_at = createdAtMs,
-        )
+        ),
     )
     database.topicQueries.insertMember(
         TopicMemberEntity(
@@ -123,7 +127,7 @@ constructor(
             role = TopicMemberRole.Admin,
             joined_at = createdAtMs,
             attributes_updated_at = createdAtMs,
-        )
+        ),
     )
     database.topicQueries.insertMessageState(
         Topic_message_state(
@@ -133,7 +137,7 @@ constructor(
             draft_quoted_message_id = null,
             draft_text_content = null,
             draft_voice_content = null,
-        )
+        ),
     )
     return topicId
   }
@@ -265,18 +269,26 @@ constructor(
         rowsAffected > 0L
       }
 
-  override suspend fun getMessageDraft(userId: UserId, topicId: TopicId): MessageDraft? =
+  override suspend fun getMessageBasicDraft(userId: UserId, topicId: TopicId): MessageBasicDraft? =
       withContext(dispatcher) {
         val entity =
             database.topicSelectQueries
-                .getMessageDraft(topicId = topicId, userId = userId)
+                .getMessageBasicDraft(topicId = topicId, userId = userId)
                 .executeAsOneOrNull() ?: return@withContext null
-        buildMessageDraft(
-            userId = userId,
+        buildMessageBasicDraft(
             quotedMessageId = entity.draft_quoted_message_id,
             text = entity.draft_text_content,
-            voiceEntityResult = entity.draft_voice_content,
         )
+      }
+
+  override suspend fun getMessageVoiceDraft(userId: UserId, topicId: TopicId): LoadedVoiceDraft =
+      withContext(dispatcher) {
+        val entityResult =
+            database.topicSelectQueries
+                .getMessageVoiceDraft(topicId = topicId, userId = userId)
+                .executeAsOneOrNull()
+                ?.draft_voice_content
+        buildLoadedVoiceDraft(userId, entityResult)
       }
 
   override suspend fun setMessageDraftQuotedMessageId(
@@ -384,8 +396,7 @@ constructor(
           null
         }
     val messageDraft =
-        buildMessageDraft(
-            userId = userId,
+        buildMessageDraftPreview(
             quotedMessageId = draft_quoted_message_id,
             text = draft_text_content,
             voiceEntityResult = draft_voice_content,
@@ -403,22 +414,49 @@ constructor(
     )
   }
 
-  private fun buildMessageDraft(
-      userId: UserId,
+  private fun buildMessageBasicDraft(
       quotedMessageId: MessageId?,
       text: String?,
-      voiceEntityResult: Result<VoiceDraftEntity>?,
-  ): MessageDraft? {
-    return if (text.isNullOrEmpty() && voiceEntityResult == null && quotedMessageId == null) {
+  ): MessageBasicDraft? {
+    return if (text.isNullOrEmpty() && quotedMessageId == null) {
       null
     } else {
-      val voiceDraft = voiceEntityResult?.getOrNull()?.toDomain(draftPathUseCase, userId = userId)
-      MessageDraft(
+      MessageBasicDraft(
           inputMode = null,
           quotedMessageId = quotedMessageId,
           text = text,
-          voiceNote = voiceDraft,
       )
     }
+  }
+
+  private fun buildMessageDraftPreview(
+      quotedMessageId: MessageId?,
+      text: String?,
+      voiceEntityResult: Result<VoiceDraftEntity>?,
+  ): MessageDraftPreview? {
+    return if (text.isNullOrEmpty() && quotedMessageId == null && voiceEntityResult == null) {
+      null
+    } else {
+      val durationMs = voiceEntityResult?.getOrNull()?.base?.durationMs
+      MessageDraftPreview(
+          quotedMessageId = quotedMessageId,
+          text = text,
+          voiceDuration = durationMs?.milliseconds,
+      )
+    }
+  }
+
+  private fun buildLoadedVoiceDraft(
+      userId: UserId,
+      voiceEntityResult: Result<VoiceDraftEntity>?,
+  ): LoadedVoiceDraft {
+    if (voiceEntityResult == null) return LoadedVoiceDraft.None
+    val voiceEntity =
+        voiceEntityResult
+            .onFailure { e ->
+              Timber.w(e, "VoiceDraft: parse JSON failed")
+            }
+            .getOrNull() ?: return LoadedVoiceDraft.Corrupted.Json
+    return voiceEntity.toLoadedVoiceDraft(draftPathUseCase, userId)
   }
 }

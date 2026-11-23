@@ -5,17 +5,41 @@ import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import timber.log.Timber
+import top.fseasy.imlog.domain.audio.AppendMergeResult
 import top.fseasy.imlog.domain.audio.AudioRecordResult
-import top.fseasy.imlog.domain.audio.AudioWaveformExtractor
+import top.fseasy.imlog.domain.audio.CommittedAudioCheckResult
+import top.fseasy.imlog.domain.audio.PendingAudioRecoveryResult
+import top.fseasy.imlog.domain.audio.VoiceDraftAudioProcessor
+import top.fseasy.imlog.domain.model.LoadedVoiceDraft
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VoiceDraft
+import top.fseasy.imlog.domain.model.VoiceDraftDetail
 import top.fseasy.imlog.domain.model.commit
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
 import top.fseasy.imlog.domain.usecase.pathpolicy.VoiceDraftPathUseCase
+
+data class PreparedVoiceDraft(
+    val draft: VoiceDraft.Committed?, // 绝对干净：voice 要么 null，要么 Committed
+    val recoveryNotice: DraftRecoveryNotice? = null,
+)
+
+sealed interface DraftRecoveryNotice {
+  /** 追加片段损坏，已保留之前的 base */
+  data object AppendingSegmentDiscarded : DraftRecoveryNotice
+
+  /** base 损坏或丢失，但保留了新录制的追加片段 */
+  data class BaseSegmentLostKeptPending(
+      val quarantinedBaseFile: StoragePathModel.Shared?,
+  ) : DraftRecoveryNotice
+
+  /** 整个语音草稿无法恢复（均已损坏/丢失，或 JSON 损坏） */
+  data class VoiceDraftCorrupted(
+      val quarantinedFile: StoragePathModel.Shared?,
+  ) : DraftRecoveryNotice
+}
 
 /** NOT auto-inject yet. we can uniform it under KMP */
 class VoiceDraftUseCase(
@@ -23,7 +47,7 @@ class VoiceDraftUseCase(
     private val topicRepository: TopicRepository,
     private val draftPathUseCase: VoiceDraftPathUseCase,
     private val outputAudioFileExtension: String,
-    private val audioWaveformExtractor: AudioWaveformExtractor,
+    private val audioProcessor: VoiceDraftAudioProcessor,
 ) {
 
   /**
@@ -108,95 +132,258 @@ class VoiceDraftUseCase(
         }
       }
 
-  /** Load, verify(check & fix if necessary) voice draft */
-  suspend fun loadValidDraft(userId: UserId, topicId: TopicId): VoiceDraft? {
+  /** 进入聊天页面时调用： 读取、校验并自愈语音草稿，确保输出的 draft 要么为 null，要么是可直接播放/发送的 Committed。 */
+  suspend fun prepareVoiceDraftOnEnter(
+      userId: UserId,
+      topicId: TopicId,
+  ): PreparedVoiceDraft {
+    return when (val loaded = topicRepository.getMessageVoiceDraft(userId, topicId)) {
+      LoadedVoiceDraft.None -> PreparedVoiceDraft(draft = null)
 
-    /** Return updated voice draft. Will delete the pending file. */
-    suspend fun _tryToMergePendingAudioToBase(
-        rawDraft: VoiceDraft,
-        pendingFilePath: StoragePathModel,
-    ): VoiceDraft? {
-
-      if (rawDraft.pendingChunkFilename.isNullOrBlank()) return rawDraft
-
-      var updatedDraft = rawDraft
-      val pendingFilePath = restoreDraftPath(userId, filename = rawDraft.pendingChunkFilename)
-
-      if (
-          storageRepository.fileExists(pendingFilePath) &&
-              (storageRepository.fileSizeOrNull(pendingFilePath) ?: 0) > 0
-      ) {
-        Timber.w("Detected unfinished recording chunk from crash, recovering...")
-        // 奇迹救援：把断电前录的声音拼回 baseFile
-        // 先获取waveform 和时长
-        val extractResult = audioWaveformExtractor.extract5BitEncodedWaveformOrNull(pendingFilePath)
-        if (extractResult == null) {
-          Timber.w("Failed to parse pending audio file [$pendingFilePath]. Have to give up")
-          return rawDraft
-        }
-        val isSuccess = storageRepository.fileAppendContent(baseFilePath, pendingFilePath)
-        if (!isSuccess) {
-          Timber.w("Failed to append pending audio to base audio. Have to give up")
-          updatedDraft = updatedDraft.copy(pendingChunkFilename = null)
-        } else {}
-      }
-      storageRepository.deleteFile(pendingFilePath)
-      // 修复完成，把 pendingChunkPath 擦除还原为干净的草稿
-      safeDraft = draft.copy(pendingChunkFilename = null)
-    }
-
-    suspend fun _fixDraftIfNecessary(rawDraft: VoiceDraft): VoiceDraft? {
-
-      val baseFilePath = restoreDraftPath(userId, filename = rawDraft.baseFilename)
-      // First check if base audio file is OK! if not, discard the draft
-      if (
-          !storageRepository.fileExists(baseFilePath) ||
-              (storageRepository.fileSizeOrNull(baseFilePath) ?: 0) <= 0
-      ) {
-        Timber.w(
-            "Restore draft get invalid base audio: ${rawDraft.baseFilename}, not exists or empty. Discard",
+      LoadedVoiceDraft.Corrupted.Json -> {
+        topicRepository.setMessageDraftVoiceContent(userId, topicId = topicId, draft = null)
+        PreparedVoiceDraft(
+            draft = null,
+            recoveryNotice = DraftRecoveryNotice.VoiceDraftCorrupted(quarantinedFile = null),
         )
-        return null
       }
-      // !NOTE!: We just check the base file path, don't check the duration / validity
-      // AS the stability of ADTS format should be stronger than our media duration checker
-      var updatedDraft = rawDraft
-      // 检查是否有上次崩溃遗留的未合并分片
-      if (!rawDraft.pendingChunkFilename.isNullOrBlank()) {
-        val pendingFilePath = restoreDraftPath(userId, filename = rawDraft.pendingChunkFilename)
 
-        if (
-            storageRepository.fileExists(pendingFilePath) &&
-                (storageRepository.fileSizeOrNull(pendingFilePath) ?: 0) > 0
-        ) {
-          Timber.w("Detected unfinished recording chunk from crash, recovering...")
-          // 奇迹救援：把断电前录的声音拼回 baseFile
-          // 先获取waveform 和时长
-          val extractResult =
-              audioWaveformExtractor.extract5BitEncodedWaveformOrNull(pendingFilePath)
-          if (extractResult == null) {
-            Timber.w("Failed to parse pending audio file [$pendingFilePath]. Have to give up")
-          }
-          val isSuccess = storageRepository.fileAppendContent(baseFilePath, pendingFilePath)
-          if (!isSuccess) {
-            Timber.w("Failed to append pending audio to base audio. Have to give up")
-            updatedDraft = updatedDraft.copy(pendingChunkFilename = null)
-          } else {}
+      is LoadedVoiceDraft.Corrupted.WaveformUnpack -> {
+        recoverFromWaveformUnpackFailure(userId, topicId, loaded)
+      }
+
+      is LoadedVoiceDraft.Valid -> {
+        reconcileValidVoiceDraft(userId, topicId, loaded.draft)
+      }
+    }
+  }
+
+  /**
+   * 仅 DB 里的 waveform5BitBase64 损坏，但文件名还在： 利用 recoverPending 重新扫描 base 音频文件并重建 Waveform，尽量做到无感自愈。
+   */
+  private suspend fun recoverFromWaveformUnpackFailure(
+      userId: UserId,
+      topicId: TopicId,
+      corrupted: LoadedVoiceDraft.Corrupted.WaveformUnpack,
+  ): PreparedVoiceDraft {
+    return when (val baseRecover = audioProcessor.recoverPending(corrupted.baseFilePath)) {
+      is PendingAudioRecoveryResult.Ready -> {
+        val recoveredBase =
+            VoiceDraftDetail(
+                filePath = corrupted.baseFilePath,
+                duration = baseRecover.duration,
+                waveform = baseRecover.waveform,
+            )
+        val pendingPath = corrupted.recordingFilePath
+        if (pendingPath == null) {
+          // 原来就是 Committed：写回修复后的波形即可，静默自愈
+          val committed = VoiceDraft.Committed(recoveredBase)
+          topicRepository.setMessageDraftVoiceContent(userId, topicId, committed)
+          PreparedVoiceDraft(draft = committed)
+        } else {
+          // 原来正在 Appending：恢复出 base 后直接复用 Appending 合并流程
+          reconcileAppending(
+              userId = userId,
+              topicId = topicId,
+              appending =
+                  VoiceDraft.ActiveRecording.Appending(
+                      base = recoveredBase,
+                      recordingFilePath = pendingPath,
+                  ),
+          )
         }
-        storageRepository.deleteFile(pendingFilePath)
-        // 修复完成，把 pendingChunkPath 擦除还原为干净的草稿
-        safeDraft = draft.copy(pendingChunkFilename = null)
+      }
+
+      PendingAudioRecoveryResult.Missing,
+      is PendingAudioRecoveryResult.Corrupted ->
+          handleBaseLostOrCorrupted(
+              userId = userId,
+              topicId = topicId,
+              baseFilePath = corrupted.baseFilePath,
+              recordingFilePath = corrupted.recordingFilePath,
+          )
+    }
+  }
+
+  private suspend fun reconcileValidVoiceDraft(
+      userId: UserId,
+      topicId: TopicId,
+      draft: VoiceDraft,
+  ): PreparedVoiceDraft =
+      when (draft) {
+        is VoiceDraft.Committed -> reconcileCommitted(userId, topicId, draft)
+        is VoiceDraft.ActiveRecording.Base -> reconcileActiveBase(userId, topicId, draft)
+        is VoiceDraft.ActiveRecording.Appending -> reconcileAppending(userId, topicId, draft)
+      }
+
+  private suspend fun reconcileCommitted(
+      userId: UserId,
+      topicId: TopicId,
+      committed: VoiceDraft.Committed,
+  ): PreparedVoiceDraft {
+    return when (audioProcessor.validateCommitted(committed.detail.filePath)) {
+      CommittedAudioCheckResult.Valid -> PreparedVoiceDraft(draft = committed)
+
+      CommittedAudioCheckResult.Missing,
+      is CommittedAudioCheckResult.Corrupted -> {
+        withContext(NonCancellable + Dispatchers.IO) {
+          val quarantined = quarantineBrokenFile(committed.detail.filePath, userId)
+          topicRepository.setMessageDraftVoiceContent(userId, topicId, null)
+          PreparedVoiceDraft(
+              draft = null,
+              recoveryNotice =
+                  DraftRecoveryNotice.VoiceDraftCorrupted(quarantinedFile = quarantined),
+          )
+        }
       }
     }
+  }
 
-    return withContext(Dispatchers.IO) {
-      val rawDraft =
-          topicRepository
-              .getMessageDraft(
-                  userId = userId,
-                  topicId = topicId,
-              )
-              ?.voiceNote ?: return@withContext null
+  private suspend fun reconcileActiveBase(
+      userId: UserId,
+      topicId: TopicId,
+      activeBase: VoiceDraft.ActiveRecording.Base,
+  ): PreparedVoiceDraft {
+    return when (val recovery = audioProcessor.recoverPending(activeBase.recordingFilePath)) {
+      is PendingAudioRecoveryResult.Ready -> {
+        val committed =
+            VoiceDraft.Committed(
+                VoiceDraftDetail(
+                    filePath = activeBase.recordingFilePath,
+                    duration = recovery.duration,
+                    waveform = recovery.waveform,
+                ),
+            )
+        topicRepository.setMessageDraftVoiceContent(userId, topicId, committed)
+        PreparedVoiceDraft(draft = committed)
+      }
+
+      PendingAudioRecoveryResult.Missing,
+      is PendingAudioRecoveryResult.Corrupted -> {
+        withContext(NonCancellable + Dispatchers.IO) {
+          val quarantined = quarantineBrokenFile(activeBase.recordingFilePath, userId)
+          topicRepository.setMessageDraftVoiceContent(userId, topicId, null)
+          PreparedVoiceDraft(
+              draft = null,
+              recoveryNotice =
+                  DraftRecoveryNotice.VoiceDraftCorrupted(quarantinedFile = quarantined),
+          )
+        }
+      }
     }
+  }
+
+  private suspend fun reconcileAppending(
+      userId: UserId,
+      topicId: TopicId,
+      appending: VoiceDraft.ActiveRecording.Appending,
+  ): PreparedVoiceDraft {
+    val mergedPath =
+        draftPathUseCase.newVoiceDraftPath(
+            userId,
+            messageTimestamp = Clock.System.now(),
+            audioFileExtension = outputAudioFileExtension,
+        )
+
+    return when (
+        val mergeResult =
+            audioProcessor.mergeAppending(
+                basePath = appending.base.filePath,
+                baseDuration = appending.base.duration,
+                pendingPath = appending.recordingFilePath,
+                destPath = mergedPath,
+            )
+    ) {
+      is AppendMergeResult.Merged -> {
+        val committed =
+            VoiceDraft.Committed(
+                VoiceDraftDetail(
+                    filePath = mergedPath,
+                    duration = mergeResult.duration,
+                    waveform = mergeResult.waveform,
+                ),
+            )
+        // 先更新 DB 指向新合并的文件，再删除旧源片段，确保崩溃安全
+        withContext(Dispatchers.IO + NonCancellable) {
+          topicRepository.setMessageDraftVoiceContent(userId, topicId, committed)
+          storageRepository.deleteFile(appending.base.filePath)
+          storageRepository.deleteFile(appending.recordingFilePath)
+        }
+        PreparedVoiceDraft(draft = committed)
+      }
+
+      is AppendMergeResult.PendingUnrecoverableKeepBase,
+      AppendMergeResult.IncompatibleFormat -> {
+        // 仅追加片段损坏/缺失/不兼容：保住原本健康的 base 并升格为 Committed
+        val committed = VoiceDraft.Committed(appending.base)
+        withContext(NonCancellable + Dispatchers.IO) {
+          topicRepository.setMessageDraftVoiceContent(userId, topicId, committed)
+          quarantineBrokenFile(appending.recordingFilePath, userId)
+        }
+        PreparedVoiceDraft(
+            draft = committed,
+            recoveryNotice = DraftRecoveryNotice.AppendingSegmentDiscarded,
+        )
+      }
+
+      is AppendMergeResult.BaseCorrupted ->
+          handleBaseLostOrCorrupted(
+              userId = userId,
+              topicId = topicId,
+              baseFilePath = appending.base.filePath,
+              recordingFilePath = appending.recordingFilePath,
+          )
+    }
+  }
+
+  /** 当 base 确认丢失或损坏时调用： 若存在合法的 [recordingFilePath]，则将其升格为新的 Committed；否则彻底清理草稿。 */
+  private suspend fun handleBaseLostOrCorrupted(
+      userId: UserId,
+      topicId: TopicId,
+      baseFilePath: StoragePathModel.Internal,
+      recordingFilePath: StoragePathModel.Internal?,
+  ): PreparedVoiceDraft {
+    val pendingRecovery = recordingFilePath?.let { audioProcessor.recoverPending(it) }
+
+    return withContext(NonCancellable) {
+      val quarantinedBase = quarantineBrokenFile(baseFilePath, userId)
+
+      if (recordingFilePath != null && pendingRecovery is PendingAudioRecoveryResult.Ready) {
+        val committed =
+            VoiceDraft.Committed(
+                VoiceDraftDetail(
+                    filePath = recordingFilePath,
+                    duration = pendingRecovery.duration,
+                    waveform = pendingRecovery.waveform,
+                ),
+            )
+        topicRepository.setMessageDraftVoiceContent(userId, topicId, committed)
+        PreparedVoiceDraft(
+            draft = committed,
+            recoveryNotice = DraftRecoveryNotice.BaseSegmentLostKeptPending(quarantinedBase),
+        )
+      } else {
+        val quarantinedPending = recordingFilePath?.let { quarantineBrokenFile(it, userId) }
+        topicRepository.setMessageDraftVoiceContent(userId, topicId, null)
+        PreparedVoiceDraft(
+            draft = null,
+            recoveryNotice =
+                DraftRecoveryNotice.VoiceDraftCorrupted(
+                    quarantinedFile = quarantinedBase ?: quarantinedPending,
+                ),
+        )
+      }
+    }
+  }
+
+  private suspend fun quarantineBrokenFile(
+      brokenPath: StoragePathModel.Internal,
+      userId: UserId,
+  ): StoragePathModel.Shared? {
+    // currently we keep the same name
+    val filename = VoiceDraftPathUseCase.getRestorableDraftFilename(brokenPath)
+    val quarantinePath = draftPathUseCase.newQuarantinePath(userId, filename)
+    val isQuarantined = audioProcessor.quarantineOrDelete(brokenPath, quarantinePath)
+    return if (isQuarantined) quarantinePath else null
   }
 }

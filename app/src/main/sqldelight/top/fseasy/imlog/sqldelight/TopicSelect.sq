@@ -70,11 +70,20 @@ WHERE topic_members.user_id = :userId;
 getPreference:
 SELECT * FROM topic_preference WHERE topic_id = :topic_id AND user_id = :user_id;
 
---| topic-message-state queries
-getMessageDraft:
+--| topic-message-draft queries
+-- basic: quoted message id, text
+getMessageBasicDraft:
 SELECT
     draft_quoted_message_id,
-    draft_text_content,
+    draft_text_content
+FROM topic_message_state
+WHERE
+    topic_id = :topicId
+    AND user_id = :userId;
+
+-- VoiceDraft will be process independently, make an independent interface
+getMessageVoiceDraft:
+SELECT
     draft_voice_content
 FROM topic_message_state
 WHERE

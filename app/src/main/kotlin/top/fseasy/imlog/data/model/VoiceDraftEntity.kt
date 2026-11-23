@@ -3,7 +3,10 @@ package top.fseasy.imlog.data.model
 import kotlin.io.encoding.Base64
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.serialization.Serializable
-import top.fseasy.imlog.domain.audio.WaveformCodec5Bit
+import timber.log.Timber
+import top.fseasy.imlog.data.commonmain.audio.WaveformCodec5Bit
+import top.fseasy.imlog.domain.model.LoadedVoiceDraft
+import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VoiceDraft
 import top.fseasy.imlog.domain.model.VoiceDraftDetail
@@ -19,7 +22,7 @@ data class VoiceDraftDetailEntity(
 @Serializable
 data class VoiceDraftEntity(
     val base: VoiceDraftDetailEntity?,
-    val pendingChunkFilename: String? = null,
+    val pendingSegmentFilename: String? = null,
 )
 
 fun VoiceDraftDetail.toEntity(): VoiceDraftDetailEntity {
@@ -31,13 +34,26 @@ fun VoiceDraftDetail.toEntity(): VoiceDraftDetailEntity {
   )
 }
 
-fun VoiceDraft.toEntity(): VoiceDraftEntity {
-  return VoiceDraftEntity(
-      base = base?.toEntity(),
-      pendingChunkFilename =
-          pendingChunkFilePath?.let { VoiceDraftPathUseCase.getRestorableDraftFilename(it) },
-  )
-}
+fun VoiceDraft.toEntity() =
+    when (this) {
+      is VoiceDraft.ActiveRecording.Appending ->
+          VoiceDraftEntity(
+              base = base.toEntity(),
+              pendingSegmentFilename =
+                  VoiceDraftPathUseCase.getRestorableDraftFilename(recordingFilePath),
+          )
+      is VoiceDraft.ActiveRecording.Base ->
+          VoiceDraftEntity(
+              base = null,
+              pendingSegmentFilename =
+                  VoiceDraftPathUseCase.getRestorableDraftFilename(recordingFilePath),
+          )
+      is VoiceDraft.Committed ->
+          VoiceDraftEntity(
+              base = detail.toEntity(),
+              pendingSegmentFilename = null,
+          )
+    }
 
 fun VoiceDraftDetailEntity.toDomain(
     draftPathUseCase: VoiceDraftPathUseCase,
@@ -51,13 +67,44 @@ fun VoiceDraftDetailEntity.toDomain(
   )
 }
 
-fun VoiceDraftEntity.toDomain(
+/** No exception. */
+fun VoiceDraftEntity.toLoadedVoiceDraft(
     draftPathUseCase: VoiceDraftPathUseCase,
     userId: UserId,
-): VoiceDraft {
-  return VoiceDraft(
-      base = base?.toDomain(draftPathUseCase, userId),
-      pendingChunkFilePath =
-          pendingChunkFilename?.let { draftPathUseCase.restoreDraftPath(userId, filename = it) },
-  )
+): LoadedVoiceDraft {
+  val recordingFilePath = pendingSegmentFilename?.let { filename ->
+    draftPathUseCase.restoreDraftPath(userId, filename)
+  }
+  if (base != null) {
+    try {
+      val baseDomain = base.toDomain(draftPathUseCase, userId)
+      return LoadedVoiceDraft.Valid(buildVoiceDraftWithBase(baseDomain, recordingFilePath))
+    } catch (e: Throwable) {
+      Timber.w(e, "VoiceDraft: unpack waveform failed")
+      return LoadedVoiceDraft.Corrupted.WaveformUnpack(
+          baseFilePath = draftPathUseCase.restoreDraftPath(userId, base.filename),
+          baseDuration = base.durationMs.milliseconds,
+          recordingFilePath = recordingFilePath,
+      )
+    }
+  } else {
+    return if (recordingFilePath != null) {
+      LoadedVoiceDraft.Valid(VoiceDraft.ActiveRecording.Base(recordingFilePath))
+    } else {
+      LoadedVoiceDraft.None
+    }
+  }
 }
+
+private fun buildVoiceDraftWithBase(
+    baseDetail: VoiceDraftDetail,
+    recordingFilePath: StoragePathModel.Internal?,
+): VoiceDraft =
+    if (recordingFilePath != null) {
+      VoiceDraft.ActiveRecording.Appending(
+          base = baseDetail,
+          recordingFilePath = recordingFilePath,
+      )
+    } else {
+      VoiceDraft.Committed(detail = baseDetail)
+    }

@@ -13,7 +13,10 @@ import top.fseasy.imlog.domain.model.UserId
  */
 class VoiceDraftPathUseCase
 @Inject
-constructor(private val attachmentPathUseCase: AttachmentPathUseCase) {
+constructor(
+    private val attachmentPathUseCase: AttachmentPathUseCase,
+    private val storagePathUseCase: StoragePathUseCase,
+) {
   /**
    * VoiceDraft file location follows the attachment path rule. Since it's related to the attachment
    * processing flow, put it here to keep things cohesive.
@@ -33,6 +36,13 @@ constructor(private val attachmentPathUseCase: AttachmentPathUseCase) {
 
   fun restoreDraftPath(userId: UserId, filename: String) =
       attachmentPathUseCase.generateInternalCachePath(userId, filename)
+
+  /**
+   * We just copy(move) the broken audio to the shared storage, so user can keep it by themselves.
+   */
+  fun newQuarantinePath(userId: UserId, filename: String): StoragePathModel.Shared {
+    return storagePathUseCase.buildQuarantinePath(userId, filename)
+  }
 
   companion object {
     fun getRestorableDraftFilename(draftPath: StoragePathModel.Internal): String =

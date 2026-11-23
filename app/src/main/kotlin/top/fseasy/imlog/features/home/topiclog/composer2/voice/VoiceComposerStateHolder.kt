@@ -24,7 +24,7 @@ import top.fseasy.imlog.domain.audio.AudioRecordResult
 import top.fseasy.imlog.domain.audio.RecordingPrompt
 import top.fseasy.imlog.domain.audio.RecordingSessionState
 import top.fseasy.imlog.domain.audio.VoiceRecordingCoordinator
-import top.fseasy.imlog.domain.audio.WaveformCodec5Bit
+import top.fseasy.imlog.data.commonmain.audio.WaveformCodec5Bit
 import top.fseasy.imlog.domain.audio.deserializeToByteArray
 import top.fseasy.imlog.domain.audio.serializeToString
 import top.fseasy.imlog.domain.model.AuthState
@@ -118,7 +118,9 @@ class VoiceComposerStateHolder(
       )
 
   init {
-    viewModelScope.launchUntilAuth(authState, Dispatchers.IO) {}
+    viewModelScope.launchUntilAuth(authState, Dispatchers.IO) {
+      draftUseCase.
+    }
   }
 
 

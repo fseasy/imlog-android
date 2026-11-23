@@ -1,6 +1,8 @@
 package top.fseasy.imlog.domain.audio
 
 import kotlin.math.roundToInt
+import kotlin.time.Duration
+import kotlin.time.DurationUnit
 
 class Waveform(val bars: FloatArray) {
   val size: Int
@@ -11,6 +13,7 @@ class Waveform(val bars: FloatArray) {
 
   /** 弹性重采样（供 UI 层调用以适配不同屏幕宽度、横竖屏） */
   fun resample(targetBarCount: Int): FloatArray {
+    if (targetBarCount <= 0) return FloatArray(0)
     if (bars.isEmpty()) return FloatArray(targetBarCount) { 0.1f }
     if (bars.size == targetBarCount) return bars.copyOf()
 
@@ -27,30 +30,31 @@ class Waveform(val bars: FloatArray) {
     return result
   }
 
-  /** 将新音频片段的原始采样追加到当前波形之后 全程直接在 FloatArray 上运算，零编解码消耗
+  /**
+   * 将新音频片段的原始采样追加到当前波形之后。全程直接在 FloatArray 上运算，零编解码消耗。
    *
    * Return a new Waveform instance.
-   * */
+   */
   fun appendSegment(
-      oldDurationSeconds: Long,
+      oldDuration: Duration,
       newRawAmplitudes: FloatArray,
-      newDurationSeconds: Long,
+      newDuration: Duration,
   ): Waveform {
-    val totalDuration = oldDurationSeconds + newDurationSeconds
+    val totalDuration = oldDuration + newDuration
     val totalTargetBars = calculateTargetBars(totalDuration)
 
-    if (bars.isEmpty() || oldDurationSeconds <= 0) {
+    if (bars.isEmpty() || oldDuration <= Duration.ZERO) {
       return fromRawAmplitudes(newRawAmplitudes, totalTargetBars)
     }
-    if (newRawAmplitudes.isEmpty() || newDurationSeconds <= 0) {
+    if (newRawAmplitudes.isEmpty() || newDuration <= Duration.ZERO) {
       return this
     }
 
-    // 1. 按时长比例分配柱子数量
-    val oldTargetBars =
-        ((oldDurationSeconds.toFloat() / totalDuration) * totalTargetBars)
-            .roundToInt()
-            .coerceIn(1, totalTargetBars - 1)
+    // 1. 按精确时长比例分配柱子数量（避免 < 1s 的片段按整秒截断为 0）
+    val oldRatio =
+        oldDuration.toDouble(DurationUnit.MILLISECONDS) /
+            totalDuration.toDouble(DurationUnit.MILLISECONDS)
+    val oldTargetBars = (oldRatio * totalTargetBars).roundToInt().coerceIn(1, totalTargetBars - 1)
     val newTargetBars = totalTargetBars - oldTargetBars
 
     // 2. 旧波形缩放，新波形降采样
@@ -60,19 +64,16 @@ class Waveform(val bars: FloatArray) {
     return Waveform(scaledOldBars + newBars)
   }
 
-  // 1. 数组内容比对（安全！）
   override fun equals(other: Any?): Boolean {
     if (this === other) return true
     if (other !is Waveform) return false
     return bars.contentEquals(other.bars)
   }
 
-  // 2. 数组内容哈希（安全！）
   override fun hashCode(): Int {
     return bars.contentHashCode()
   }
 
-  // 3. 友好日志打印
   override fun toString(): String {
     return "Waveform(size=${bars.size}, preview=${bars.take(5)})"
   }
@@ -80,8 +81,12 @@ class Waveform(val bars: FloatArray) {
   companion object {
     val EMPTY = Waveform(FloatArray(0))
 
-    fun calculateTargetBars(durationSeconds: Long): Int {
-      return (30 + durationSeconds).toInt().coerceIn(30, 100)
+    fun getSilencePlaceholder(duration: Duration) =
+        Waveform(FloatArray(calculateTargetBars(duration)) { 0.1f })
+
+    /**  先在 Long 范围限制 [0, 70] 再转 Int，防止超长/INFINITE Duration 溢出. 输出范围 30 ～ 100 */
+    fun calculateTargetBars(duration: Duration): Int {
+      return 30 + duration.inWholeSeconds.coerceIn(0L, 70L).toInt()
     }
 
     /** 从高频采样降采样到目标柱数 */
@@ -89,8 +94,8 @@ class Waveform(val bars: FloatArray) {
       return Waveform(downsample(rawAmplitudes, targetBars))
     }
 
-    fun fromRawAmplitudes(rawAmplitudes: FloatArray, durationSeconds: Long) =
-        fromRawAmplitudes(rawAmplitudes, calculateTargetBars(durationSeconds))
+    fun fromRawAmplitudes(rawAmplitudes: FloatArray, duration: Duration) =
+        fromRawAmplitudes(rawAmplitudes, calculateTargetBars(duration))
 
     private fun downsample(rawAmplitudes: FloatArray, targetBars: Int): FloatArray {
       if (rawAmplitudes.isEmpty() || targetBars <= 0) return FloatArray(0)

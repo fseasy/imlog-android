@@ -4,9 +4,7 @@ import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonNames
 import timber.log.Timber
 
 enum class MessageType(val value: String) {
@@ -174,28 +172,3 @@ data class TimelineMessage(
     val content: MessageContent,
 )
 
-/** For message preview */
-data class MessagePreview(
-    val type: MessageType,
-    val text: String?,
-    val senderId: UserId,
-    val senderName: String?,
-)
-
-@Serializable
-enum class MessageInputMode(val value: String) {
-  Text("text"),
-  @OptIn(ExperimentalSerializationApi::class) @JsonNames("Voice") HoldToRecord("hold-to-record"),
-  VoiceNote("voice-note"),
-  Attachment("attachment"),
-  Camera("camera"),
-}
-
-/** For composer draft */
-@Serializable
-data class MessageDraft(
-    val inputMode: MessageInputMode? = null,
-    val quotedMessageId: MessageId? = null,
-    val text: String? = null,
-    val voiceNote: VoiceDraft? = null,
-)
