@@ -1,7 +1,7 @@
 
 - basic Background
 
-我在做一个以 IM 聊天形式承载的个人记录 app, Android, Jetpack Kotlin.
+我在做一个以 IM 聊天形式承载的个人记录 app, Android, Jetpack Kotlin，名字叫 ImLog
 
 1. Ask about Android Jetpack Compose, SQLDelight
 

@@ -1,0 +1,320 @@
+package top.fseasy.imlog.features.home.conversation
+
+import android.content.Context
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.media3.common.util.UnstableApi
+import androidx.navigation.toRoute
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import timber.log.Timber
+import top.fseasy.imlog.R
+import top.fseasy.imlog.common.runSuspendCatching
+import top.fseasy.imlog.data.mapper.toUriStr
+import top.fseasy.imlog.data.util.ExoPlayerStateHolder
+import top.fseasy.imlog.data.util.MediaInput
+import top.fseasy.imlog.domain.model.AbsolutePathModel
+import top.fseasy.imlog.domain.model.AuthState
+import top.fseasy.imlog.domain.model.MessageId
+import top.fseasy.imlog.domain.model.TopicId
+import top.fseasy.imlog.domain.model.UserId
+import top.fseasy.imlog.domain.repository.StorageRepository
+import top.fseasy.imlog.domain.repository.TopicRepository
+import top.fseasy.imlog.domain.repository.UserRepository
+import top.fseasy.imlog.domain.usecase.pathpolicy.StoragePathUseCase
+import top.fseasy.imlog.features.home.conversation.fullscreencontainer.FullScreenContainerUiModel
+import top.fseasy.imlog.features.home.conversation.timeline.MessageContentUiModel
+import top.fseasy.imlog.features.home.conversation.timeline.MessageUiModel
+import top.fseasy.imlog.features.home.conversation.timeline.buildFileUri
+import top.fseasy.imlog.features.home.conversation.timeline.buildStoragePath
+import top.fseasy.imlog.features.home.conversation.timeline.narrow
+import top.fseasy.imlog.navigation.MainScreen
+
+/**
+ * Conversation view model.
+ *
+ * It holds
+ * 1. media-play (ExoPlayer) interface, used in timeline(message bubble) & fullscreen part
+ *    play/pause, playing state. => Unstable Api annotation source, propagated from the lower
+ *    ExoPlayer.
+ * 2. FullScreen model building
+ * 3. UiEffect, especially showing-snackbar, which will be used in children components
+ * 4. uiState: topic model.
+ *
+ * Special Logic:
+ * - mark topic read when init
+ */
+@UnstableApi
+@HiltViewModel
+class ConversationViewModel
+@Inject
+constructor(
+    savedStateHandle: SavedStateHandle,
+    topicRepository: TopicRepository,
+    private val userRepository: UserRepository,
+    private val storagePathUseCase: StoragePathUseCase,
+    private val storageRepository: StorageRepository,
+    @param:ApplicationContext private val context: Context,
+) : ViewModel() {
+
+  val topicId: TopicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
+
+  init {
+    launchWithUserId { userId ->
+      runSuspendCatching { topicRepository.markTopicAsRead(userId = userId, topicId = topicId) }
+          .onFailure { e ->
+            Timber.w(e, "Failed to mark topic [$topicId] as read")
+          }
+          .onSuccess { isSuccess -> Timber.d("Mark topic as read result: $isSuccess") }
+    }
+  }
+
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val contextStateFlow: StateFlow<ContextState> =
+      combine(
+              userRepository.authState.filterIsInstance<AuthState.Authenticated>(),
+              topicRepository.observeTopicOrNull(topicId),
+          ) { authState, topic ->
+            when (topic) {
+              null -> ContextState.Error("Failed to load Topic for id: $topicId")
+              else ->
+                  ContextState.Success(
+                      currentUserId = authState.userId,
+                      topic = topic,
+                  )
+            }
+          }
+          .stateIn(
+              scope = viewModelScope,
+              started = SharingStarted.WhileSubscribed(5000),
+              initialValue = ContextState.Loading,
+          )
+
+  private val _uiEvents = Channel<ConversationUiEvent>()
+  val uiEvents = _uiEvents.receiveAsFlow()
+
+  // For audio/voice message playing position cache
+  private val inactiveMediaPlayPositionCache = mutableMapOf<String, kotlin.time.Duration>()
+  private val exoPlayerStateHolder =
+      ExoPlayerStateHolder(
+              context = context,
+              onPlayingStopped = { state, playPosition ->
+                val playingId = state.playingId ?: return@ExoPlayerStateHolder
+                val totalDuration = state.duration
+                if (totalDuration < 1.minutes) return@ExoPlayerStateHolder
+                if (totalDuration - playPosition < 10.seconds) {
+                  // play done. REMOVE
+                  inactiveMediaPlayPositionCache.remove(playingId)
+                } else {
+                  inactiveMediaPlayPositionCache[playingId] = playPosition
+                }
+              },
+          )
+          .also(::addCloseable)
+
+  /** Playback State/Position are global state! which means, there is at most 1 playing media */
+  val activeMediaPlaybackState = exoPlayerStateHolder.playbackState
+  val activeMediaPlayPosition = exoPlayerStateHolder.playPositionState
+  val player = exoPlayerStateHolder.exoPlayer
+
+  fun getMediaCachedPlayPosition(messageId: MessageId) =
+      inactiveMediaPlayPositionCache[toMediaInputId(messageId)] ?: 0.milliseconds
+
+  /** Cycle Playback Speed in range of {1, 1.5, 2}. Only work when trigger id == playing id */
+  fun cycleMediaPlaybackSpeed(triggerMessageId: MessageId) {
+    if (toMediaInputId(triggerMessageId) != activeMediaPlaybackState.value.playingId) return
+    val newSpeed =
+        when (activeMediaPlaybackState.value.speed) {
+          1.0f -> 1.5f
+          1.5f -> 2.0f
+          else -> 1.0f
+        }
+    viewModelScope.launch { exoPlayerStateHolder.changeSpeed(newSpeed) }
+  }
+
+  /** Build MediaInput without cache as the db data may change */
+  fun seekMedia(message: MessageUiModel<MessageContentUiModel.AudioPlaySupported>, ratio: Float) {
+    val content = message.content
+
+    launchWithUserId { userId ->
+      val uri =
+          runSuspendCatching {
+            content.buildFileUri(
+                signInUserId = userId,
+                topicId = topicId,
+                messageCreatedAt = message.createdAt,
+                audioSupportedContent = content,
+                storagePathUseCase = storagePathUseCase,
+                storageRepository = storageRepository,
+            )
+          }
+              .getOrNull()
+              ?: run {
+                _uiEvents.send(
+                    ConversationUiEvent.ShowSnackBar(
+                        context.getString(R.string.term_media_file_not_found),
+                    ),
+                )
+                return@launchWithUserId
+              }
+      val input =
+          MediaInput(
+              id = toMediaInputId(message.id),
+              uri = uri,
+              fileDuration = content.duration,
+          )
+      exoPlayerStateHolder.seekToRatio(input, ratio = ratio)
+    }
+  }
+
+  /** Build MediaInput without cache as the db data may change */
+  fun toggleMediaPlay(message: MessageUiModel<MessageContentUiModel.AudioPlaySupported>) {
+    val content = message.content
+
+    launchWithUserId { userId ->
+      val uri =
+          runSuspendCatching {
+            content.buildFileUri(
+                signInUserId = userId,
+                topicId = topicId,
+                messageCreatedAt = message.createdAt,
+                audioSupportedContent = content,
+                storagePathUseCase = storagePathUseCase,
+                storageRepository = storageRepository,
+            )
+          }
+              .getOrNull()
+              ?: run {
+                _uiEvents.send(
+                    ConversationUiEvent.ShowSnackBar(
+                        context.getString(R.string.term_media_file_not_found),
+                    ),
+                )
+                return@launchWithUserId
+              }
+
+      exoPlayerStateHolder.togglePlayPause(
+          MediaInput(
+              id = toMediaInputId(message.id),
+              uri = uri,
+              fileDuration = content.duration,
+          ),
+      )
+    }
+  }
+
+  /**
+   * Create the OpenFileChoose intent for GenericFile Message. Send UI Effect when success
+   *
+   * TODO: in kmp, just pass the path and let the
+   */
+  fun createOpenFileIntentForGenericFileMessage(
+      message: MessageUiModel<MessageContentUiModel.GenericFile>,
+  ) {
+    val fileMessageContent = message.content
+    launchWithUserId { userId ->
+      val storagePath =
+          fileMessageContent.buildStoragePath(
+              signInUserId = userId,
+              topicId = topicId,
+              messageCreatedAt = message.createdAt,
+              storagePathUseCase = storagePathUseCase,
+          )
+      if (storagePath == null) {
+        _uiEvents.send(
+            ConversationUiEvent.ShowSnackBar(
+                context.getString(
+                    R.string.prefix_failed_to_resolve_file_with_name,
+                    fileMessageContent.displayFilename,
+                ),
+            ),
+        )
+      } else {
+        _uiEvents.send(ConversationUiEvent.OpenSharedFile(storagePath))
+      }
+    }
+  }
+
+  fun showImageLikeFullScreenMessage(message: MessageUiModel<MessageContentUiModel.ImageLike>) {
+    launchWithUserId { userId ->
+      val path = buildImageLikeFileUri(userId, message = message) ?: return@launchWithUserId
+      val model =
+          when (message.content) {
+            is MessageContentUiModel.Image ->
+                FullScreenContainerUiModel.ImageShow(message.narrow(), path = path)
+            is MessageContentUiModel.Video ->
+                FullScreenContainerUiModel.VideoShow(message.narrow(), path = path)
+          }
+      _uiEvents.send(ConversationUiEvent.SetFullScreenViewMessage(model))
+    }
+  }
+
+  /**
+   * An exported api for children components sending snackbar. in Ui side, get string may be more
+   * difficult, especially in event callback (as it lacks of @Composable env) so receive the
+   * resource id instead
+   */
+  fun showSnackbarForUi(messageResId: Int) = showSnackbar(context.getString(messageResId))
+
+  fun onSnackbarAction(action: SnackbarAction) {
+    when (action) {
+      is SnackbarAction.ViewQuarantinedAudio -> {
+        viewModelScope.launch {
+          _uiEvents.send(ConversationUiEvent.OpenQuarantinedFile(action.path))
+        }
+      }
+    }
+  }
+
+  fun onSendUiEvent(event: ConversationUiEvent) = viewModelScope.launch { _uiEvents.send(event) }
+
+  private fun showSnackbar(message: String, action: SnackbarAction? = null) =
+      viewModelScope.launch {
+        _uiEvents.send(ConversationUiEvent.ShowSnackBar(message, action))
+      }
+
+  private fun launchWithUserId(block: suspend (userId: UserId) -> Unit) {
+    (userRepository.authState.value as? AuthState.Authenticated)?.userId?.let { uid ->
+      viewModelScope.launch { block(uid) }
+    }
+  }
+
+  private suspend fun buildImageLikeFileUri(
+      userId: UserId,
+      message: MessageUiModel<MessageContentUiModel.ImageLike>,
+  ): AbsolutePathModel.UriStrModel? {
+    Timber.d("before build file uri")
+    val uri =
+        runSuspendCatching {
+          message.content.buildFileUri(
+              signInUserId = userId,
+              topicId = topicId,
+              messageCreatedAt = message.createdAt,
+              storagePathUseCase = storagePathUseCase,
+              storageRepository = storageRepository,
+          )
+        }
+            .onFailure { e -> Timber.w(e, "FullScreenView build storage uri failed") }
+            .getOrNull()
+            ?: run {
+              _uiEvents.send(ConversationUiEvent.ShowSnackBar("Failed to resolve file"))
+              return null
+            }
+    Timber.d("build file uri done")
+    return AbsolutePathModel.UriStrModel(uri.toUriStr())
+  }
+}

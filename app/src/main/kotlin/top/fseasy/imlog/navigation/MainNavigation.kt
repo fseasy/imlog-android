@@ -7,7 +7,7 @@ import androidx.navigation.navigation
 import kotlinx.serialization.Serializable
 import top.fseasy.imlog.features.MainTabsRoute
 import top.fseasy.imlog.features.home.createtopic.CreateTopicRoute
-import top.fseasy.imlog.features.home.topiclog.TopicLogRoute
+import top.fseasy.imlog.features.home.conversation.TopicLogRoute
 import top.fseasy.imlog.features.home.topicsettings.TopicSettingsRoute
 import top.fseasy.imlog.features.settings.AboutScreen
 import top.fseasy.imlog.features.settings.AppSettingsRoute

@@ -112,10 +112,11 @@
     <string name="term_image">Image</string>
     <string name="term_video">Video</string>
     <string name="term_file">File</string>
-    <string name="open_file_by_chooser">Choose app to open file %1$s</string>
+    <string name="prefix_open_file_by_chooser_with_name">Choose app to open file %1$s</string>
+    <string name="prefix_failed_to_resolve_file_with_name">Failed to resolve file \'%1$s\'</string>
     <string name="term_full_screen_image">Full Screen Image</string>
     <string name="feature_app_settings_title">Settings</string>
-    <string name="composer_recording_fail_on_permission">Failed to Record Due to No Permissions</string>
+    <string name="composer_recording_fail_on_permission">Failed to record as no permissions</string>
     <string name="topic_log_empty_text">No Logs Yet.</string>
     <string name="term_pinned">Pinned</string>
     <string name="term_back">Back</string>
@@ -150,6 +151,19 @@
     <string name="composer_voice_note_btn_resume">Resume</string>
     <string name="composer_voice_note_btn_pause">Pause</string>
 
+    <!-- Composer Voice Draft Recovery Tips -->
+    <string name="composer_voice_draft_recovery_appending_discarded">Couldn\'t recover your latest clip. Your previous voice draft was restored.</string>
+    <string name="composer_voice_draft_recovery_appending_discarded_with_backup">Couldn\'t add your latest clip, so a backup was saved. Previous voice draft restored.</string>
+
+    <string name="composer_voice_draft_recovery_base_lost_kept_pending">Earlier voice draft couldn\'t be loaded. Your latest clip was kept.</string>
+    <string name="composer_voice_draft_recovery_base_lost_kept_pending_with_backup">Earlier voice draft was damaged, so a backup was saved. Your latest clip was kept.</string>
+
+    <string name="composer_voice_draft_recovery_corrupted">Voice draft couldn\'t be loaded because the file is missing or damaged.</string>
+    <string name="composer_voice_draft_recovery_corrupted_with_backup">Voice draft couldn\'t be loaded, but a copy of the damaged file was saved.</string>
+
+    <!-- Banner / Snackbar 上带操作按钮 -->
+    <string name="term_view_file">View file</string>
+    <string name="term_dismiss">Dismiss</string>
     <!-- Composer Voice Recording Tips -->
     <!-- 系统事件、失败：原因前缀模板（%1$s = 结果后缀） -->
     <string name="composer_recording_fail_reason_focus_lost">Recording interrupted. %1$s</string>

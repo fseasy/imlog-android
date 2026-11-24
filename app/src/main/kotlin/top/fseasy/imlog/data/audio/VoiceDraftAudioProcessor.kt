@@ -124,7 +124,7 @@ constructor(
       withContext(Dispatchers.IO + NonCancellable) {
         val file = resolvePath(path)
         if (!file.exists() || !file.isFile) return@withContext false
-        if (file.length() == 0L) {
+        if (file.length() < MIN_QUARANTINE_BYTES) {
           file.delete()
           return@withContext false
         }
@@ -139,4 +139,9 @@ constructor(
   private suspend fun extractWaveform(path: StoragePathModel.Internal, duration: Duration) =
       waveformExtractor.extractOrNull(path, duration)?.waveform
           ?: Waveform.getSilencePlaceholder(duration)
+
+  private companion object {
+    // 低于此大小的损坏文件连 1~2 帧音频都凑不齐，直接清理，不污染用户 Shared 目录
+    const val MIN_QUARANTINE_BYTES = 256L
+  }
 }
