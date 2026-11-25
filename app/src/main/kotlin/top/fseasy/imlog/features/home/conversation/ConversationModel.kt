@@ -26,10 +26,16 @@ sealed interface ContextState {
   ) : ContextState
 }
 
+sealed interface GeneralNotice {
+  data object FailedToResolveFile : GeneralNotice
+}
+
 sealed interface ConversationUiEvent {
   data class ShowVoiceRecordingNotice(val notice: VoiceRecordingNotice) : ConversationUiEvent
 
   data class ShowVoiceDraftRecoveryNotice(val notice: DraftRecoveryNotice) : ConversationUiEvent
+
+  data class ShowGeneralNotice(val notice: GeneralNotice) : ConversationUiEvent
 
   data class OpenSharedFile(val path: StoragePathModel.Shared) : ConversationUiEvent
 

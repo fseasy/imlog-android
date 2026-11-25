@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
-import top.fseasy.imlog.R
 import top.fseasy.imlog.common.runSuspendCatching
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.data.util.ExoPlayerStateHolder
@@ -165,8 +164,8 @@ constructor(
               .getOrNull()
               ?: run {
                 _uiEvents.send(
-                    ConversationUiEvent.ShowSnackBar(
-                        context.getString(R.string.term_media_file_not_found),
+                    ConversationUiEvent.ShowGeneralNotice(
+                        GeneralNotice.FailedToResolveFile,
                     ),
                 )
                 return@launchWithUserId
@@ -200,9 +199,7 @@ constructor(
               .getOrNull()
               ?: run {
                 _uiEvents.send(
-                    ConversationUiEvent.ShowSnackBar(
-                        context.getString(R.string.term_media_file_not_found),
-                    ),
+                    ConversationUiEvent.ShowGeneralNotice(GeneralNotice.FailedToResolveFile),
                 )
                 return@launchWithUserId
               }
@@ -217,11 +214,7 @@ constructor(
     }
   }
 
-  /**
-   * Create the OpenFileChoose intent for GenericFile Message. Send UI Effect when success
-   *
-   * TODO: in kmp, just pass the path and let the
-   */
+  /** Create the OpenFileChoose intent for GenericFile Message. Send UI Effect when success */
   fun createOpenFileIntentForGenericFileMessage(
       message: MessageUiModel<MessageContentUiModel.GenericFile>,
   ) {
@@ -236,12 +229,7 @@ constructor(
           )
       if (storagePath == null) {
         _uiEvents.send(
-            ConversationUiEvent.ShowSnackBar(
-                context.getString(
-                    R.string.prefix_failed_to_resolve_file_with_name,
-                    fileMessageContent.displayFilename,
-                ),
-            ),
+            ConversationUiEvent.ShowGeneralNotice(GeneralNotice.FailedToResolveFile),
         )
       } else {
         _uiEvents.send(ConversationUiEvent.OpenSharedFile(storagePath))
@@ -263,29 +251,7 @@ constructor(
     }
   }
 
-  /**
-   * An exported api for children components sending snackbar. in Ui side, get string may be more
-   * difficult, especially in event callback (as it lacks of @Composable env) so receive the
-   * resource id instead
-   */
-  fun showSnackbarForUi(messageResId: Int) = showSnackbar(context.getString(messageResId))
-
-  fun onSnackbarAction(action: SnackbarAction) {
-    when (action) {
-      is SnackbarAction.ViewQuarantinedAudio -> {
-        viewModelScope.launch {
-          _uiEvents.send(ConversationUiEvent.OpenQuarantinedFile(action.path))
-        }
-      }
-    }
-  }
-
   fun onSendUiEvent(event: ConversationUiEvent) = viewModelScope.launch { _uiEvents.send(event) }
-
-  private fun showSnackbar(message: String, action: SnackbarAction? = null) =
-      viewModelScope.launch {
-        _uiEvents.send(ConversationUiEvent.ShowSnackBar(message, action))
-      }
 
   private fun launchWithUserId(block: suspend (userId: UserId) -> Unit) {
     (userRepository.authState.value as? AuthState.Authenticated)?.userId?.let { uid ->
@@ -311,7 +277,9 @@ constructor(
             .onFailure { e -> Timber.w(e, "FullScreenView build storage uri failed") }
             .getOrNull()
             ?: run {
-              _uiEvents.send(ConversationUiEvent.ShowSnackBar("Failed to resolve file"))
+              _uiEvents.send(
+                  ConversationUiEvent.ShowGeneralNotice(GeneralNotice.FailedToResolveFile),
+              )
               return null
             }
     Timber.d("build file uri done")

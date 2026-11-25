@@ -14,10 +14,21 @@ interface VoiceDraftAudioProcessor {
   /** 校验并将 pending 合并到 base，输出到 [destPath]（建议先写临时文件再原子替换）， 返回合并后的新时长与波形。 */
   suspend fun mergeAppending(
       basePath: StoragePathModel.Internal,
+      baseWaveform: Waveform?,
       baseDuration: Duration,
       pendingPath: StoragePathModel.Internal,
       destPath: StoragePathModel.Internal,
   ): AppendMergeResult
+
+  /**
+   * 在正常录音条件下，base 已经校验过或者是之前已经录制好的，appending 是 stop 产出的音频， 这时 base, appending 都有 waveform 和
+   * duration，只需要合并音频即可
+   */
+  suspend fun fastMergeAppendingAudio(
+      basePath: StoragePathModel.Internal,
+      appendingPath: StoragePathModel.Internal,
+      destPath: StoragePathModel.Internal,
+  ): FastMergeResult
 
   /**
    * 将损坏文件移入隔离区（或删除），释放原路径. 返回是否移入成功.
@@ -57,4 +68,14 @@ sealed interface AppendMergeResult {
 
   /** 两个片段编码参数不一致，无法直接合并 */
   data object IncompatibleFormat : AppendMergeResult
+}
+
+sealed interface FastMergeResult {
+  data object Merged : FastMergeResult
+
+  data object AppendingEmptyKeepBase : FastMergeResult
+
+  data object IncompatibleFormat : FastMergeResult
+
+  data class Failed(val reason: String) : FastMergeResult
 }

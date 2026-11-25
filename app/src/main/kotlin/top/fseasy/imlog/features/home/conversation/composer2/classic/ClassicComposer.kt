@@ -40,7 +40,6 @@ import top.fseasy.imlog.ui.util.LocalSnackbarController
 @Composable
 fun ClassicComposer(
     onNavigateBack: () -> Unit,
-    onShowSnackbar: (messageResId: Int) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: Composer2ViewModel = hiltViewModel(),
     onBaseHeightPxChanged: (Int) -> Unit = {},
@@ -77,7 +76,6 @@ fun ClassicComposer(
       onStartVoiceRecording = viewModel::startVoiceRecording,
       onSendVoiceRecording = viewModel::stopVoiceRecordingAndSendVoiceMessage,
       onCancelVoiceRecoding = viewModel::cancelVoiceRecording,
-      onShowSnackbar = onShowSnackbar,
       onBaseHeightPxChanged = onBaseHeightPxChanged,
       onUpdateCachedImeHeightInDp = viewModel.classicComposerUiState::updateCachedImeHeight,
       onComposerBarAction = onComposerBarAction,
@@ -97,7 +95,6 @@ private fun ComposerContent(
     onCancelVoiceRecoding: () -> Unit,
     onUpdateCachedImeHeightInDp: (ScreenOrientation, heightValueInDp: Float) -> Unit,
     onTextFieldFocusChanged: (focused: Boolean) -> Unit,
-    onShowSnackbar: (Int) -> Unit,
     onComposerBarAction: (ComposerBarAction) -> Unit,
     modifier: Modifier = Modifier,
     onBaseHeightPxChanged: (Int) -> Unit = {},

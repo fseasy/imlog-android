@@ -31,18 +31,33 @@ sealed interface DraftRecoveryNotice {
 
   /** 追加片段损坏或不兼容，已保留之前的 base */
   data class AppendingSegmentDiscarded(
-    override val quarantinedFilePath: StoragePathModel.Shared?,
+      override val quarantinedFilePath: StoragePathModel.Shared?,
   ) : DraftRecoveryNotice
 
   /** base 损坏或丢失，但保留了新录制的追加片段 */
   data class BaseSegmentLostKeptPending(
-    override val quarantinedFilePath: StoragePathModel.Shared?,
+      override val quarantinedFilePath: StoragePathModel.Shared?,
   ) : DraftRecoveryNotice
 
   /** 整个语音草稿无法恢复（均已损坏/丢失，或 JSON 损坏） */
   data class VoiceDraftCorrupted(
-    override val quarantinedFilePath: StoragePathModel.Shared?,
+      override val quarantinedFilePath: StoragePathModel.Shared?,
   ) : DraftRecoveryNotice
+}
+
+sealed interface CommitDraftResult {
+  val draft: VoiceDraft.Committed?
+  val filesToDelete: List<StoragePathModel.Internal>
+
+  data class OnRecordingSuccess(
+      override val draft: VoiceDraft.Committed,
+      override val filesToDelete: List<StoragePathModel.Internal>,
+  ) : CommitDraftResult
+
+  data class OnRecordingFailure(
+      override val draft: VoiceDraft.Committed?,
+      override val filesToDelete: List<StoragePathModel.Internal>,
+  ) : CommitDraftResult
 }
 
 /** NOT auto-inject yet. we can uniform it under KMP */
@@ -95,12 +110,15 @@ class VoiceDraftUseCase(
   suspend fun commitWhenRecordingSuccess(
       draft: VoiceDraft.ActiveRecording,
       audioRecordResult: AudioRecordResult.Success,
-  ) =
-      draft.commit(
-          recordingResult = audioRecordResult,
-          fileContentAppendOperation = storageRepository::fileAppendContent,
-          fileDeleteOperation = storageRepository::deleteFile,
-      )
+  ): CommitDraftResult {
+
+    draft.commit(
+      recordingResult = audioRecordResult,
+      fileContentAppendOperation = storageRepository::fileAppendContent,
+      fileDeleteOperation = storageRepository::deleteFile,
+    )
+  }
+
 
   /**
    * Always discard the recordingFilePath, then
@@ -136,6 +154,9 @@ class VoiceDraftUseCase(
         }
       }
 
+  suspend fun saveDraftToDb(userId: UserId, topicId: TopicId, draft: VoiceDraft?): Boolean =
+      topicRepository.setMessageDraftVoiceContent(userId, topicId = topicId, draft = draft)
+
   /** 进入聊天页面时调用： 读取、校验并自愈语音草稿，确保输出的 draft 要么为 null，要么是可直接播放/发送的 Committed。 */
   suspend fun prepareVoiceDraftOnEnter(
       userId: UserId,
@@ -145,10 +166,10 @@ class VoiceDraftUseCase(
       LoadedVoiceDraft.None -> PreparedVoiceDraft(draft = null)
 
       LoadedVoiceDraft.Corrupted.Json -> {
-        topicRepository.setMessageDraftVoiceContent(userId, topicId = topicId, draft = null)
+        saveDraftToDb(userId, topicId = topicId, draft = null)
         PreparedVoiceDraft(
-          draft = null,
-          recoveryNotice = DraftRecoveryNotice.VoiceDraftCorrupted(quarantinedFilePath = null),
+            draft = null,
+            recoveryNotice = DraftRecoveryNotice.VoiceDraftCorrupted(quarantinedFilePath = null),
         )
       }
 
@@ -182,7 +203,7 @@ class VoiceDraftUseCase(
         if (pendingPath == null) {
           // 原来就是 Committed：写回修复后的波形即可，静默自愈
           val committed = VoiceDraft.Committed(recoveredBase)
-          topicRepository.setMessageDraftVoiceContent(userId, topicId, committed)
+          saveDraftToDb(userId, topicId, committed)
           PreparedVoiceDraft(draft = committed)
         } else {
           // 原来正在 Appending：恢复出 base 后直接复用 Appending 合并流程
@@ -232,10 +253,10 @@ class VoiceDraftUseCase(
       is CommittedAudioCheckResult.Corrupted -> {
         withContext(NonCancellable + Dispatchers.IO) {
           val quarantined = quarantineBrokenFile(committed.detail.filePath, userId)
-          topicRepository.setMessageDraftVoiceContent(userId, topicId, null)
+          saveDraftToDb(userId, topicId, null)
           PreparedVoiceDraft(
-            draft = null,
-            recoveryNotice =
+              draft = null,
+              recoveryNotice =
                   DraftRecoveryNotice.VoiceDraftCorrupted(quarantinedFilePath = quarantined),
           )
         }
@@ -258,7 +279,7 @@ class VoiceDraftUseCase(
                     waveform = recovery.waveform,
                 ),
             )
-        topicRepository.setMessageDraftVoiceContent(userId, topicId, committed)
+        saveDraftToDb(userId, topicId, committed)
         PreparedVoiceDraft(draft = committed)
       }
 
@@ -266,10 +287,10 @@ class VoiceDraftUseCase(
       is PendingAudioRecoveryResult.Corrupted -> {
         withContext(NonCancellable + Dispatchers.IO) {
           val quarantined = quarantineBrokenFile(activeBase.recordingFilePath, userId)
-          topicRepository.setMessageDraftVoiceContent(userId, topicId, null)
+          saveDraftToDb(userId, topicId, null)
           PreparedVoiceDraft(
-            draft = null,
-            recoveryNotice =
+              draft = null,
+              recoveryNotice =
                   DraftRecoveryNotice.VoiceDraftCorrupted(quarantinedFilePath = quarantined),
           )
         }
@@ -309,7 +330,7 @@ class VoiceDraftUseCase(
             )
         // 先更新 DB 指向新合并的文件，再删除旧源片段，确保崩溃安全
         withContext(Dispatchers.IO + NonCancellable) {
-          topicRepository.setMessageDraftVoiceContent(userId, topicId, committed)
+          saveDraftToDb(userId, topicId, committed)
           storageRepository.deleteFile(appending.base.filePath)
           storageRepository.deleteFile(appending.recordingFilePath)
         }
@@ -322,7 +343,7 @@ class VoiceDraftUseCase(
         val committed = VoiceDraft.Committed(appending.base)
         val quarantinedPending =
             withContext(NonCancellable + Dispatchers.IO) {
-              topicRepository.setMessageDraftVoiceContent(userId, topicId, committed)
+              saveDraftToDb(userId, topicId, committed)
               quarantineBrokenFile(appending.recordingFilePath, userId)
             }
         PreparedVoiceDraft(
@@ -362,19 +383,19 @@ class VoiceDraftUseCase(
                     waveform = pendingRecovery.waveform,
                 ),
             )
-        topicRepository.setMessageDraftVoiceContent(userId, topicId, committed)
+        saveDraftToDb(userId, topicId, committed)
         PreparedVoiceDraft(
             draft = committed,
             recoveryNotice = DraftRecoveryNotice.BaseSegmentLostKeptPending(quarantinedBase),
         )
       } else {
         val quarantinedPending = recordingFilePath?.let { quarantineBrokenFile(it, userId) }
-        topicRepository.setMessageDraftVoiceContent(userId, topicId, null)
+        saveDraftToDb(userId, topicId, null)
         PreparedVoiceDraft(
             draft = null,
             recoveryNotice =
                 DraftRecoveryNotice.VoiceDraftCorrupted(
-                  quarantinedFilePath = quarantinedBase ?: quarantinedPending,
+                    quarantinedFilePath = quarantinedBase ?: quarantinedPending,
                 ),
         )
       }

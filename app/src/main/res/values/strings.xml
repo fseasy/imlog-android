@@ -112,6 +112,7 @@
     <string name="term_image">Image</string>
     <string name="term_video">Video</string>
     <string name="term_file">File</string>
+    <string name="term_failed_to_resolve_file">Failed to resolve file</string>
     <string name="prefix_open_file_by_chooser_with_name">Choose app to open file %1$s</string>
     <string name="prefix_failed_to_resolve_file_with_name">Failed to resolve file \'%1$s\'</string>
     <string name="term_full_screen_image">Full Screen Image</string>

@@ -30,6 +30,17 @@ class Waveform(val bars: FloatArray) {
     return result
   }
 
+  fun appendWaveform(
+      oldDuration: Duration,
+      other: Waveform,
+      otherDuration: Duration,
+  ) =
+      appendSegment(
+          oldDuration = oldDuration,
+          newRawAmplitudes = other.bars,
+          newDuration = otherDuration,
+      )
+
   /**
    * 将新音频片段的原始采样追加到当前波形之后。全程直接在 FloatArray 上运算，零编解码消耗。
    *
@@ -84,7 +95,7 @@ class Waveform(val bars: FloatArray) {
     fun getSilencePlaceholder(duration: Duration) =
         Waveform(FloatArray(calculateTargetBars(duration)) { 0.1f })
 
-    /**  先在 Long 范围限制 [0, 70] 再转 Int，防止超长/INFINITE Duration 溢出. 输出范围 30 ～ 100 */
+    /** 先在 Long 范围限制 [0, 70] 再转 Int，防止超长/INFINITE Duration 溢出. 输出范围 30 ～ 100 */
     fun calculateTargetBars(duration: Duration): Int {
       return 30 + duration.inWholeSeconds.coerceIn(0L, 70L).toInt()
     }

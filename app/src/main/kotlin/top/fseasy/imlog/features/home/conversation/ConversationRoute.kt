@@ -53,7 +53,7 @@ import top.fseasy.imlog.ui.util.ObserveAsEvents
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-fun TopicLogRoute(
+fun ConversationRoute(
     onNavigateBack: () -> Unit,
     onSettingsClick: (TopicId) -> Unit,
     viewModel: ConversationViewModel = hiltViewModel(),
@@ -108,6 +108,10 @@ fun TopicLogRoute(
           }
         }
       }
+      is ConversationUiEvent.ShowGeneralNotice -> launchLatest {
+        val message = event.notice.toMessage(resources)
+        snackbarHostState.showSnackbar(message)
+      }
     }
   }
 
@@ -152,7 +156,7 @@ fun TopicLogRoute(
         itemKey = { m -> toOverlayItemKey(m.id) },
         onDismissFinished = { currentFullScreenViewMessage = null },
         content = {
-          TopicLogContent(
+          ConversationContent(
               topicId = viewModel.topicId,
               topicName = topicName,
               // proxy to composer viewModel to handle the inputMode correctly and then navigate
@@ -173,7 +177,6 @@ fun TopicLogRoute(
               composerSection = { onBaseHeightPxChanged ->
                 ClassicComposer(
                     onNavigateBack = onNavigateBack,
-                    onShowSnackbar = viewModel::showSnackbarForUi,
                     viewModel = composerViewModel,
                     onBaseHeightPxChanged = onBaseHeightPxChanged,
                 )
@@ -194,7 +197,7 @@ fun TopicLogRoute(
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TopicLogContent(
+private fun ConversationContent(
     topicId: TopicId,
     topicName: String?,
     onNavigateBack: () -> Unit,

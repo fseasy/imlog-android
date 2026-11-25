@@ -90,6 +90,9 @@ interface TopicRepository {
       quotedMessageId: MessageId,
   ): Boolean
 
+  /**
+   * Main-thread save: run in io
+   */
   suspend fun setMessageDraftVoiceContent(
       userId: UserId,
       topicId: TopicId,

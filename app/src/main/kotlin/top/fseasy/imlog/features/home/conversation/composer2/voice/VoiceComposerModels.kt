@@ -87,10 +87,12 @@ fun ActiveRecordingAction.nextOnStop() =
 /**
  * State rolling:
  *
- * Idle -> active-recording -> \[committed-draft\] -> CleanUp -> Idle
+ * Initializing ->Idle -> active-recording -> \[committed-draft\] -> CleanUp -> Idle
  */
 @Immutable
 internal sealed interface VoiceDraftUiState {
+
+  @Immutable data object Initializing : VoiceDraftUiState
 
   @Immutable data object Idle : VoiceDraftUiState
 
@@ -241,6 +243,7 @@ internal suspend fun VoiceDraftUiState.discardAll(
     is VoiceDraftUiState.ActiveRecording -> draftUseCase.deleteDraftFiles(this.draft)
     is VoiceDraftUiState.CommittedDraft -> draftUseCase.deleteDraftFiles(this.draft)
     VoiceDraftUiState.Idle -> Unit
+    VoiceDraftUiState.Initializing -> Unit
   }
   return VoiceDraftUiState.Idle
 }
