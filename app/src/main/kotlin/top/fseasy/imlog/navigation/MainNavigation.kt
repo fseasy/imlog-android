@@ -25,7 +25,7 @@ sealed interface MainScreen {
    *
    * I give up, use the plain data type to avoid it.
    */
-  @Serializable data class TopicLog(val topicId: String) : MainScreen
+  @Serializable data class Conversation(val topicId: String) : MainScreen
 
   @Serializable data class TopicSettings(val topicId: String) : MainScreen
 
@@ -49,7 +49,7 @@ fun NavGraphBuilder.mainGraph(
     composable<MainScreen.MainTabs> {
       MainTabsRoute(
           onNavigateToTopic = { topicId ->
-            navController.navigate(MainScreen.TopicLog(topicId.value))
+            navController.navigate(MainScreen.Conversation(topicId.value))
           },
           onNavigateToAppSettings = { navController.navigate(MainScreen.AppSettings) },
           onNavigateToTopicSettings = { topicId ->
@@ -58,7 +58,7 @@ fun NavGraphBuilder.mainGraph(
           onNavigateToCreateTopic = { navController.navigate(MainScreen.CreateTopic) },
       )
     }
-    composable<MainScreen.TopicLog> {
+    composable<MainScreen.Conversation> {
       ConversationRoute(
           onNavigateBack = { navController.popBackStack() },
           onSettingsClick = { topicId ->
@@ -79,7 +79,7 @@ fun NavGraphBuilder.mainGraph(
       CreateTopicRoute(
           onNavigateBack = { navController.popBackStack() },
           onNavigateToNewTopic = { topicId ->
-            navController.navigate(MainScreen.TopicLog(topicId.value)) {
+            navController.navigate(MainScreen.Conversation(topicId.value)) {
               popUpTo(MainScreen.CreateTopic) { inclusive = true }
             }
           },

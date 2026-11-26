@@ -182,7 +182,7 @@ constructor(
     }
     // then try cache as input, throw when fail
     val cacheAbsolutePath =
-        storageRepository.resolveStoragePathToAbsolutePathsWithoutCreating(cacheFilePath).last()
+        storageRepository.resolvePathOrThrow(cacheFilePath).last()
     return executeGenerate(cacheAbsolutePath, fileMetadata)
   }
 

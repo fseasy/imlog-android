@@ -36,7 +36,7 @@ constructor(
     private val storagePathUseCase: StoragePathUseCase,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
-  val topicId: TopicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
+  val topicId: TopicId = TopicId(savedStateHandle.toRoute<MainScreen.Conversation>().topicId)
 
   // Item is sorted in DESC order => in Timeline LazyColumn view, should be rendered reversely.
   @OptIn(ExperimentalCoroutinesApi::class)

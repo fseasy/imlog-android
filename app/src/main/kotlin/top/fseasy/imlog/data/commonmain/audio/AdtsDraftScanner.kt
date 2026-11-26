@@ -38,7 +38,13 @@ sealed interface AdtsPendingScanResult {
 
 object AdtsDraftScanner {
 
-  /** O(1) 快速校验（用于已定稿的 base 或 Committed 草稿）： 只检查文件存在性及前 1~2 帧头合法性，避免进聊天页时全文件扫描或触发 Retriever IPC。 */
+  /**
+   * Main-tread safe.
+   *
+   * @throws kotlinx.coroutines.CancellationException
+   *
+   * O(1) 快速校验（用于已定稿的 base 或 Committed 草稿）： 只检查文件存在性及前 1~2 帧头合法性，避免进聊天页时全文件扫描或触发 Retriever IPC。
+   */
   suspend fun quickValidate(file: File): AdtsQuickCheckResult =
       withContext(Dispatchers.IO) {
         if (!file.exists() || !file.isFile) {
@@ -90,6 +96,10 @@ object AdtsDraftScanner {
       }
 
   /**
+   * Main-tread safe.
+   *
+   * @throws kotlinx.coroutines.CancellationException
+   *
    * 针对录音中断遗留的 pendingSegment：
    * 1. 全帧边界扫描，精确统计有效帧数与时长；
    * 2. 遇到末尾截断残帧时，若前面存在有效帧且 [trimCorruptedTail] 为 true，直接截断保留完整帧；
@@ -182,7 +192,12 @@ object AdtsDraftScanner {
       }
 
   /**
+   * main-tread safe.
+   *
    * 将 [baseFile] 与 [pendingFile] 的有效部分按顺序合并写入 [destTempFile]。 调用前应确保两者通过了校验且 AdtsAudioConfig 一致。
+   *
+   * @throws kotlinx.coroutines.CancellationException
+   * @throws IllegalArgumentException if [pendingValidByteLength] <= zero
    */
   suspend fun mergeAdtsFiles(
       baseFile: File,

@@ -64,10 +64,10 @@ interface StorageRepository {
    *
    * io parts run in IO.
    *
-   * @throws Exception all exceptions came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
+   * @throws top.fseasy.imlog.domain.PathResolveException
    */
-  suspend fun resolveStoragePathToAbsolutePathsWithoutCreating(
-      storagePath: StoragePathModel
+  suspend fun resolvePathOrThrow(
+      storagePath: StoragePathModel,
   ): List<AbsolutePathModel>
 
   /**
@@ -77,10 +77,10 @@ interface StorageRepository {
    *
    * Pure CPU working without io.
    *
-   * @throws Exception all exceptions came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
+   * @throws top.fseasy.imlog.domain.PathResolveException
    */
-  fun resolveInternalStoragePathToAbsolutePathWithoutCreating(
-      internalStoragePath: StoragePathModel.Internal
+  fun resolveInternalPathOrThrow(
+      internalStoragePath: StoragePathModel.Internal,
   ): AbsolutePathModel.AppPathModel
 
   /**
@@ -90,10 +90,11 @@ interface StorageRepository {
    *
    * io parts run in IO.
    *
-   * @throws Exception all exceptions came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
+   * @throws top.fseasy.imlog.domain.PathResolveException
+   * @throws kotlinx.coroutines.CancellationException
    */
-  suspend fun resolveSharedStoragePathToAbsolutePathWithoutCreating(
-      sharedStoragePath: StoragePathModel.Shared
+  suspend fun resolveSharedPathOrThrow(
+      sharedStoragePath: StoragePathModel.Shared,
   ): AbsolutePathModel.UriStrModel
 
   /**
@@ -114,7 +115,6 @@ interface StorageRepository {
    *   of files it contains.
    */
   suspend fun fileSizeOrNull(path: StoragePathModel.Internal): Long?
-
 
   /**
    * Run in IO thread in io parts.
@@ -182,15 +182,23 @@ interface StorageRepository {
       srcMimeType: String? = null,
   ): FileCopyResult
 
-  /** Run in IO thread in io parts. Swallow all the exceptions. */
-  suspend fun deleteFile(
-      filePath: AbsolutePathModel,
-  ): FileDeleteResult
-
-  /** Run in IO thread in io parts. Swallow all the exceptions except CancellationException */
+  /**
+   * Run in IO thread in io parts. Swallow all the exceptions except CancellationException
+   *
+   * @throws kotlinx.coroutines.CancellationException
+   */
   suspend fun deleteFile(
       filePath: StoragePathModel,
   ): FileDeleteResult
+
+  /**
+   * Run in IO thread in io parts. Swallow all the exceptions except CancellationException
+   *
+   * @throws kotlinx.coroutines.CancellationException
+   */
+  suspend fun deleteFiles(
+      filePath: List<StoragePathModel>,
+  ): Boolean
 
   /**
    * No exception will be thrown. If path is invalid, return null. else return metadata that might

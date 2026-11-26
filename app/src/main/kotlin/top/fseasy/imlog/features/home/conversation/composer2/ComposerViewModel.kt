@@ -92,7 +92,7 @@ constructor(
     @ApplicationIoScope private val applicationIoScope: CoroutineScope,
     application: Application,
 ) : ViewModel() {
-  private val topicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
+  private val topicId = TopicId(savedStateHandle.toRoute<MainScreen.Conversation>().topicId)
   private val authState = userRepository.authState
 
   private val voiceRecordingCoordinator = (application as ImLogApplication).recordingCoordinator

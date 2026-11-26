@@ -14,7 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.R
-import top.fseasy.imlog.data.mapper.toUriOrThrow
+import top.fseasy.imlog.data.mapper.toUri
 import top.fseasy.imlog.data.util.MimeTypeUtils
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.repository.StorageRepository
@@ -50,9 +50,9 @@ constructor(
   private suspend fun resolveUriOrNull(path: StoragePathModel.Shared): Uri? {
     return try {
       storageRepository
-          .resolveSharedStoragePathToAbsolutePathWithoutCreating(path)
+          .resolveSharedPathOrThrow(path)
           .value
-          .toUriOrThrow()
+          .toUri()
     } catch (e: Exception) {
       Timber.w(e, "Failed to resolve shared storage path: $path")
       null

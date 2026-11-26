@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import top.fseasy.imlog.data.mapper.toNioPath
+import top.fseasy.imlog.data.mapper.toNioPathOrThrow
 import top.fseasy.imlog.data.util.VoiceRecorder
 import top.fseasy.imlog.data.util.VoiceRecorderState
 import top.fseasy.imlog.domain.model.TopicId
@@ -85,7 +85,7 @@ class VoiceRecorderStateHolder(
             userId = userId,
             filename = filename,
         )
-    return outputFilePath.toNioPath(context)
+    return outputFilePath.toNioPathOrThrow(context)
   }
 
   override fun close() {

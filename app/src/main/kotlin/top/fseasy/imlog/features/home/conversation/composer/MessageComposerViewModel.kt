@@ -74,7 +74,7 @@ constructor(
     @param:ApplicationContext private val context: Context,
     @ApplicationIoScope private val applicationIoScope: CoroutineScope,
 ) : ViewModel() {
-  private val topicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
+  private val topicId = TopicId(savedStateHandle.toRoute<MainScreen.Conversation>().topicId)
   private val authState = userRepository.authState
 
   val voiceRecorderStateHolder =

@@ -70,7 +70,7 @@ constructor(
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
-  val topicId: TopicId = TopicId(savedStateHandle.toRoute<MainScreen.TopicLog>().topicId)
+  val topicId: TopicId = TopicId(savedStateHandle.toRoute<MainScreen.Conversation>().topicId)
 
   init {
     launchWithUserId { userId ->

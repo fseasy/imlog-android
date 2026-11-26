@@ -8,17 +8,20 @@ import kotlinx.coroutines.withContext
 import top.fseasy.imlog.domain.audio.AppendMergeResult
 import top.fseasy.imlog.domain.audio.AudioRecordResult
 import top.fseasy.imlog.domain.audio.CommittedAudioCheckResult
+import top.fseasy.imlog.domain.audio.MergeAudioRecordingResult
+import top.fseasy.imlog.domain.audio.MergeFailureReason
 import top.fseasy.imlog.domain.audio.PendingAudioRecoveryResult
 import top.fseasy.imlog.domain.audio.VoiceDraftAudioProcessor
+import top.fseasy.imlog.domain.audio.Waveform
 import top.fseasy.imlog.domain.model.LoadedVoiceDraft
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.TopicId
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VoiceDraft
 import top.fseasy.imlog.domain.model.VoiceDraftDetail
-import top.fseasy.imlog.domain.model.commit
 import top.fseasy.imlog.domain.repository.StorageRepository
 import top.fseasy.imlog.domain.repository.TopicRepository
+import top.fseasy.imlog.domain.usecase.composer.CommitOnRecordingSuccessResult.Success
 import top.fseasy.imlog.domain.usecase.pathpolicy.VoiceDraftPathUseCase
 
 data class PreparedVoiceDraft(
@@ -45,19 +48,20 @@ sealed interface DraftRecoveryNotice {
   ) : DraftRecoveryNotice
 }
 
-sealed interface CommitDraftResult {
-  val draft: VoiceDraft.Committed?
-  val filesToDelete: List<StoragePathModel.Internal>
+data class CommitDraftOnRecordingFailureResult(
+    val draft: VoiceDraft.Committed?,
+    val filesToDelete: List<StoragePathModel.Internal>,
+)
 
-  data class OnRecordingSuccess(
-      override val draft: VoiceDraft.Committed,
-      override val filesToDelete: List<StoragePathModel.Internal>,
-  ) : CommitDraftResult
+sealed interface CommitOnRecordingSuccessResult {
+  data class Success(
+      val draft: VoiceDraft.Committed,
+      val filesToDelete: List<StoragePathModel.Internal>,
+  ) : CommitOnRecordingSuccessResult
 
-  data class OnRecordingFailure(
-      override val draft: VoiceDraft.Committed?,
-      override val filesToDelete: List<StoragePathModel.Internal>,
-  ) : CommitDraftResult
+  data class Failure(
+      val reason: MergeFailureReason,
+  ) : CommitOnRecordingSuccessResult
 }
 
 /** NOT auto-inject yet. we can uniform it under KMP */
@@ -69,76 +73,90 @@ class VoiceDraftUseCase(
     private val audioProcessor: VoiceDraftAudioProcessor,
 ) {
 
+  fun newVoiceDraftPath(userId: UserId, now: Instant = Clock.System.now()) =
+      draftPathUseCase.newVoiceDraftPath(
+          userId,
+          messageTimestamp = now,
+          audioFileExtension = outputAudioFileExtension,
+      )
+
   /**
    * following Write Ahead Log rule: just recording the path to the draft.
    *
    * No IO operations. No Exception will be thrown.
    */
-  fun newVoiceDraft(
+  fun createBaseVoiceDraft(
       userId: UserId,
       now: Instant = Clock.System.now(),
   ): VoiceDraft.ActiveRecording.Base {
-    val path =
-        draftPathUseCase.newVoiceDraftPath(
-            userId,
-            messageTimestamp = now,
-            audioFileExtension = outputAudioFileExtension,
-        )
+    val path = newVoiceDraftPath(userId, now)
     return VoiceDraft.ActiveRecording.Base(path)
   }
 
-  fun appending(
+  fun createAppendingVoiceDraft(
       baseDraft: VoiceDraft.Committed,
       userId: UserId,
       now: Instant = Clock.System.now(),
   ): VoiceDraft.ActiveRecording.Appending {
-    val path =
-        draftPathUseCase.newVoiceDraftPath(
-            userId,
-            messageTimestamp = now,
-            audioFileExtension = outputAudioFileExtension,
-        )
+    val path = newVoiceDraftPath(userId, now)
     return VoiceDraft.ActiveRecording.Appending(base = baseDraft.detail, recordingFilePath = path)
   }
 
   /**
    * safe for main-thread.
    *
-   * No catchable exception. But it may throw some system level exception or
-   * CoroutineCancellationException
+   * No exception.
    */
-  suspend fun commitWhenRecordingSuccess(
+  suspend fun commitOnRecordingSuccess(
+      userId: UserId,
       draft: VoiceDraft.ActiveRecording,
       audioRecordResult: AudioRecordResult.Success,
-  ): CommitDraftResult {
-
-    draft.commit(
-      recordingResult = audioRecordResult,
-      fileContentAppendOperation = storageRepository::fileAppendContent,
-      fileDeleteOperation = storageRepository::deleteFile,
-    )
-  }
-
-
-  /**
-   * Always discard the recordingFilePath, then
-   *
-   * 1. if it's Base => Null
-   * 2. If it's appending, put the base back to committed.
-   *
-   * No exception will be thrown.
-   *
-   * Safe for main-thread.
-   */
-  suspend fun tryCommitWhenRecordingFailure(
-      draft: VoiceDraft.ActiveRecording,
-  ): VoiceDraft.Committed? {
-    storageRepository.deleteFile(draft.recordingFilePath)
-    return when (draft) {
-      is VoiceDraft.ActiveRecording.Appending -> VoiceDraft.Committed(draft.base)
-      is VoiceDraft.ActiveRecording.Base -> null
-    }
-  }
+  ): CommitOnRecordingSuccessResult =
+      withContext(Dispatchers.IO + NonCancellable) {
+        when (draft) {
+          is VoiceDraft.ActiveRecording.Appending -> {
+            val destPath = newVoiceDraftPath(userId)
+            val result =
+                audioProcessor.mergeAudioRecording(
+                    base = draft.base,
+                    recordingResult = audioRecordResult,
+                    destPath = destPath,
+                )
+            when (result) {
+              is MergeAudioRecordingResult.Success ->
+                  Success(
+                      draft =
+                          VoiceDraft.Committed(
+                              VoiceDraftDetail(
+                                  filePath = destPath,
+                                  duration = result.duration,
+                                  waveform = result.waveform,
+                              ),
+                          ),
+                      filesToDelete = listOf(draft.base.filePath, audioRecordResult.filePath),
+                  )
+              is MergeAudioRecordingResult.Failure ->
+                  CommitOnRecordingSuccessResult.Failure(result.reason)
+            }
+          }
+          is VoiceDraft.ActiveRecording.Base ->
+              Success(
+                  draft =
+                      VoiceDraft.Committed(
+                          VoiceDraftDetail(
+                              audioRecordResult.filePath,
+                              duration = audioRecordResult.duration,
+                              waveform =
+                                  Waveform.fromRawAmplitudes(
+                                      audioRecordResult.amplitudes,
+                                      audioRecordResult.duration,
+                                  ),
+                          ),
+                      ),
+                  filesToDelete = emptyList(),
+              )
+        }
+      }
 
   /** delete all possible files. */
   suspend fun deleteDraftFiles(draft: VoiceDraft) =
@@ -312,9 +330,10 @@ class VoiceDraftUseCase(
 
     return when (
         val mergeResult =
-            audioProcessor.mergeAppending(
+            audioProcessor.mergeWithRecovery(
                 basePath = appending.base.filePath,
                 baseDuration = appending.base.duration,
+                baseWaveform = appending.base.waveform,
                 pendingPath = appending.recordingFilePath,
                 destPath = mergedPath,
             )
@@ -338,8 +357,9 @@ class VoiceDraftUseCase(
       }
 
       is AppendMergeResult.PendingUnrecoverableKeepBase,
+      AppendMergeResult.OutputPathInvalid,
       AppendMergeResult.IncompatibleFormat -> {
-        // 仅追加片段损坏/缺失/不兼容：保住原本健康的 base 并升格为 Committed
+        // 保住原本健康的 base 并升格为 Committed
         val committed = VoiceDraft.Committed(appending.base)
         val quarantinedPending =
             withContext(NonCancellable + Dispatchers.IO) {
@@ -411,5 +431,31 @@ class VoiceDraftUseCase(
     val quarantinePath = draftPathUseCase.newQuarantinePath(userId, filename)
     val isQuarantined = audioProcessor.quarantineOrDelete(brokenPath, quarantinePath)
     return if (isQuarantined) quarantinePath else null
+  }
+
+  companion object {
+    /**
+     * 1. if it's Base => Null
+     * 2. If it's appending, put the base back to committed.
+     *
+     * Won't delete files.
+     *
+     * No exception will be thrown.
+     *
+     * Safe for main-thread.
+     */
+    fun commitByRollbackOnRecordingFailure(
+        draft: VoiceDraft.ActiveRecording,
+    ): CommitDraftOnRecordingFailureResult {
+      val rollbackDraft =
+          when (draft) {
+            is VoiceDraft.ActiveRecording.Appending -> VoiceDraft.Committed(draft.base)
+            is VoiceDraft.ActiveRecording.Base -> null
+          }
+      return CommitDraftOnRecordingFailureResult(
+          draft = rollbackDraft,
+          filesToDelete = listOf(draft.recordingFilePath),
+      )
+    }
   }
 }

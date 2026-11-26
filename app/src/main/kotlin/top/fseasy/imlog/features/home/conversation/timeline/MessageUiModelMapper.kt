@@ -10,9 +10,9 @@ import kotlin.math.sin
 import kotlin.time.Duration
 import kotlin.time.Instant
 import top.fseasy.imlog.data.mapper.toAbsolutePathWithoutCreating
-import top.fseasy.imlog.data.mapper.toNioPath
+import top.fseasy.imlog.data.mapper.toNioPathOrThrow
 import top.fseasy.imlog.data.mapper.toUriOrNull
-import top.fseasy.imlog.data.mapper.toUriOrThrow
+import top.fseasy.imlog.data.mapper.toUri
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.CacheAttachmentSource
@@ -58,7 +58,7 @@ fun QuotedMessageContent.toUiModel(
               timestamp = createdAt,
               filename = thumbnailFilename,
           )
-          .toNioPath(context)
+          .toNioPathOrThrow(context)
 
   return when (this) {
     is QuotedMessageContent.Text -> QuotedMessageContentUiModel.Text(text = text)
@@ -186,7 +186,7 @@ fun MessageContent.toUiModel(
             userId = signInUserId,
             filename = cacheFilename,
         )
-        .toNioPath(context)
+        .toNioPathOrThrow(context)
   }
 
   return when (this) {
@@ -314,8 +314,8 @@ internal suspend fun MessageContentUiModel.Attachment.buildStorageUri(
           storagePathUseCase = storagePathUseCase,
       ) ?: return null
   val uriModel =
-      storageRepository.resolveSharedStoragePathToAbsolutePathWithoutCreating(storagePath)
-  return uriModel.value.toUriOrThrow()
+      storageRepository.resolveSharedPathOrThrow(storagePath)
+  return uriModel.value.toUri()
 }
 
 /** @throws Exception when resolve Uri */

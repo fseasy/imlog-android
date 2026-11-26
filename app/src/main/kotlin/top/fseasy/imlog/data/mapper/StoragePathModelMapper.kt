@@ -2,17 +2,19 @@ package top.fseasy.imlog.data.mapper
 
 import android.content.Context
 import android.net.Uri
+import java.io.File
+import java.nio.file.InvalidPathException
+import java.nio.file.Path
+import top.fseasy.imlog.common.runSuspendCatching
 import top.fseasy.imlog.data.util.FindOrCreateFileUriResult
 import top.fseasy.imlog.data.util.UriPathUtil
 import top.fseasy.imlog.data.util.resolve
+import top.fseasy.imlog.domain.PathResolveException
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.InternalStorageRootSource
 import top.fseasy.imlog.domain.model.SharedStorageRootSource
 import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.UserId
-import java.io.File
-import java.io.FileNotFoundException
-import java.nio.file.Path
 
 fun InternalStorageRootSource.toFile(context: Context): File {
   return when (this) {
@@ -21,27 +23,45 @@ fun InternalStorageRootSource.toFile(context: Context): File {
   }
 }
 
-/** pure cpu operations. */
-fun StoragePathModel.Internal.toNioPath(context: Context): Path =
-    root.toFile(context).resolve(fullRelativePath).toPath()
+/**
+ * pure cpu operations.
+ *
+ * @throws PathResolveException
+ */
+fun StoragePathModel.Internal.toNioPathOrThrow(context: Context): Path =
+    try {
+      root.toFile(context).resolve(fullRelativePath).toPath()
+    } catch (e: InvalidPathException) {
+      throw PathResolveException(e.message ?: "resolve path $this failed")
+    }
 
-/** To absolute path model without creating dirs/files. pure cpu operations. */
+/**
+ * To absolute path model without creating dirs/files. pure cpu operations.
+ *
+ * @throws top.fseasy.imlog.domain.PathResolveException
+ */
 fun StoragePathModel.Internal.toAbsolutePathWithoutCreating(context: Context) =
-    AbsolutePathModel.AppPathModel(toNioPath(context).toAppPath())
+    AbsolutePathModel.AppPathModel(toNioPathOrThrow(context).toAppPath())
 
 /**
  * Run in IO thread for io parts.
  *
  * @param userRootUriProvider
  *   see @top.fseasy.imlog.data.repository.StorageRepositoryImpl.getSharedStorageRootUriWithCache
- * @throws Exception
+ * @throws PathResolveException
+ * @throws kotlinx.coroutines.CancellationException
  */
-suspend fun SharedStorageRootSource.toUri(userRootUriProvider: suspend (UserId) -> Uri?) =
+suspend fun SharedStorageRootSource.toUriOrThrow(userRootUriProvider: suspend (UserId) -> Uri?) =
     when (this) {
-      is SharedStorageRootSource.Direct -> uriStr.toUriOrThrow()
+      is SharedStorageRootSource.Direct -> uriStr.toUri()
       is SharedStorageRootSource.LookupByUser ->
-          userRootUriProvider(userId)
-              ?: throw IllegalStateException("Storage root URI for current user $userId is null.")
+          runSuspendCatching { userRootUriProvider(userId) }
+              .getOrElse { e ->
+                throw PathResolveException(
+                    "Get Root URI for  current user $userId get exception: ${e.message}",
+                    e,
+                )
+              } ?: throw PathResolveException("Storage root URI for current user $userId is null.")
     }
 
 /**
@@ -55,7 +75,7 @@ suspend fun StoragePathModel.Shared.ensureFileUri(
     context: Context,
     mimeType: String,
 ): Uri {
-  val rootUri = this.root.toUri(userRootUriProvider)
+  val rootUri = this.root.toUriOrThrow(userRootUriProvider)
   return when (
       val result =
           UriPathUtil.ensureSAFFileUri(
@@ -81,7 +101,7 @@ suspend fun StoragePathModel.Shared.ensureDirectorUri(
     userRootUriProvider: suspend (UserId) -> Uri?,
     context: Context,
 ): Uri {
-  val rootUri = this.root.toUri(userRootUriProvider)
+  val rootUri = this.root.toUriOrThrow(userRootUriProvider)
   val result =
       UriPathUtil.ensureSAFDirectoryUri(
           context = context,
@@ -100,14 +120,14 @@ suspend fun StoragePathModel.Shared.ensureDirectorUri(
  * Find uri: find (only) file (+ mimeType) uri for the given path and root uri. Run in IO for io
  * parts.
  *
- * @throws Exception
- * @throws FileNotFoundException
+ * @throws PathResolveException
+ * @throws kotlinx.coroutines.CancellationException
  */
 suspend fun StoragePathModel.Shared.findUriOrThrow(
     userRootUriProvider: suspend (UserId) -> Uri?,
     context: Context,
 ): Uri {
-  val rootUri = this.root.toUri(userRootUriProvider)
+  val rootUri = this.root.toUriOrThrow(userRootUriProvider)
   return when (
       val result =
           UriPathUtil.findSAFUri(
@@ -117,8 +137,8 @@ suspend fun StoragePathModel.Shared.findUriOrThrow(
           )
   ) {
     is FindOrCreateFileUriResult.Success -> result.uri
-    is FindOrCreateFileUriResult.NotFound -> throw FileNotFoundException("Can not locate uri file")
-    is FindOrCreateFileUriResult.Error -> throw result.cause
+    is FindOrCreateFileUriResult.NotFound -> throw PathResolveException("Can not locate uri file")
+    is FindOrCreateFileUriResult.Error -> throw PathResolveException("find error", result.cause)
   }
 }
 
@@ -127,7 +147,8 @@ suspend fun StoragePathModel.Shared.findUriOrThrow(
  *
  * io parts run in IO.
  *
- * @throws Exception came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
+ * @throws PathResolveException
+ * @throws kotlinx.coroutines.CancellationException
  */
 suspend fun StoragePathModel.Shared.toAbsolutePathWithoutCreating(
     userRootUriProvider: suspend (UserId) -> Uri?,
@@ -141,10 +162,8 @@ suspend fun StoragePathModel.Shared.toAbsolutePathWithoutCreating(
  *
  * io parts run in IO.
  *
- * @throws Exception all exceptions came from @StoragePathModel.SharedStorageOnly.findUriOrThrow
- * @see
- *   top.fseasy.imlog.domain.repository.StorageRepository.resolveStoragePathToAbsolutePathsWithoutCreating
- *   it wraps this function and export it to domain level
+ * @throws PathResolveException
+ * @throws kotlinx.coroutines.CancellationException
  */
 suspend fun StoragePathModel.toAbsolutePathsWithoutCreating(
     userRootUriProvider: suspend (UserId) -> Uri?,

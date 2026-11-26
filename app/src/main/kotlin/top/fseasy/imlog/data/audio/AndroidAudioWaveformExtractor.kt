@@ -21,7 +21,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import top.fseasy.imlog.data.commonmain.audio.WaveformStreamingAccumulator
-import top.fseasy.imlog.data.mapper.toUriOrThrow
+import top.fseasy.imlog.data.mapper.toUri
 import top.fseasy.imlog.domain.audio.AudioWaveformExtractor
 import top.fseasy.imlog.domain.audio.AudioWaveformResult
 import top.fseasy.imlog.domain.model.StoragePathModel
@@ -55,13 +55,13 @@ class AndroidAudioWaveformExtractor(
           when (path) {
             is StoragePathModel.Internal -> {
               val internalPath =
-                storageRepository.resolveInternalStoragePathToAbsolutePathWithoutCreating(path)
+                storageRepository.resolveInternalPathOrThrow(path)
               extractor.setDataSource(internalPath.value.value)
             }
             is StoragePathModel.Shared -> {
               val sharedPath =
-                storageRepository.resolveSharedStoragePathToAbsolutePathWithoutCreating(path)
-              extractor.setDataSource(context, sharedPath.value.toUriOrThrow(), null)
+                storageRepository.resolveSharedPathOrThrow(path)
+              extractor.setDataSource(context, sharedPath.value.toUri(), null)
             }
           }
 

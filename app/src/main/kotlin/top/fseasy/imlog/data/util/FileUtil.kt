@@ -14,7 +14,11 @@ import top.fseasy.imlog.domain.model.FileDeleteResult
 fun File.toFileProviderUri(context: Context): Uri =
     FileProvider.getUriForFile(context, FILE_PROVIDER_AUTHORITIES, this)
 
-/** Append multiple sub path segments to base File. No io, pure CPU operations. */
+/**
+ * Append multiple sub path segments to base File. No io, pure CPU operations.
+ *
+ * No exception.
+ */
 fun File.resolve(
     paths: List<String>,
 ): File = paths.fold(this) { acc, path -> File(acc, path) }
@@ -31,7 +35,7 @@ fun syncDeleteFile(file: File): FileDeleteResult =
           FileDeleteResult.Success
         } else {
           FileDeleteResult.Error(
-              IllegalStateException("File delete return false without exception")
+              IllegalStateException("File delete return false without exception"),
           )
         }
       } else {

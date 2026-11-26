@@ -3,6 +3,7 @@ package top.fseasy.imlog.features.home.conversation.composer2.voice
 import androidx.compose.runtime.Immutable
 import top.fseasy.imlog.domain.audio.RecordingOsEvent
 import top.fseasy.imlog.domain.audio.Waveform
+import top.fseasy.imlog.domain.model.StoragePathModel
 import top.fseasy.imlog.domain.model.VoiceDraft
 import top.fseasy.imlog.domain.usecase.composer.VoiceDraftUseCase
 
@@ -70,14 +71,24 @@ fun BeforeOsNativeStartedAction.nextOnStartFailure(): OsNativeStartFailedAction 
 fun BeforeOsNativeStartedAction.nextOnStartResult(startedSuccess: Boolean): ActiveRecordingAction =
     if (startedSuccess) nextOnStartSuccess() else nextOnStartFailure()
 
-fun ActiveRecordingAction.nextOnCancel() =
+/**
+ * 用户点击 cancel 后的下一个动作
+ *
+ * @return null 表示初始状态无效，不能转移
+ */
+fun ActiveRecordingAction.nextOnUserCancel() =
     when (this) {
       BeforeOsNativeStartedAction.StartOsNative -> BeforeOsNativeStartedAction.CancelOnceStarted
       OsNativeStartedAction.Recording -> OsNativeStartedAction.Cancel
       else -> null
     }
 
-fun ActiveRecordingAction.nextOnStop() =
+/**
+ * 用户触发 Stop 后的下一个动作.
+ *
+ * @return null 表示初始状态无效，不能转移
+ */
+fun ActiveRecordingAction.nextOnUserStop() =
     when (this) {
       BeforeOsNativeStartedAction.StartOsNative -> BeforeOsNativeStartedAction.StopOnceStarted
       OsNativeStartedAction.Recording -> OsNativeStartedAction.Stop
@@ -126,10 +137,10 @@ internal sealed interface VoiceDraftUiState {
 }
 
 internal enum class RecordingCancelPolicy {
-  /** 彻底丢弃：删除当前片段 + 历史底稿（如果有），最终必回 Idle */
-  DiscardAll,
-  /** 仅回滚本次续录：只删当前片段；若存在历史底稿则恢复为 CommittedDraft，否则回 Idle */
-  RollbackCurrentSegment,
+  /** 用户主动取消，所以要彻底丢弃：删除当前片段 + 历史底稿（如果有），最终必回 Idle */
+  UserCancelCausedDiscardAll,
+  /** 无法正常 stop, 调用 cancel 来安全停止。此时仅回滚本次续录：只删当前片段；若存在历史底稿则恢复为 CommittedDraft，否则回 Idle */
+  InternalCancelCausedRollback,
 }
 
 /**
@@ -142,14 +153,16 @@ internal val ActiveRecordingAction.cancelPolicy: RecordingCancelPolicy
       when (this) {
         BeforeOsNativeStartedAction.CancelOnceStarted,
         OsNativeStartedAction.Cancel,
-        OsNativeStartFailedAction.CancelOnStartFailed -> RecordingCancelPolicy.DiscardAll
+        OsNativeStartFailedAction.CancelOnStartFailed ->
+            RecordingCancelPolicy.UserCancelCausedDiscardAll
 
         BeforeOsNativeStartedAction.StartOsNative,
         BeforeOsNativeStartedAction.StopOnceStarted,
         OsNativeStartedAction.Recording,
         OsNativeStartedAction.Stop, // Stop while encounter error
         OsNativeStartFailedAction.RollbackOnStartFailed,
-        OsNativeStartFailedAction.StopOnStartFailed -> RecordingCancelPolicy.RollbackCurrentSegment
+        OsNativeStartFailedAction.StopOnStartFailed ->
+            RecordingCancelPolicy.InternalCancelCausedRollback
       }
 
 /**
@@ -216,14 +229,75 @@ internal fun VoiceDraftUiState.ActiveRecording.nextOnceOsNativeStarted(
   return this.withMeta(action = nextAction)
 }
 
-internal fun VoiceDraftUiState.ActiveRecording.nextOnCancel(): VoiceDraftUiState.ActiveRecording? {
-  val nextAction = this.action.nextOnCancel() ?: return null
+/**
+ * 注意，这里还是在 [VoiceDraftUiState.ActiveRecording] 的范畴，只是计算用户点击 Cancel 后，当前状态能否转移到 Cancel 的状态，若可以， 就将
+ * Cancel 动作放到 [VoiceDraftUiState.ActiveRecording] 之上。返回的，是转移后的状态。
+ */
+internal fun VoiceDraftUiState.ActiveRecording.nextOnUserCancel():
+    VoiceDraftUiState.ActiveRecording? {
+  val nextAction = this.action.nextOnUserCancel() ?: return null
   return this.withMeta(action = nextAction)
 }
 
-internal fun VoiceDraftUiState.ActiveRecording.nextOnStop(): VoiceDraftUiState.ActiveRecording? {
-  val nextAction = this.action.nextOnStop() ?: return null
+internal fun VoiceDraftUiState.ActiveRecording.nextOnUserStop():
+    VoiceDraftUiState.ActiveRecording? {
+  val nextAction = this.action.nextOnUserStop() ?: return null
   return this.withMeta(action = nextAction)
+}
+
+internal data class CommitActiveRecordingOnCancelDoneResult(
+    val state: VoiceDraftUiState,
+    val filesToDelete: List<StoragePathModel.Internal>,
+)
+
+/**
+ * 这计算的是，Cancel 执行**完成后**，应该转移的状态、删除的文件。区别于 [nextOnUserCancel], 它是算 Cancel 触发 时能不能转移到 Cancel,
+ * 能转移时对应的 guarding 状态，尚没有执行 Cancel
+ *
+ * Pure CPU, no IO, no Exception.
+ */
+internal fun commitActiveRecordingOnCancelDone(
+    currentState: VoiceDraftUiState.ActiveRecording,
+): CommitActiveRecordingOnCancelDoneResult {
+  val shouldDiscardAll =
+      when (currentState.action) {
+        // The following all are user intentional triggered actions. We should discard all files and
+        // back to Idle.
+        BeforeOsNativeStartedAction.CancelOnceStarted,
+        OsNativeStartedAction.Cancel,
+        OsNativeStartFailedAction.CancelOnStartFailed -> true
+        // The following actions, means the cancel is triggered by Internal Failure / Os Event.
+        // Not user intentional. So we should do rollback
+        BeforeOsNativeStartedAction.StartOsNative,
+        BeforeOsNativeStartedAction.StopOnceStarted,
+        OsNativeStartedAction.Recording,
+        OsNativeStartedAction.Stop,
+        OsNativeStartFailedAction.RollbackOnStartFailed,
+        OsNativeStartFailedAction.StopOnStartFailed -> false
+      }
+
+  val draft = currentState.draft
+
+  return if (shouldDiscardAll) {
+    // 用户主动取消：丢弃 base（如果有）+ 本次 recording
+    val filesToDelete =
+        when (draft) {
+          is VoiceDraft.ActiveRecording.Appending ->
+              listOf(draft.base.filePath, draft.recordingFilePath)
+          is VoiceDraft.ActiveRecording.Base -> listOf(draft.recordingFilePath)
+        }
+    CommitActiveRecordingOnCancelDoneResult(VoiceDraftUiState.Idle, filesToDelete)
+  } else {
+    // 非用户主动：回滚，只删本次 recording，保留 base（如果有），并回到 base 对应的状态（没有就是 Idle）
+    // 复用 UseCase 的逻辑
+    val commitResult = VoiceDraftUseCase.commitByRollbackOnRecordingFailure(draft)
+    val resultState = if (commitResult.draft != null) {
+      VoiceDraftUiState.CommittedDraft(commitResult.draft)
+    } else {
+      VoiceDraftUiState.Idle
+    }
+    CommitActiveRecordingOnCancelDoneResult(resultState, commitResult.filesToDelete)
+  }
 }
 
 /** Safe for main-thread. No exception except CancellationException */

@@ -2,6 +2,7 @@ package top.fseasy.imlog.domain.audio
 
 import kotlin.time.Duration
 import top.fseasy.imlog.domain.model.StoragePathModel
+import top.fseasy.imlog.domain.model.VoiceDraftDetail
 
 interface VoiceDraftAudioProcessor {
 
@@ -12,7 +13,7 @@ interface VoiceDraftAudioProcessor {
   suspend fun recoverPending(path: StoragePathModel.Internal): PendingAudioRecoveryResult
 
   /** 校验并将 pending 合并到 base，输出到 [destPath]（建议先写临时文件再原子替换）， 返回合并后的新时长与波形。 */
-  suspend fun mergeAppending(
+  suspend fun mergeWithRecovery(
       basePath: StoragePathModel.Internal,
       baseWaveform: Waveform?,
       baseDuration: Duration,
@@ -21,14 +22,18 @@ interface VoiceDraftAudioProcessor {
   ): AppendMergeResult
 
   /**
-   * 在正常录音条件下，base 已经校验过或者是之前已经录制好的，appending 是 stop 产出的音频， 这时 base, appending 都有 waveform 和
-   * duration，只需要合并音频即可
+   * 在正常录音条件下，base 已经校验过或者是之前已经录制好的，pending 是 stop 产出的音频， 这时 base, pending 都有 waveform 和 duration
+   * (detail 都有)
+   *
+   * 这时只需要：
+   * 1. 合并音频（快速校验），写入到 destPath
+   * 2. 基于已有的 waveform 合并 waveform (不必读音频); 合并 duration，返回
    */
-  suspend fun fastMergeAppendingAudio(
-      basePath: StoragePathModel.Internal,
-      appendingPath: StoragePathModel.Internal,
+  suspend fun mergeAudioRecording(
+      base: VoiceDraftDetail,
+      recordingResult: AudioRecordResult.Success,
       destPath: StoragePathModel.Internal,
-  ): FastMergeResult
+  ): MergeAudioRecordingResult
 
   /**
    * 将损坏文件移入隔离区（或删除），释放原路径. 返回是否移入成功.
@@ -63,6 +68,8 @@ sealed interface AppendMergeResult {
   /** pending 丢失或彻底损坏，但 base 依然健康 -> UseCase 可直接保留 base */
   data class PendingUnrecoverableKeepBase(val reason: String) : AppendMergeResult
 
+  data object OutputPathInvalid : AppendMergeResult
+
   /** base 本身已经损坏（或丢失） */
   data class BaseCorrupted(val reason: String) : AppendMergeResult
 
@@ -70,12 +77,18 @@ sealed interface AppendMergeResult {
   data object IncompatibleFormat : AppendMergeResult
 }
 
-sealed interface FastMergeResult {
-  data object Merged : FastMergeResult
+sealed interface MergeAudioRecordingResult {
+  data class Success(val duration: Duration, val waveform: Waveform) : MergeAudioRecordingResult
 
-  data object AppendingEmptyKeepBase : FastMergeResult
+  data class Failure(val reason: MergeFailureReason) : MergeAudioRecordingResult
+}
 
-  data object IncompatibleFormat : FastMergeResult
-
-  data class Failed(val reason: String) : FastMergeResult
+enum class MergeFailureReason {
+  BaseFileMissingOrEmpty,
+  BothFileMissingOrEmpty,
+  BaseAudioContentCorrupted,
+  PendingAudioContentCorrupted,
+  FileIo,
+  FilePathInvalid,
+  IncompatibleFormat,
 }

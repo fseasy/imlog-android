@@ -10,7 +10,7 @@ import kotlinx.parcelize.Parcelize
 import kotlinx.parcelize.WriteWith
 import timber.log.Timber
 import top.fseasy.imlog.R
-import top.fseasy.imlog.data.mapper.toNioPath
+import top.fseasy.imlog.data.mapper.toNioPathOrThrow
 import top.fseasy.imlog.data.util.NioPathParceler
 import top.fseasy.imlog.domain.model.AvatarModel
 import top.fseasy.imlog.domain.model.PresetAvatar
@@ -85,7 +85,7 @@ fun buildUserAvatarNioPath(
     storagePathUseCase
         .buildUserAvatarStoragePath(signInUserId, filename)
         .toInternal()
-        .toNioPath(context)
+        .toNioPathOrThrow(context)
 
 /** A helper function for nioPathBuilder, for TopicAvatar */
 fun buildTopicAvatarNioPath(
@@ -97,7 +97,7 @@ fun buildTopicAvatarNioPath(
     storagePathUseCase
         .buildTopicAvatarStoragePath(signInUserId, filename)
         .toInternal()
-        .toNioPath(context)
+        .toNioPathOrThrow(context)
 
 fun <T : PresetAvatar> AvatarUiModel<T>.toDomain(): AvatarModel<T> {
   return when (this) {

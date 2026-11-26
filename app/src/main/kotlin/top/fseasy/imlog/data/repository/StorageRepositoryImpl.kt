@@ -3,7 +3,6 @@ package top.fseasy.imlog.data.repository
 import android.content.Context
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.FileNotFoundException
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -14,19 +13,18 @@ import kotlin.io.path.fileSize
 import kotlin.io.path.writeBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import top.fseasy.imlog.common.runSuspendCatching
 import top.fseasy.imlog.data.mapper.ensureDirectorUri
 import top.fseasy.imlog.data.mapper.ensureFileUri
 import top.fseasy.imlog.data.mapper.findUriOrThrow
 import top.fseasy.imlog.data.mapper.toAbsolutePathWithoutCreating
 import top.fseasy.imlog.data.mapper.toAbsolutePathsWithoutCreating
 import top.fseasy.imlog.data.mapper.toFile
-import top.fseasy.imlog.data.mapper.toNioPath
+import top.fseasy.imlog.data.mapper.toNioPathOrThrow
 import top.fseasy.imlog.data.mapper.toUri
 import top.fseasy.imlog.data.mapper.toUriOrNull
-import top.fseasy.imlog.data.mapper.toUriOrThrow
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.data.model.syncAppendContent
 import top.fseasy.imlog.data.util.FileWriteMode
@@ -39,6 +37,8 @@ import top.fseasy.imlog.data.util.copyBetweenUri
 import top.fseasy.imlog.data.util.copyUriToFile
 import top.fseasy.imlog.data.util.syncDeleteFile as syncDeleteJavaFile
 import top.fseasy.imlog.data.util.writeData2Uri
+import top.fseasy.imlog.domain.FileIoException
+import top.fseasy.imlog.domain.PathResolveException
 import top.fseasy.imlog.domain.model.AbsolutePathModel
 import top.fseasy.imlog.domain.model.AudioMetadata
 import top.fseasy.imlog.domain.model.FileCopyResult
@@ -50,7 +50,6 @@ import top.fseasy.imlog.domain.model.UriStr
 import top.fseasy.imlog.domain.model.UserId
 import top.fseasy.imlog.domain.model.VideoMetadata
 import top.fseasy.imlog.domain.repository.StorageRepository
-import top.fseasy.imlog.common.runSuspendCatching
 import top.fseasy.imlog.sqldelight.SqlDelightDb
 
 @Singleton
@@ -90,7 +89,7 @@ constructor(
       userId: UserId,
       uriStr: UriStr?,
   ): Result<Unit> = runCatching {
-    val uri = uriStr?.toUriOrThrow() // Parse first to verify
+    val uri = uriStr?.toUri() // Parse first to verify
     withContext(dispatcher) {
       database.transaction {
         database.userPreferenceQueries.upsertSharedStorageRootUri(
@@ -106,20 +105,25 @@ constructor(
     storageUriCache[userId] = uri
   }
 
-  override suspend fun resolveStoragePathToAbsolutePathsWithoutCreating(
-      storagePath: StoragePathModel
+  override suspend fun resolvePathOrThrow(
+      storagePath: StoragePathModel,
   ): List<AbsolutePathModel> =
       storagePath.toAbsolutePathsWithoutCreating(
           ::getSharedStorageRootUriWithCache,
           context,
       )
 
-  override fun resolveInternalStoragePathToAbsolutePathWithoutCreating(
-      internalStoragePath: StoragePathModel.Internal
+  /** @throws top.fseasy.imlog.domain.PathResolveException */
+  override fun resolveInternalPathOrThrow(
+      internalStoragePath: StoragePathModel.Internal,
   ): AbsolutePathModel.AppPathModel = internalStoragePath.toAbsolutePathWithoutCreating(context)
 
-  override suspend fun resolveSharedStoragePathToAbsolutePathWithoutCreating(
-      sharedStoragePath: StoragePathModel.Shared
+  /**
+   * @throws top.fseasy.imlog.domain.PathResolveException
+   * @throws CancellationException
+   */
+  override suspend fun resolveSharedPathOrThrow(
+      sharedStoragePath: StoragePathModel.Shared,
   ): AbsolutePathModel.UriStrModel =
       sharedStoragePath.toAbsolutePathWithoutCreating(::getSharedStorageRootUriWithCache, context)
 
@@ -129,27 +133,27 @@ constructor(
       } ?: defaultName
 
   override suspend fun getAudioMetadataOrNull(path: StoragePathModel): AudioMetadata? =
-      resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(path)?.let {
+      resolvePathToLastOneOrNull(path)?.let {
         MetadataResolveUtils.resolveAudio(it, context = context)
       }
 
   override suspend fun getImageMetadataOrNull(path: StoragePathModel): ImageMetadata? =
-      resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(path)?.let {
+      resolvePathToLastOneOrNull(path)?.let {
         MetadataResolveUtils.resolveImage(it, context = context)
       }
 
   override suspend fun getVideoMetadataOrNull(path: StoragePathModel): VideoMetadata? =
-      resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(path)?.let {
+      resolvePathToLastOneOrNull(path)?.let {
         MetadataResolveUtils.resolveVideo(it, context = context)
       }
 
   override suspend fun getGenericFileMetadataOrNull(path: StoragePathModel): GenericFileMetadata? =
-      resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(path)?.let {
+      resolvePathToLastOneOrNull(path)?.let {
         MetadataResolveUtils.resolveGenericFile(it, context = context)
       }
 
   override suspend fun getMimetypeOrNull(path: StoragePathModel): String? =
-      resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(path)?.let {
+      resolvePathToLastOneOrNull(path)?.let {
         MimeTypeUtils.getMimeTypeOrNull(it, context = context)
       }
 
@@ -158,15 +162,17 @@ constructor(
         when (path) {
           is StoragePathModel.Dual -> getMediaDurationOrNull(path.toInternal())
           is StoragePathModel.Internal -> {
-            MediaDurationUtils.getDurationOrNull(path.toNioPath(context).toFile())
+            MediaDurationUtils.getDurationOrNull(path.toNioPathOrThrow(context).toFile())
           }
           is StoragePathModel.Shared -> {
-            val uri = runSuspendCatching {
-              path.findUriOrThrow(::getSharedStorageRootUriWithCache, context = context)
-            }.getOrNull() ?: return@withContext null
+            val uri =
+                runSuspendCatching {
+                  path.findUriOrThrow(::getSharedStorageRootUriWithCache, context = context)
+                }
+                    .getOrNull() ?: return@withContext null
             MediaDurationUtils.getDurationOrNull(
                 context,
-                uri = uri
+                uri = uri,
             )
           }
         }
@@ -182,7 +188,7 @@ constructor(
 
     suspend fun mkdirsForInternal(p: StoragePathModel.Internal) =
         withContext(dispatcher) {
-          p.toNioPath(context).createDirectories()
+          p.toNioPathOrThrow(context).createDirectories()
         }
 
     val uri =
@@ -209,14 +215,14 @@ constructor(
   }
 
   override suspend fun fileExists(path: StoragePathModel.Internal): Boolean {
-    val nioPath = path.toNioPath(context)
+    val nioPath = path.toNioPathOrThrow(context)
     return withContext(dispatcher) {
       nioPath.exists()
     }
   }
 
   override suspend fun fileSizeOrNull(path: StoragePathModel.Internal): Long? {
-    val nioPath = path.toNioPath(context)
+    val nioPath = path.toNioPathOrThrow(context)
     return withContext(dispatcher) {
       try {
         nioPath.fileSize()
@@ -231,10 +237,8 @@ constructor(
       base: StoragePathModel,
       append: StoragePathModel,
   ): Boolean {
-    val baseAbsolutePath =
-        resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(base) ?: return false
-    val appendAbsolutePath =
-        resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(append) ?: return false
+    val baseAbsolutePath = resolvePathToLastOneOrNull(base) ?: return false
+    val appendAbsolutePath = resolvePathToLastOneOrNull(append) ?: return false
     return withContext(dispatcher) {
       baseAbsolutePath.syncAppendContent(context, appendAbsolutePath)
     }
@@ -285,7 +289,7 @@ constructor(
       filePath: StoragePathModel.Internal,
       content: ByteArray,
   ) {
-    val path = filePath.toNioPath(context)
+    val path = filePath.toNioPathOrThrow(context)
     withContext(dispatcher) {
       path.createParentDirectories().writeBytes(content)
     }
@@ -319,7 +323,7 @@ constructor(
       targetPath: StoragePathModel,
       srcMimeType: String?,
   ): FileCopyResult = runCatching {
-    resolveStoragePathToAbsolutePathsWithoutCreating(srcPath)
+    resolvePathOrThrow(srcPath)
   }
       .fold(
           onSuccess = { srcAbsolutePaths ->
@@ -360,7 +364,7 @@ constructor(
     }
         .getOrElse {
           return FileCopyResult.Error.SrcOpenUnexpected(
-              IllegalArgumentException("Can't Transform $srcAbsolutePath to Uri")
+              IllegalArgumentException("Can't Transform $srcAbsolutePath to Uri"),
           )
         }
     return when (targetPath) {
@@ -409,30 +413,8 @@ constructor(
       srcUri: Uri,
       pathModel: StoragePathModel.Internal,
   ): FileCopyResult {
-    val tgtFile = pathModel.toNioPath(context).toFile()
+    val tgtFile = pathModel.toNioPathOrThrow(context).toFile()
     return copyUriToFile(context, srcUri, tgtFile)
-  }
-
-  /** Run in IO thread in io parts. Swallow all the exceptions. */
-  override suspend fun deleteFile(
-      filePath: AbsolutePathModel,
-  ): FileDeleteResult {
-    when (filePath) {
-      is AbsolutePathModel.UriStrModel -> {
-        val uri =
-            filePath.value.toUriOrNull()
-                ?: return FileDeleteResult.Error(
-                    IllegalStateException("Invalid uri str: ${filePath.value}")
-                )
-        return UriPathUtil.deleteUri(context, uri)
-      }
-
-      is AbsolutePathModel.AppPathModel -> {
-        return withContext(dispatcher) {
-          syncDeleteJavaFile(filePath.value.toFile())
-        }
-      }
-    }
   }
 
   /**
@@ -442,37 +424,81 @@ constructor(
    */
   override suspend fun deleteFile(
       filePath: StoragePathModel,
-  ): FileDeleteResult = withContext(Dispatchers.IO){
+  ): FileDeleteResult =
+      withContext(dispatcher) {
+        val absolutePaths =
+            try {
+              resolvePathOrThrow(filePath)
+            } catch (e: PathResolveException) {
+              Timber.d(e, "deleteFile: error on resolve file path: $filePath")
+              return@withContext FileDeleteResult.Error(e)
+            }
+        if (deleteAbsolutePaths(absolutePaths)) {
+          FileDeleteResult.Success
+        } else FileDeleteResult.Error(FileIoException("Failed to delete all files: $filePath"))
+      }
 
-    val absolutePaths =
-        try {
-          resolveStoragePathToAbsolutePathsWithoutCreating(filePath)
-        } catch (e: FileNotFoundException) {
-          Timber.d(e, "deleteFile: Failed to locate file on shared-storage: $filePath")
-          return@withContext FileDeleteResult.FileNotExist
-        } catch (e: CancellationException) {
-          throw e
-        } catch (e: Exception) {
-          Timber.d(e, "deleteFile: error on locating file on shared-storage: $filePath")
-          return@withContext FileDeleteResult.Error(e)
+  override suspend fun deleteFiles(
+      filePath: List<StoragePathModel>,
+  ): Boolean =
+      withContext(dispatcher) {
+        var resolveAllSuccess = true
+        val absolutePaths = filePath.flatMap { p ->
+          try {
+            resolvePathOrThrow(p)
+          } catch (e: PathResolveException) {
+            Timber.d(e, "deleteFile: error on resolve file path: $p")
+            resolveAllSuccess = false
+            emptyList()
+          }
         }
-    for (path in absolutePaths) {
-      when (val deleteResult = deleteFile(path)) {
-        is FileDeleteResult.FileNotExist,
-        is FileDeleteResult.Error,
-        -> return@withContext deleteResult
+        val deleteAllSuccess = deleteAbsolutePaths(absolutePaths)
+        deleteAllSuccess && resolveAllSuccess
+      }
 
-        else -> Unit
+  /** make it private, future we'll remove the `AbsolutePathModel` interface */
+  private suspend fun deleteAbsolutePaths(
+      filePaths: List<AbsolutePathModel>,
+  ): Boolean {
+    suspend fun deleteAbsolutePath(
+        filePath: AbsolutePathModel,
+    ): FileDeleteResult {
+      when (filePath) {
+        is AbsolutePathModel.UriStrModel -> {
+          val uri =
+              filePath.value.toUriOrNull()
+                  ?: return FileDeleteResult.Error(
+                      IllegalStateException("Invalid uri str: ${filePath.value}"),
+                  )
+          return UriPathUtil.deleteUri(context, uri)
+        }
+
+        is AbsolutePathModel.AppPathModel -> {
+          return withContext(dispatcher) {
+            syncDeleteJavaFile(filePath.value.toFile())
+          }
+        }
       }
     }
-    return@withContext FileDeleteResult.Success
+    return withContext(dispatcher) {
+      var allSuccess = true
+      for (path in filePaths) {
+        when (deleteAbsolutePath(path)) {
+          is FileDeleteResult.Error -> allSuccess = false
+          // File Not found, delete should view it as success
+          is FileDeleteResult.FileNotExist -> Unit
+          else -> Unit
+        }
+      }
+      allSuccess
+    }
   }
 
   /** A helper function for internal transforming */
-  private suspend fun resolveStoragePathToOneAbsolutePathWithoutCreatingOrNull(
-      storagePath: StoragePathModel
+  private suspend fun resolvePathToLastOneOrNull(
+      storagePath: StoragePathModel,
   ): AbsolutePathModel? = runCatching {
-    resolveStoragePathToAbsolutePathsWithoutCreating(storagePath)
+    resolvePathOrThrow(storagePath)
   }
       .getOrNull()
       ?.last()

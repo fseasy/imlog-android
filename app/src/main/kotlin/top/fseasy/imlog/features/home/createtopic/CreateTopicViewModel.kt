@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import top.fseasy.imlog.R
 import top.fseasy.imlog.data.mapper.toAppPath
-import top.fseasy.imlog.data.mapper.toNioPath
+import top.fseasy.imlog.data.mapper.toNioPathOrThrow
 import top.fseasy.imlog.data.mapper.toUriStr
 import top.fseasy.imlog.data.util.TempFileCleaner
 import top.fseasy.imlog.di.ApplicationIoScope
@@ -109,7 +109,7 @@ constructor(
                 return@launchWithUid
               }
               _tempFileCleaner.delete(tempPath)
-              AvatarUiModel.NioPath(targetPath.toInternal().toNioPath(context))
+              AvatarUiModel.NioPath(targetPath.toInternal().toNioPathOrThrow(context))
             }
           }
       runSuspendCatching {
@@ -173,7 +173,7 @@ constructor(
         }
 
         is FileCopyResult.Success -> {
-          val newModel = AvatarUiModel.NioPath(path.toNioPath(context))
+          val newModel = AvatarUiModel.NioPath(path.toNioPathOrThrow(context))
           _uiStateFlow.update {
             it.copy(selectAvatarTask = TaskExecuteWithDefaultState.Success(newModel))
           }

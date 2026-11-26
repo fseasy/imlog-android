@@ -16,7 +16,7 @@ fun AppPath.toFile() = File(value)
  *
  * @throws java.nio.file.InvalidPathException if the string can't be converted to Path.
  */
-fun AppPath.toNioPath() = Paths.get(value)
+fun AppPath.toNioPathOrThrow() = Paths.get(value)
 
 fun File.toAppPath() = AppPath(absolutePath)
 

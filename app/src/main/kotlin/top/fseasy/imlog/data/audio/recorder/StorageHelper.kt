@@ -3,7 +3,7 @@ package top.fseasy.imlog.data.audio.recorder
 import android.content.Context
 import android.os.StatFs
 import java.io.File
-import top.fseasy.imlog.data.mapper.toNioPath
+import top.fseasy.imlog.data.mapper.toNioPathOrThrow
 import top.fseasy.imlog.domain.model.StoragePathModel
 
 fun syncGetAvailableBytes(dir: File): Long {
@@ -22,7 +22,7 @@ internal data class ResolvedStoragePath(
   companion object {
     /** @throws SecurityException */
     fun syncCreate(path: StoragePathModel.Internal, context: Context): ResolvedStoragePath {
-      val file = path.toNioPath(context).toFile().apply { parentFile?.mkdirs() }
+      val file = path.toNioPathOrThrow(context).toFile().apply { parentFile?.mkdirs() }
       return ResolvedStoragePath(path = path, file = file)
     }
   }

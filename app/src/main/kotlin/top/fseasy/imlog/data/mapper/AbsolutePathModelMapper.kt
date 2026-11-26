@@ -15,7 +15,7 @@ fun AbsolutePathModel.toUri(context: Context): Uri =
     when (this) {
       is AbsolutePathModel.AppPathModel -> this.value.toFile().toFileProviderUri(context)
 
-      is AbsolutePathModel.UriStrModel -> this.value.toUriOrThrow()
+      is AbsolutePathModel.UriStrModel -> this.value.toUri()
     }
 
 /**
@@ -28,7 +28,7 @@ fun AbsolutePathModel.toUri(context: Context): Uri =
 fun AbsolutePathModel.toActualFileOrUri(): Any =
     when (this) {
       is AbsolutePathModel.AppPathModel -> this.value.toFile()
-      is AbsolutePathModel.UriStrModel -> this.value.toUriOrThrow()
+      is AbsolutePathModel.UriStrModel -> this.value.toUri()
     }
 
 
